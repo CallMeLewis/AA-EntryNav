@@ -225,8 +225,10 @@ def flare_drive_note(version, text):
 def without_verification(text):
     """text without its verified or unverified wording: "This version is unverified." anywhere, and a closing sentence
     that starts with Verified or Unverified. Only CHANGELOG.md records whether a release has run in a car."""
-    text = re.sub(r"(^|(?<=[.!?]))\s*This version is (un)?verified\b[^.]*\.", "", text)
-    return re.sub(r"(^|(?<=[.!?]))\s*(Unverified|Verified)\b[^.]*\.$", "", text).strip()
+    # After a sentence's end, which a bold opening sentence closes with "**" ("**It no longer sticks.** Unverified.").
+    end = r"(^|(?<=[.!?])|(?<=[.!?]\*\*))"
+    text = re.sub(end + r"\s*This version is (un)?verified\b[^.]*\.", "", text)
+    return re.sub(end + r"\s*(Unverified|Verified)\b[^.]*\.$", "", text).strip()
 
 
 def release_body(text):
