@@ -4,28 +4,35 @@
   uv run --no-project --with cryptography python tools/publish_release.py keygen   create the signing key, once
   uv run --no-project --with cryptography python tools/publish_release.py init     publish an empty signed index, once
   uv run --no-project --with cryptography python tools/publish_release.py verify   check the live index and list it
-  uv run --no-project --with cryptography python tools/publish_release.py publish [OPTIONS]
-  uv run --no-project --with cryptography python tools/publish_release.py notes VERSION TEXT   rewrite its notes
+  uv run --no-project --with cryptography python tools/publish_release.py preview [VERSION]   show its two texts
+  uv run --no-project --with cryptography python tools/publish_release.py publish [--stable]
+  uv run --no-project --with cryptography python tools/publish_release.py notes VERSION   resync its texts
   uv run --no-project --with cryptography python tools/publish_release.py stability VERSION stable|experimental
   uv run --no-project --with cryptography python tools/publish_release.py retire VERSION... [--delete-archives]
   uv run --no-project --with cryptography python tools/publish_release.py tags     tag releases, with GitHub Releases
 
-OPTIONS: --notes TEXT, --stable. Each release carries the owner's label, stable or experimental (experimental unless
---stable), shown as a pill in Flare Drive. `stability` changes it later: the list is signed again, the archive stays as
-it is. Whether a release has run in a car (verified or unverified) is recorded in CHANGELOG.md only, not in the list.
+A release's texts come from its section of CHANGELOG.md (docs/release-notes.md): the Flare Drive note, written in it as
+<!-- Flare Drive: ... -->, and the GitHub Release's text, made from the section itself. `preview` shows both without
+publishing anything; `notes` brings a published release's note and GitHub Release back in line with the section.
+
+Each release carries the owner's label, stable or experimental (experimental unless --stable), shown as a pill in Flare
+Drive. `stability` changes it later: the list is signed again, the archive stays as it is. Whether a release has run in
+a car (verified or unverified) is recorded in CHANGELOG.md only, not in the list.
 
 `retire` takes releases off the list, which is signed again; Flare Drive stops offering them at its next check, and a
 head unit that has one installed keeps it. With --delete-archives their archives are then deleted from the bucket.
 
-`publish` builds what CI tested: it refuses a dirty tree, a HEAD whose CI has not passed, and a version already
-published. It then builds the ARM programs, runs the QEMU tests, validates and packages (README.md, Building), in
-Docker when not on Linux, uploads the archive, and only then the signed index, so Flare Drive never sees an entry whose
-archive is missing.
+`publish` builds what CI tested: it refuses a dirty tree, a HEAD whose CI has not passed, a version already published,
+and a version whose CHANGELOG.md section or Flare Drive note is missing. It then builds the ARM programs, runs the QEMU
+tests, validates and packages (README.md, Building), in Docker when not on Linux, uploads the archive, and only then the
+signed index, so Flare Drive never sees an entry whose archive is missing. It then dates the version's CHANGELOG.md
+heading with the day it was published and links the version to the commit its archive was built from.
 
 Once the index lists a release, `publish` tags it v<version> on GitHub, at the commit its archive was built
 from (the index's sourceCommit), push the tag, and give it a GitHub Release with the published archive and its SHA-256
 (with `gh`, signed in to GitHub). An existing tag is never moved. `tags` does the same for every published release still
-without a tag or a Release.
+without a tag or a Release, taking each one's text from CHANGELOG.md, or its Flare Drive note when CHANGELOG.md has no
+section for it.
 
 The index is signed with Ed25519 by a key that never leaves this PC (~/.flare-drive/release-signing-key, or
 FLARE_DRIVE_SIGNING_KEY). Flare Drive accepts an index only if its signature matches one of the public keys it was
@@ -39,6 +46,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -67,6 +75,11 @@ FIRMWARE = ["202111011321", "202306092158"]
 # Flare Drive's version code for new releases: 20 is the first that lets the signed index approve a release for the
 # trial firmware (19 still needed each release's SHA-256 built in, so it would list a new release and then refuse it).
 MIN_APP = 20
+# Outside git until the repository goes public. Each version's section holds its texts (docs/release-notes.md).
+CHANGELOG = ROOT / "CHANGELOG.md"
+HEADING = re.compile(r"^## \[([^\]]+)\]", re.M)
+LINK = re.compile(r"^\[([^\]]+)\]: \S+$", re.M)
+NOTE = re.compile(r"<!--\s*Flare Drive:(.*?)-->", re.S)
 
 
 def key_path():
@@ -154,6 +167,116 @@ def now():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def read_changelog():
+    if not CHANGELOG.is_file():
+        sys.exit(f"FAIL: no {CHANGELOG.name} here. It is kept outside git: copy it in from wherever it is kept.")
+    return CHANGELOG.read_text(encoding="utf-8")
+
+
+def write_changelog(text):
+    CHANGELOG.write_text(text, encoding="utf-8", newline="\n")
+
+
+def section_span(text, version):
+    """Where the section headed ## [version] starts and ends in text, heading included, or None."""
+    for heading in HEADING.finditer(text):
+        if heading.group(1) == version:
+            ends = [m.start() for m in (HEADING.search(text, heading.end()), LINK.search(text, heading.end())) if m]
+            return heading.start(), min(ends, default=len(text))
+    return None
+
+
+def find_section(version):
+    """The version's CHANGELOG.md section, heading included, or None when there is none (or no CHANGELOG.md)."""
+    if not CHANGELOG.is_file():
+        return None
+    text = read_changelog()
+    span = section_span(text, version)
+    return text[span[0] : span[1]] if span else None
+
+
+def section(version):
+    found = find_section(version)
+    if found is None:
+        sys.exit(f"FAIL: {CHANGELOG.name} has no section for {version}. Write it following docs/release-notes.md.")
+    return found
+
+
+def flare_drive_note(version, text):
+    """The Flare Drive note written in the section as <!-- Flare Drive: ... -->, as one line."""
+    match = NOTE.search(text)
+    note = " ".join(match.group(1).split()) if match else ""
+    if not note:
+        sys.exit(f"FAIL: {CHANGELOG.name}'s {version} section has no Flare Drive note: <!-- Flare Drive: ... -->.")
+    return note
+
+
+def without_verification(text):
+    """text without its verified or unverified wording: "This version is unverified." anywhere, and a closing sentence
+    that starts with Verified or Unverified. Only CHANGELOG.md records whether a release has run in a car."""
+    text = re.sub(r"(^|(?<=[.!?]))\s*This version is (un)?verified\b[^.]*\.", "", text)
+    return re.sub(r"(^|(?<=[.!?]))\s*(Unverified|Verified)\b[^.]*\.$", "", text).strip()
+
+
+def release_body(text):
+    """The GitHub Release's text, made from a CHANGELOG.md section: its heading and Flare Drive note left out, an
+    "Action needed:" paragraph as an IMPORTANT callout, ### headings raised to ##, verified or unverified wording left
+    out, and each paragraph or bullet on one line, since GitHub shows hard line breaks."""
+    blocks = []  # paragraphs, bullets and headings, unwrapped; "" for a blank line
+    for line in NOTE.sub("", text).splitlines()[1:]:
+        line = line.strip()
+        if not line or line.startswith(("- ", "#")) or not blocks or not blocks[-1] or blocks[-1].startswith("#"):
+            blocks.append(line)
+        else:
+            blocks[-1] += " " + line
+    lines = []
+    for block in blocks:
+        if block.startswith("### "):
+            block = block[1:]
+        elif block.startswith("Action needed:"):
+            action = without_verification(block[len("Action needed:") :])
+            block = f"> [!IMPORTANT]\n> {action[:1].upper()}{action[1:]}"
+        elif block.startswith("- "):
+            block = "- " + without_verification(block[2:])
+            if block == "- ":
+                continue
+        elif block:
+            block = without_verification(block)
+            if not block:
+                continue
+        if block or (lines and lines[-1]):
+            lines.append(block)
+    return "\n".join(lines).strip() + "\n"
+
+
+def with_links(text, index):
+    """text with a link for every published version that has none, to the commit its archive was built from. The links
+    stay at the end: [Unreleased], then the versions newest first."""
+    lines = text.rstrip("\n").split("\n")
+    links = {}
+    while lines and (not lines[-1].strip() or LINK.match(lines[-1])):
+        line = lines.pop()
+        if line.strip():
+            links[LINK.match(line).group(1)] = line
+    for release in index["releases"]:
+        if release["version"] not in links:
+            links[release["version"]] = (
+                f"[{release['version']}]: https://github.com/{REPO}/tree/{release['sourceCommit']}"
+            )
+    versions = sorted((label for label in links if re.fullmatch(r"\d+(\.\d+)*", label)), key=version_key, reverse=True)
+    others = [label for label in links if label != "Unreleased" and label not in versions]
+    order = (["Unreleased"] if "Unreleased" in links else []) + versions + others
+    return "\n".join(lines).rstrip("\n") + "\n\n" + "\n".join(links[label] for label in order) + "\n"
+
+
+def preview(args):
+    """A version's Flare Drive note and GitHub Release text, as publish would use them. Nothing is published."""
+    version = args.version or (ROOT / "VERSION").read_text().strip()
+    text = section(version)
+    print(f"Flare Drive note for {version}:\n\n{flare_drive_note(version, text)}\n")
+    print(f"GitHub Release text for {version}:\n\n{release_body(text)}", end="")
+
+
 def keygen(_):
     path = key_path()
     if path.exists():
@@ -214,15 +337,21 @@ def publish(args):
     version = (ROOT / "VERSION").read_text().strip()
     if any(r["version"] == version for r in index["releases"]):
         sys.exit(f"FAIL: {version} is already published. Raise VERSION for a new release; a version is never replaced.")
+    # Both texts before the build, which takes minutes: a missing section or note stops it at once.
+    text = section(version)
+    note, body = flare_drive_note(version, text), release_body(text)
+    print(f"Flare Drive note: {note}", flush=True)
     # The build and every check CI can't run (tools/verify_arm.py, as the pre-push hook runs them), then the
     # archive. Each step stops the publish on failure. Packaging runs on Linux too: zipped elsewhere, the iDrive app's
     # zips hold the same files in different bytes.
     verify_arm.run_all(ROOT, (*verify_arm.CHECKS, "tools/package_release.py"))
-    upload(key, index, ROOT / "artifacts" / f"aa-entrynav-{version}-armhf.tar", version, head, args)
+    archive = ROOT / "artifacts" / f"aa-entrynav-{version}-armhf.tar"
+    upload(key, index, archive, version, head, args.stable, note, body)
 
 
 def notes(args):
-    """Replaces one release's notes in the live index and signs it again. The archives stay as they are."""
+    """Brings one published release's Flare Drive note and GitHub Release text back in line with its CHANGELOG.md
+    section. The list is signed again only when the note changed; the archives stay as they are."""
     key = load_key()
     index = live_index(key)
     if index is None:
@@ -230,8 +359,21 @@ def notes(args):
     entries = [r for r in index["releases"] if r["version"] == args.version]
     if not entries:
         sys.exit(f"FAIL: {args.version} is not published.")
-    entries[0]["notes"] = args.text
-    publish_index(key, {**index, "published": now()})
+    text = section(args.version)
+    note, body = flare_drive_note(args.version, text), release_body(text)
+    if entries[0].get("notes") == note:
+        print("The Flare Drive note already matches CHANGELOG.md.")
+    else:
+        entries[0]["notes"] = note
+        publish_index(key, {**index, "published": now()})
+    tag = f"v{args.version}"
+    edited = subprocess.run(
+        ["gh", "release", "edit", tag, "-R", REPO, "--notes", body], capture_output=True, text=True, check=False
+    )
+    if edited.returncode:
+        print(f"WARN: the GitHub Release {tag} was not updated: {edited.stderr.strip()}")
+    else:
+        print(f"GitHub Release {tag} updated.")
     verify(None)
 
 
@@ -269,7 +411,7 @@ def retire(args):
     verify(None)
 
 
-def upload(key, index, archive, version, commit, args):
+def upload(key, index, archive, version, commit, stable, note, body):
     """Uploads the archive, reads it back, then signs and uploads the index with its entry added."""
     data = archive.read_bytes()
     with tarfile.open(archive) as tar:
@@ -285,26 +427,39 @@ def upload(key, index, archive, version, commit, args):
         "sourceCommit": commit,
         "published": now(),
         "firmware": FIRMWARE,
-        "stability": "stable" if args.stable else "experimental",
+        "stability": "stable" if stable else "experimental",
         "minApp": MIN_APP,
-        "notes": args.notes,
+        "notes": note,
     }
     wrangler_put(entry["file"], archive, "application/x-tar", "public, max-age=31536000, immutable")
     if fetch(entry["file"]) != data:
         sys.exit("FAIL: the uploaded archive doesn't read back the same. The index was not changed.")
     publish_index(key, {"schema": 1, "published": now(), "releases": index["releases"] + [entry]})
     print(f"Published {version} ({entry['sha256'][:12]}…) from {commit[:7]}.")
+    record_published(entry, index)
     if tag_release(entry):
-        github_release(entry, latest=all(version_key(r) < version_key(entry) for r in index["releases"]))
+        newest = all(version_key(r["version"]) < version_key(version) for r in index["releases"])
+        github_release(entry, body, latest=newest)
     verify(None)
+
+
+def record_published(entry, index):
+    """Dates the version's CHANGELOG.md heading with the day it was published and links the version to the commit its
+    archive was built from."""
+    text = read_changelog()
+    day = entry["published"][:10]
+    heading = re.compile(rf"^(## \[{re.escape(entry['version'])}\] - )\d{{4}}-\d{{2}}-\d{{2}}", re.M)
+    text = heading.sub(rf"\g<1>{day}", text, count=1)
+    write_changelog(with_links(text, {"releases": index["releases"] + [entry]}))
+    print(f"{CHANGELOG.name}: {entry['version']} dated {day} and linked to {entry['sourceCommit'][:7]}.")
 
 
 def git(*args, check=True):
     return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, check=check)
 
 
-def version_key(entry):
-    return tuple(int(part) for part in entry["version"].split("."))
+def version_key(version):
+    return tuple(int(part) for part in version.split("."))
 
 
 def tag_release(entry):
@@ -336,10 +491,11 @@ def tag_release(entry):
     return True
 
 
-def github_release(entry, latest):
-    """A GitHub Release for the tag, with the archive Flare Drive installs and its SHA-256 file. The archive is
-    downloaded from the bucket and must match the index's SHA-256, never taken from artifacts/, which a later build may
-    have replaced. Only [latest] is marked Latest. An existing Release is left as it is; a failure is reported."""
+def github_release(entry, body, latest):
+    """A GitHub Release for the tag, with body as its text, the archive Flare Drive installs and its SHA-256 file. The
+    archive is downloaded from the bucket and must match the index's SHA-256, never taken from artifacts/, which a later
+    build may have replaced. Only [latest] is marked Latest. An existing Release is left as it is (`notes` updates its
+    text); a failure is reported."""
     version, tag = entry["version"], f"v{entry['version']}"
     if subprocess.run(["gh", "release", "view", tag, "-R", REPO], capture_output=True).returncode == 0:
         print(f"{tag} already has a GitHub Release.")
@@ -349,7 +505,6 @@ def github_release(entry, latest):
         print(f"WARN: the published {version} archive doesn't match the index's SHA-256: no GitHub Release for {tag}.")
         return
     name = Path(entry["file"]).name
-    body = f"{entry['notes']}\n" if entry.get("notes") else ""
     with tempfile.TemporaryDirectory() as folder:
         archive, sums = Path(folder) / name, Path(folder) / f"{name}.sha256"
         archive.write_bytes(data)
@@ -368,15 +523,18 @@ def github_release(entry, latest):
 
 def tags(args):
     """Tags every published release that has no tag yet, from the live index, and gives each tag a GitHub Release,
-    oldest first, with the newest marked Latest."""
+    oldest first, with the newest marked Latest. Its text comes from CHANGELOG.md, or is its Flare Drive note when
+    CHANGELOG.md has no section for it."""
     index = live_index(load_key())
     if index is None:
         sys.exit("FAIL: no index is published yet.")
     git("fetch", "--tags", "origin", check=False)
-    releases = sorted(index["releases"], key=version_key)
+    releases = sorted(index["releases"], key=lambda r: version_key(r["version"]))
     for entry in releases:
         if tag_release(entry):
-            github_release(entry, latest=entry is releases[-1])
+            text = find_section(entry["version"])
+            body = release_body(text) if text else (f"{entry['notes']}\n" if entry.get("notes") else "")
+            github_release(entry, body, latest=entry is releases[-1])
 
 
 def main():
@@ -386,13 +544,14 @@ def main():
     commands.add_parser("init").set_defaults(func=init)
     commands.add_parser("verify").set_defaults(func=verify)
     commands.add_parser("tags").set_defaults(func=tags)
+    pv = commands.add_parser("preview")
+    pv.add_argument("version", nargs="?", help="a version with a CHANGELOG.md section (default: VERSION's)")
+    pv.set_defaults(func=preview)
     p = commands.add_parser("publish")
-    p.add_argument("--notes", default="", help="one short paragraph, shown in Flare Drive")
     p.add_argument("--stable", action="store_true", help="label it stable in Flare Drive (default: experimental)")
     p.set_defaults(func=publish)
     n = commands.add_parser("notes")
     n.add_argument("version", help="a published version")
-    n.add_argument("text", help="one short paragraph, shown in Flare Drive")
     n.set_defaults(func=notes)
     s = commands.add_parser("stability")
     s.add_argument("version", help="a published version")
