@@ -33,7 +33,7 @@ never hold more than about 2 MB.
   imperative ("Add", "Fix", "Rename", "Move"), keep it within 72 characters and leave off the full stop. No prefixes
   such as `fix:`, `feat(hmiapp):` or `ci:`: say "Speed up CI by ...".
 - **Body:** optional, after a blank line. Explain why the change was made, since the diff already shows what changed.
-  Mention effects and limitations a reader wouldn't guess, and say whether it was tried in a car or only tested on PC
+  Mention effects and limitations a reader wouldn't guess, and say whether it was verified in a car or only tested on PC
   and under QEMU. Leave it out when the subject says it all.
 - Wrap the body at 72 characters. A long URL goes on its own line.
 - A GitHub issue goes on the last line of the body, as `Fixes` and its full URL, so it still makes sense outside

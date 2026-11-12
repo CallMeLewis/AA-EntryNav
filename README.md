@@ -21,7 +21,7 @@ iDrive's *Media* menu. It runs alongside iDrive and replaces none of BMW's files
 
 Each one is a switch in Flare Drive, or a file in `/var/local/data/AA` on the head unit.
 
-| Feature | File | Tried in a car |
+| Feature | File | Verified in a car |
 |---|---|---|
 | Android Auto over a **USB cable**. Sound and calls stay on the car's Bluetooth | `usb` | Yes |
 | **Wireless off**: only the cable, the car's Bluetooth and Wi-Fi left alone | `wireless-off` | Not yet |

@@ -17,26 +17,26 @@ Changes collect under `## [Unreleased]` as they land. At release, that becomes t
 ## The CHANGELOG section
 
 ```
-## [0.1.1] - 2026-11-11 · PC
+## [0.1.1] - 2026-11-11 · Unverified
 
 The iDrive switches to Bluetooth audio as the phone connects, and the service's log can no longer fill the head unit's
-memory. Only the iDrive app (`libAAEntryNav.so`) changes. Nobody has tried this version in a car yet.
+memory. Only the iDrive app (`libAAEntryNav.so`) changes. This version is unverified.
 
 ### Added
 
 - **The iDrive switches to Bluetooth audio as the phone connects**, with the `select-bt-audio` file, a switch in Flare
-  Drive. ... Not tried in a car yet.
+  Drive. ... Unverified.
 ```
 
-- The heading is `## [X.Y.Z]`, ` - `, the release date (YYYY-MM-DD), then ` · PC` when it has only been tested on PC
-  and under QEMU, or ` · car` once this exact build has run in a car.
+- Verified means this exact build has run in a car. Unverified means it has only been tested on PC and under QEMU.
+- The heading is `## [X.Y.Z]`, ` - `, the release date (YYYY-MM-DD), then ` · Unverified`, or ` · Verified` once this
+  exact build has run in a car.
 - A short paragraph comes first: what the release does for someone in the car, which programs change, and whether it
-  has been tried in a car. Anything that needs the reader to act goes at its start (see Action needed below).
+  is verified. Anything that needs the reader to act goes at its start (see Action needed below).
 - Then [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) categories as `### ` headings, in this order, skipping
   empty ones: Added, Changed, Fixed, Removed, Security.
 - Each bullet opens with its point in bold, then the detail. Markdown is fine here: GitHub renders it.
-- Each bullet says whether that change was tried in a car or only tested on PC. Nothing counts as working until a car
-  has shown it.
+- Each bullet says whether that change is verified or unverified. Nothing counts as working until a car has shown it.
 - A version links to the commit its archive was built from, in the links at the end of the file. That commit is known
   only once `publish` has run, so the link is added at the next release, as 0.1.1's was for 0.1.0.
 
@@ -101,7 +101,7 @@ reported or suggested it, and keep the credit when the change was reworked befor
 
 - Is every bullet something a person in the car can notice, in the car's and Flare Drive's own words?
 - Does every new feature say where to find it, and which Flare Drive version it needs?
-- Does every bullet, and the section's heading, say whether it was tried in a car?
+- Does every bullet, and the section's heading, say whether it is verified or unverified?
 - Is anything that needs the reader to act first, starting with "Action needed:"?
 - Is the Flare Drive note one plain paragraph, with no Markdown and no file names?
 - Is anything that identifies a car left out?
