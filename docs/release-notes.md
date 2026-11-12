@@ -53,8 +53,8 @@ service's log can no longer fill the head unit's memory.
 - Name the Flare Drive switch or screen, never the file behind it: "a switch in Flare Drive", not `select-bt-audio`.
 - Say which Flare Drive version a new switch needs, when an older one doesn't have it.
 - Whether it is stable or experimental, and whether it was tried in a car, are not part of the note: `publish` records
-  them (`--stable`, `--tried-in-car`) and Flare Drive shows them. `publish_release.py notes` and `stability` change
-  them later; edit the GitHub Release to match.
+  them (`--stable`, `--tried-in-car`) and Flare Drive shows them. `publish_release.py notes`, `stability` and `tried`
+  change them later; edit the GitHub Release to match.
 
 ## Writing them
 

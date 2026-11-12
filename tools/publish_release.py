@@ -7,12 +7,14 @@
   uv run --no-project --with cryptography python tools/publish_release.py publish [OPTIONS]
   uv run --no-project --with cryptography python tools/publish_release.py notes VERSION TEXT   rewrite its notes
   uv run --no-project --with cryptography python tools/publish_release.py stability VERSION stable|experimental
+  uv run --no-project --with cryptography python tools/publish_release.py tried VERSION   it has run in a car
   uv run --no-project --with cryptography python tools/publish_release.py retire VERSION... [--delete-archives]
   uv run --no-project --with cryptography python tools/publish_release.py tags     tag releases, with GitHub Releases
 
 OPTIONS: --notes TEXT, --tried-in-car, --stable. Each release carries the owner's label, stable or experimental
-(experimental unless --stable), shown as a pill in Flare Drive. `stability` changes it later: the list is signed again,
-the archive stays as it is.
+(experimental unless --stable), shown as a pill in Flare Drive. `stability` changes it later, and `tried` records
+that a release published without --tried-in-car has since run in a car: the list is signed again, the archive stays as
+it is.
 
 `retire` takes releases off the list, which is signed again; Flare Drive stops offering them at its next check, and a
 head unit that has one installed keeps it. With --delete-archives their archives are then deleted from the bucket.
@@ -245,6 +247,22 @@ def stability(args):
     verify(None)
 
 
+def tried(args):
+    """Records in the live index that one release has run in a car, and signs it again."""
+    key = load_key()
+    index = live_index(key)
+    if index is None:
+        sys.exit("FAIL: no index is published yet.")
+    entries = [r for r in index["releases"] if r["version"] == args.version]
+    if not entries:
+        sys.exit(f"FAIL: {args.version} is not published.")
+    if entries[0].get("triedInCar"):
+        sys.exit(f"{args.version} is already recorded as tried in a car. Nothing was changed.")
+    entries[0]["triedInCar"] = True
+    publish_index(key, {**index, "published": now()})
+    verify(None)
+
+
 def retire(args):
     """Takes releases off the live index and signs it again. With --delete-archives, deletes their archives from the
     bucket afterwards, so no list ever names an archive that is gone."""
@@ -396,6 +414,9 @@ def main():
     s.add_argument("version", help="a published version")
     s.add_argument("label", choices=["stable", "experimental"], help="shown as a pill in Flare Drive")
     s.set_defaults(func=stability)
+    t = commands.add_parser("tried")
+    t.add_argument("version", help="a published version that has since run in a car")
+    t.set_defaults(func=tried)
     r = commands.add_parser("retire")
     r.add_argument("versions", nargs="+", help="published versions to take off the list")
     r.add_argument("--delete-archives", action="store_true", help="then delete their archives from the bucket")
