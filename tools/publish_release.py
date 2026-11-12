@@ -1,28 +1,28 @@
 # Copyright (c) 2026 CallMeLewis
-"""Publish a release for Flare Drive to download: https://updates.darkzone.dev/flare-drive/
+"""Publish a release for Flare Drive to download: https://updates.darkzone.dev/aa-entrynav/
 
   uv run --no-project --with cryptography python tools/publish_release.py keygen   create the signing key, once
   uv run --no-project --with cryptography python tools/publish_release.py init     publish an empty signed index, once
   uv run --no-project --with cryptography python tools/publish_release.py verify   check the live index and list it
   uv run --no-project --with cryptography python tools/publish_release.py publish [OPTIONS]
-  uv run --no-project --with cryptography python tools/publish_release.py adopt ARCHIVE [OPTIONS]
   uv run --no-project --with cryptography python tools/publish_release.py notes VERSION TEXT   rewrite its notes
   uv run --no-project --with cryptography python tools/publish_release.py stability VERSION stable|experimental
+  uv run --no-project --with cryptography python tools/publish_release.py retire VERSION... [--delete-archives]
   uv run --no-project --with cryptography python tools/publish_release.py tags     tag releases, with GitHub Releases
 
 OPTIONS: --notes TEXT, --tried-in-car, --stable. Each release carries the owner's label, stable or experimental
 (experimental unless --stable), shown as a pill in Flare Drive. `stability` changes it later: the list is signed again,
 the archive stays as it is.
 
-`adopt` publishes an archive built before this script existed, as it is, and only one Flare Drive already reviewed by
-its SHA-256 (REVIEWED below): their commits predate CI on this copy, so `publish`'s checks can't apply to them.
+`retire` takes releases off the list, which is signed again; Flare Drive stops offering them at its next check, and a
+head unit that has one installed keeps it. With --delete-archives their archives are then deleted from the bucket.
 
 `publish` builds what CI tested: it refuses a dirty tree, a HEAD whose CI has not passed, and a version already
 published. It then builds the ARM programs, runs the QEMU tests, validates and packages (README.md, Building), in
 Docker when not on Linux, uploads the archive, and only then the signed index, so Flare Drive never sees an entry whose
 archive is missing.
 
-Once the index lists a release, `publish` and `adopt` tag it v<version> on GitHub, at the commit its archive was built
+Once the index lists a release, `publish` tags it v<version> on GitHub, at the commit its archive was built
 from (the index's sourceCommit), push the tag, and give it a GitHub Release with the published archive and its SHA-256
 (with `gh`, signed in to GitHub). An existing tag is never moved. `tags` does the same for every published release still
 without a tag or a Release.
@@ -57,7 +57,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 import verify_arm  # noqa: E402
 
 BUCKET = "darkzone-updates"
-FEED = "flare-drive"
+FEED = "aa-entrynav"
 FEED_URL = f"https://updates.darkzone.dev/{FEED}"
 WRANGLER = "wrangler@4.146.0"  # the version the Flare apps pin
 REPO = "CallMeLewis/AA-EntryNav"
@@ -67,18 +67,6 @@ FIRMWARE = ["202111011321", "202306092158"]
 # Flare Drive's version code for new releases: 20 is the first that lets the signed index approve a release for the
 # trial firmware (19 still needed each release's SHA-256 built in, so it would list a new release and then refuse it).
 MIN_APP = 20
-# Archives built before this script, reviewed byte for byte (Flare Drive's HeadunitInstaller.TRIAL_RELEASE_SHA256):
-# SHA-256 -> (version, the commit they were built from).
-REVIEWED = {
-    "bee9abc501d87726cda903c0de6efb5b84b38fc8b1b112a70f0296ee3e796cb7": (
-        "0.10.0",
-        "e8590575e819247b2fa78d2e7f87b16db6253493",
-    ),
-    "c6bc8028ccacd69552ca9fdf8372295a425acae206fdb461dc5f66f210e8aadd": (
-        "0.10.1",
-        "05beedb90f2654b60401c9b8a0b52a9612ef6798",
-    ),
-}
 
 
 def key_path():
@@ -106,26 +94,15 @@ def output(*args):
     return subprocess.run([str(a) for a in args], cwd=ROOT, check=True, capture_output=True, text=True).stdout.strip()
 
 
-def wrangler_put(key, file, content_type, cache_control):
+def wrangler_object(action, key, *options):
     npx = shutil.which("npx")
     if not npx:
         sys.exit("FAIL: npx not found. Install Node.js, then sign in once with: npx wrangler@4.146.0 login")
-    run(
-        npx,
-        "--yes",
-        WRANGLER,
-        "r2",
-        "object",
-        "put",
-        f"{BUCKET}/{FEED}/{key}",
-        "--file",
-        file,
-        "--remote",
-        "--content-type",
-        content_type,
-        "--cache-control",
-        cache_control,
-    )
+    run(npx, "--yes", WRANGLER, "r2", "object", action, f"{BUCKET}/{FEED}/{key}", "--remote", *options)
+
+
+def wrangler_put(key, file, content_type, cache_control):
+    wrangler_object("put", key, "--file", file, "--content-type", content_type, "--cache-control", cache_control)
 
 
 def fetch(name):
@@ -240,21 +217,6 @@ def publish(args):
     upload(key, index, ROOT / "artifacts" / f"aa-entrynav-{version}-armhf.tar", version, head, args)
 
 
-def adopt(args):
-    key = load_key()
-    index = live_index(key)
-    if index is None:
-        sys.exit("FAIL: no index is published yet. Run init first.")
-    archive = Path(args.archive)
-    sha = hashlib.sha256(archive.read_bytes()).hexdigest()
-    if sha not in REVIEWED:
-        sys.exit(f"FAIL: {archive.name} ({sha[:12]}…) is not a reviewed archive. Publish new builds with publish.")
-    version, commit = REVIEWED[sha]
-    if any(r["version"] == version for r in index["releases"]):
-        sys.exit(f"FAIL: {version} is already published.")
-    upload(key, index, archive, version, commit, args)
-
-
 def notes(args):
     """Replaces one release's notes in the live index and signs it again. The archives stay as they are."""
     key = load_key()
@@ -280,6 +242,26 @@ def stability(args):
         sys.exit(f"FAIL: {args.version} is not published.")
     entries[0]["stability"] = args.label
     publish_index(key, {**index, "published": now()})
+    verify(None)
+
+
+def retire(args):
+    """Takes releases off the live index and signs it again. With --delete-archives, deletes their archives from the
+    bucket afterwards, so no list ever names an archive that is gone."""
+    key = load_key()
+    index = live_index(key)
+    if index is None:
+        sys.exit("FAIL: no index is published yet.")
+    missing = sorted(set(args.versions) - {r["version"] for r in index["releases"]})
+    if missing:
+        sys.exit(f"FAIL: not published: {', '.join(missing)}. Nothing was changed.")
+    gone = [r for r in index["releases"] if r["version"] in args.versions]
+    kept = [r for r in index["releases"] if r["version"] not in args.versions]
+    publish_index(key, {**index, "published": now(), "releases": kept})
+    print(f"Retired {', '.join(r['version'] for r in gone)}.")
+    if args.delete_archives:
+        for entry in gone:
+            wrangler_object("delete", entry["file"])
     verify(None)
 
 
@@ -328,10 +310,6 @@ def tag_release(entry):
     already published, and `tags` makes up for it. True once the tag is on GitHub at that commit."""
     version, commit = entry["version"], entry["sourceCommit"]
     tag = f"v{version}"
-    if git("cat-file", "-e", f"{commit}^{{commit}}", check=False).returncode:
-        # Releases up to 0.10.7 were built before the history was restarted: their commits are not in this repository.
-        print(f"{version} was built from {commit[:7]}, which this repository's history doesn't hold: no tag.")
-        return False
     existing = git("rev-parse", "--verify", "--quiet", f"refs/tags/{tag}^{{commit}}", check=False).stdout.strip()
     if existing and existing != commit:
         print(f"WARN: {tag} already points at {existing[:7]}, not {commit[:7]}, which {version} was built from.")
@@ -410,12 +388,6 @@ def main():
     p.add_argument("--tried-in-car", action="store_true", help="only once this exact build has run in a car")
     p.add_argument("--stable", action="store_true", help="label it stable in Flare Drive (default: experimental)")
     p.set_defaults(func=publish)
-    a = commands.add_parser("adopt")
-    a.add_argument("archive", help="artifacts/aa-entrynav-<version>-armhf.tar, one of the reviewed builds")
-    a.add_argument("--notes", default="", help="one short paragraph, shown in Flare Drive")
-    a.add_argument("--tried-in-car", action="store_true", help="only once this exact build has run in a car")
-    a.add_argument("--stable", action="store_true", help="label it stable in Flare Drive (default: experimental)")
-    a.set_defaults(func=adopt)
     n = commands.add_parser("notes")
     n.add_argument("version", help="a published version")
     n.add_argument("text", help="one short paragraph, shown in Flare Drive")
@@ -424,6 +396,10 @@ def main():
     s.add_argument("version", help="a published version")
     s.add_argument("label", choices=["stable", "experimental"], help="shown as a pill in Flare Drive")
     s.set_defaults(func=stability)
+    r = commands.add_parser("retire")
+    r.add_argument("versions", nargs="+", help="published versions to take off the list")
+    r.add_argument("--delete-archives", action="store_true", help="then delete their archives from the bucket")
+    r.set_defaults(func=retire)
     args = parser.parse_args()
     args.func(args)
 
