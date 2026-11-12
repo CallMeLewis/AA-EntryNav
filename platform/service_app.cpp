@@ -365,17 +365,101 @@ void ServiceApp::connected(int fd, void* user) {
     startSession(fd, user, std::string());
 }
 
+namespace {
+// One question to the car's Bluetooth stack, asked on a thread of its own: a private D-Bus connection registers with
+// libdbus's default timeout of about 25 s, which the session thread must not wait out (no ping answered meanwhile).
+// Shared by the asking thread and the worker; the last one to let go deletes it.
+struct PairedQuestion {
+    pthread_mutex_t mu;
+    pthread_cond_t cv;
+    std::string adapter, phone;
+    int paired;  // bluezPaired's answer once done
+    bool done;
+    int refs;
+    PairedQuestion(const std::string& a, const std::string& p)
+        : adapter(a), phone(p), paired(-1), done(false), refs(2) {
+        pthread_mutex_init(&mu, nullptr);
+        pthread_condattr_t attr;
+        pthread_condattr_init(&attr);
+        pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
+        pthread_cond_init(&cv, &attr);
+        pthread_condattr_destroy(&attr);
+    }
+    ~PairedQuestion() {
+        pthread_cond_destroy(&cv);
+        pthread_mutex_destroy(&mu);
+    }
+    void release() {  // with mu held; unlocks it
+        const bool last = --refs == 0;
+        pthread_mutex_unlock(&mu);
+        if (last) {
+            delete this;
+        }
+    }
+};
+
+const char* pairedText(int paired) {
+    return paired == 1   ? "paired with the car"
+           : paired == 0 ? "not paired with the car"
+                         : "the car's stack did not say";
+}
+
+void* askPaired(void* p) {
+    PairedQuestion* q = static_cast<PairedQuestion*>(p);
+    const int paired = bluezPaired(q->adapter, q->phone);
+    pthread_mutex_lock(&q->mu);
+    const bool late = q->refs == 1;  // the asking thread stopped waiting
+    q->paired = paired;
+    q->done = true;
+    pthread_cond_signal(&q->cv);
+    if (late) {
+        ELOG("Bluetooth", "phone %s: %s (answered late)", q->phone.c_str(), pairedText(paired));
+    }
+    q->release();
+    return nullptr;
+}
+
+const unsigned kPairedWaitMs = 1500;
+}  // namespace
+
 bool ServiceApp::bluetoothPaired(const std::string& phone, void* user) {
     ServiceApp* a = static_cast<ServiceApp*>(user);
     pthread_mutex_lock(&a->mu);
     const std::string adapter = a->bluetoothAdapter;
     pthread_mutex_unlock(&a->mu);
-    const int paired = bluezPaired(adapter, phone);
-    ELOG("Bluetooth", "phone %s: %s", phone.c_str(),
-         paired == 1   ? "paired with the car"
-         : paired == 0 ? "not paired with the car"
-                       : "the car's stack did not say");
-    return paired == 1;
+    PairedQuestion* q = new PairedQuestion(adapter, phone);
+    pthread_t t;
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    const bool asking = pthread_create(&t, &attr, askPaired, q) == 0;
+    pthread_attr_destroy(&attr);
+    if (!asking) {
+        delete q;  // only for the log: not worth asking on this thread
+        ELOG("Bluetooth", "phone %s: not asked (no thread)", phone.c_str());
+        return false;
+    }
+    timespec until;
+    clock_gettime(CLOCK_MONOTONIC, &until);
+    until.tv_sec += kPairedWaitMs / 1000;
+    until.tv_nsec += static_cast<long>(kPairedWaitMs % 1000) * 1000000L;
+    if (until.tv_nsec >= 1000000000L) {
+        ++until.tv_sec;
+        until.tv_nsec -= 1000000000L;
+    }
+    pthread_mutex_lock(&q->mu);
+    while (!q->done && pthread_cond_timedwait(&q->cv, &q->mu, &until) == 0) {
+    }
+    const bool done = q->done;
+    const int paired = q->paired;
+    q->release();
+    if (done) {
+        ELOG("Bluetooth", "phone %s: %s", phone.c_str(), pairedText(paired));
+    } else {
+        ELOG("Bluetooth", "phone %s: the car's stack did not answer within %u ms; the session carries on",
+             phone.c_str(), kPairedWaitMs);
+    }
+    return done && paired == 1;
 }
 
 void ServiceApp::startSession(int fd, void* user, const std::string& carBluetooth, bool cable) {
