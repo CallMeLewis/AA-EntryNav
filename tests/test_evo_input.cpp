@@ -282,8 +282,12 @@ int main() {
         pv.data = kCom;
         kk.onMessage(pv);
         CHECK(rec.n == 3 && rec.e[2].keycode == aa::AAK_TEL && rec.apps == 2);
+        kk.setPhoneToIdrive(true);  // a call begins while COM is held: its release still goes where its press went
         pv.data = k0;
         kk.onMessage(pv);
+        CHECK(rec.n == 4 && rec.e[3].keycode == aa::AAK_TEL && rec.e[3].down == 0);
+        kk.setPhoneToIdrive(false);
+        rec.n = 3;  // the recorder keeps 16 events
         // A press that reached Android Auto gets its release, once, even if the picture left meanwhile.
         {
             const int beforeHold = rec.n, appsBefore = rec.apps;

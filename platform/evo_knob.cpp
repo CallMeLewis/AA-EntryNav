@@ -365,8 +365,14 @@ void EvoKnob::onMessage(const VmostMsgView& m) {
     for (int i = 0; i < n; ++i) {
         const char* what = ev[i].what ? ev[i].what : "?";
         // During a call, COM stays with iDrive's call screen (CarPlay does the same: ICallManager check).
-        const bool localKey =
-            ev[i].kind == 1 && (ev[i].keycode == 0 || (ev[i].keycode == aa::AAK_TEL && phoneToIdrive_));
+        bool localKey = ev[i].kind == 1 && (ev[i].keycode == 0 || (ev[i].keycode == aa::AAK_TEL && phoneToIdrive_));
+        if (localKey && !ev[i].down && ev[i].keycode != 0) {
+            // COM pressed before the call began went to Android Auto: its release follows it there, or the key would
+            // stay down on the phone.
+            for (int k = 0; k < nHeld_; ++k) {
+                localKey = localKey && held_[k] != ev[i].keycode;
+            }
+        }
         if (localKey) {  // hard key left to iDrive (configureHardKeys)
             if (ev[i].down) {
                 ELOG("Knob", "key %s left to iDrive (not sent to AA)", what);
