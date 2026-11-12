@@ -136,6 +136,9 @@ private:
     void onStart(uint8_t channel, const Message& message);
     void onAudioStop(uint8_t channel);
     void onMedia(uint8_t channel, uint16_t id, const Message& message);
+    // A media message dropped before onMedia (reassembly): acked anyway, or the phone's window of unacked messages
+    // shrinks for good and its stream stops.
+    void ackDropped(uint8_t channel);
     void onVideoFocusRequest(uint8_t channel, const Message& message);
     void onInputBinding(uint8_t channel);
     void onMicrophoneOpen(uint8_t channel, const Message& message);

@@ -37,18 +37,45 @@ bool encodeFrame(uint8_t channel, uint8_t flags, const uint8_t* payload, size_t 
     return true;
 }
 
+size_t MessageAssembler::pendingBytes() const {
+    size_t total = 0;
+    for (std::map<uint8_t, Pending>::const_iterator i = pending_.begin(); i != pending_.end(); ++i) {
+        total += i->second.data.size();
+    }
+    return total;
+}
+
 MessageAssembler::Outcome MessageAssembler::add(const FrameHeader& header, const std::vector<uint8_t>& payload,
                                                 std::vector<uint8_t>& message) {
+    const uint8_t position = header.position();
+    const bool continues = position == frame::kMiddle || position == frame::kLast;
     Pending& pending = pending_[header.channel];
-    if (pending.data.size() + payload.size() > frame::kMaxMessage) {
-        pending_.erase(header.channel);
+    if (continues && pending.skipping) {
+        if (position == frame::kLast) {
+            pending_.erase(header.channel);
+        }
+        return kSkipped;
+    }
+    // A FIRST replaces what the channel held, and a WHOLE leaves it as it is: only a continuation adds to it.
+    const size_t held = continues ? pending.data.size() : 0;
+    const size_t others = pendingBytes() - pending.data.size();
+    if (held + payload.size() > frame::kMaxMessage || others + held + payload.size() > frame::kMaxPending) {
+        if (position == frame::kMiddle) {
+            std::vector<uint8_t>().swap(pending.data);  // the memory goes now
+            pending.sized = false;
+            pending.size = pending.onWire = 0;
+            pending.skipping = true;  // and the fragments up to the LAST are dropped quietly
+        } else if (position != frame::kWhole) {
+            pending_.erase(header.channel);
+        }
         return kOverflow;
     }
-    switch (header.position()) {
+    switch (position) {
         case frame::kWhole:
             message = payload;
             return kComplete;
         case frame::kFirst:
+            pending.skipping = false;
             pending.data = payload;
             pending.sized = true;
             pending.size = header.totalSize;
