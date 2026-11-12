@@ -82,7 +82,8 @@ public:
     // Prepares the video and starts the session on this socket, which it owns. carBluetooth: the car's address, told
     // to a phone on a cable so that it pairs with the car (aa::AASession::setBluetooth); empty on Wi-Fi. cable: the
     // socket comes from the cable, and is refused if a session started meanwhile (a phone on Wi-Fi keeps its session).
-    static void startSession(int fd, void* user, const std::string& carBluetooth, bool cable = false);
+    // True when the session runs; false when the socket was closed instead (stopping, not ready, video failed).
+    static bool startSession(int fd, void* user, const std::string& carBluetooth, bool cable = false);
     // Is this phone paired with the car's Bluetooth (bluez_adapter.hpp)? On the session thread.
     static bool bluetoothPaired(const std::string& phone, void* user);
     static void* wireless(void* user);  // thread: runWirelessLoop, then the failure the main loop sees

@@ -462,13 +462,13 @@ bool ServiceApp::bluetoothPaired(const std::string& phone, void* user) {
     return done && paired == 1;
 }
 
-void ServiceApp::startSession(int fd, void* user, const std::string& carBluetooth, bool cable) {
+bool ServiceApp::startSession(int fd, void* user, const std::string& carBluetooth, bool cable) {
     ServiceApp* a = static_cast<ServiceApp*>(user);
     pthread_mutex_lock(&a->connectMu);
     if (a->stopRequested()) {
         close(fd);
         pthread_mutex_unlock(&a->connectMu);
-        return;
+        return false;
     }
     if (cable && a->session.isActive()) {
         // The cable thread saw nothing running, then spent seconds asking the phone: a phone on Wi-Fi connected
@@ -476,7 +476,7 @@ void ServiceApp::startSession(int fd, void* user, const std::string& carBluetoot
         ELOG("ServiceApp", "a phone on Wi-Fi connected while the cable was being set up: the cable waits");
         close(fd);
         pthread_mutex_unlock(&a->connectMu);
-        return;
+        return false;
     }
     pthread_mutex_lock(&a->mu);
     bool ready = a->ready;
@@ -485,7 +485,7 @@ void ServiceApp::startSession(int fd, void* user, const std::string& carBluetoot
         close(fd);
         a->server.notifySessionEnded();
         pthread_mutex_unlock(&a->connectMu);
-        return;
+        return false;
     }
     pthread_mutex_lock(&a->mu);
     ++a->tcpLinks;
@@ -507,12 +507,13 @@ void ServiceApp::startSession(int fd, void* user, const std::string& carBluetoot
         a->tcpPreparing = false;
         pthread_mutex_unlock(&a->mu);
         pthread_mutex_unlock(&a->connectMu);
-        return;
+        return false;
     }
     a->focus = true;
     pthread_mutex_unlock(&a->mu);
     a->session.setBluetooth(carBluetooth, carBluetooth.empty() ? nullptr : bluetoothPaired, a);
-    if (!a->session.start(fd)) {
+    bool started = a->session.start(fd);
+    if (!started) {
         a->server.notifySessionEnded();  // start owns/cleans fd even on failure
     } else {
         a->server.markSessionActive();
@@ -524,9 +525,12 @@ void ServiceApp::startSession(int fd, void* user, const std::string& carBluetoot
     a->tcpPreparing = false;
     pthread_mutex_unlock(&a->mu);
     pthread_mutex_unlock(&a->connectMu);
+    return started;
 }
 
 namespace {
+const unsigned kCableRetryAfterFailureMs = 10000;
+
 void usbLog(const char* line, void*) {
     ELOG("Usb", "%s", line);
 }
@@ -576,7 +580,16 @@ void* ServiceApp::usb(void* user) {
                 } else {
                     ELOG("Bluetooth", "the car's Bluetooth stack did not answer: the phone is not told about it");
                 }
-                startSession(socket, a, adapter.address, true);  // owns the socket from here, as with Wi-Fi
+                // Owns the socket from here, as with Wi-Fi. A session that could not start (the video above all) is
+                // not retried at once: each try resets the phone and asks it again, every second or so for as long as
+                // the failure lasts.
+                if (!startSession(socket, a, adapter.address, true)) {
+                    ELOG("Usb", "the session did not start: the cable is tried again in %u s",
+                         kCableRetryAfterFailureMs / 1000);
+                    for (unsigned waited = 0; waited < kCableRetryAfterFailureMs && !a->usbStop; waited += 50) {
+                        usleep(50000);
+                    }
+                }
             }
         }
         a->usbBusy = carried;
