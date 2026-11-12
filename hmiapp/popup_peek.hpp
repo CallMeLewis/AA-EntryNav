@@ -15,11 +15,12 @@ public:
     enum Action { kNone = 0, kStart = 1, kEnd = -1, kDriveMode = 2 };
     static const int kDriveModeSeconds = 6;
 
-    PopupPeek() : peek_(false), decided_(false) {}
+    PopupPeek() : peek_(false), decided_(false), shownMode_(0) {}
 
     // Once per status poll. covered = iDrive holds the focus over our visible state while Android Auto is on screen.
     // now: monotonic seconds. One decision per covered span: a popup still open when the time limit ends does not take
-    // the picture again.
+    // the picture again. A later driving mode change in the same span does: iDrive shows the new mode in the display
+    // that still holds the focus, so kDriveMode again.
     Action step(bool covered, long now, long lastDriveMode) {
         if (!covered) {
             decided_ = false;
@@ -29,11 +30,17 @@ public:
             peek_ = false;
             return kEnd;
         }
+        const bool driveMode = lastDriveMode && now - lastDriveMode < kDriveModeSeconds;
         if (decided_) {
+            if (!peek_ && driveMode && lastDriveMode != shownMode_) {
+                shownMode_ = lastDriveMode;
+                return kDriveMode;
+            }
             return kNone;
         }
         decided_ = true;
-        if (lastDriveMode && now - lastDriveMode < kDriveModeSeconds) {
+        if (driveMode) {
+            shownMode_ = lastDriveMode;
             return kDriveMode;
         }
         peek_ = true;
@@ -44,6 +51,7 @@ public:
 
 private:
     bool peek_, decided_;
+    long shownMode_;  // the driving mode change whose display was last given a peek
 };
 
 #endif

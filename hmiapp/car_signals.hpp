@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The car's CDS properties the app follows: gear, the two phone lines, day/night, driving mode. Each change goes to
-// the service as a control message and to the hold machine.
+// the hold machine, and all but the driving mode to the service as a control message.
 //   driving.gear                     "gear <n>": in reverse the camera shows and Android Auto steps aside
 //   communication.callStatus0 / 1    "call 1" / "call 0": the phone keys follow iDrive's call
 //   vehicle.dayNightChangeOver       "daynight <n>" (1 day, 2 night), also written to /tmp/aa-entrynav-daynight
-//   driving.mode / driving.mode35up  "drivemode <n>", for a real change between two valid modes only
+//   driving.mode / driving.mode35up  a real change between two valid modes only: the hold machine sends "drivemode"
+//                                    if iDrive's driving mode display then covers our state (popup_peek.hpp)
 // Every handler runs on the app thread.
 #ifndef AA_ENTRYNAV_HMIAPP_CAR_SIGNALS_HPP
 #define AA_ENTRYNAV_HMIAPP_CAR_SIGNALS_HPP

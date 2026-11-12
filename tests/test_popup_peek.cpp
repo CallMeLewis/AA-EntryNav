@@ -14,14 +14,16 @@ int main() {
         assert(p.step(false, 103, 0) == PopupPeek::kEnd && !p.active());
         assert(p.step(false, 104, 0) == PopupPeek::kNone);
     }
-    {  // the driving mode display gets its own shorter peek, once for the whole of its span
+    {  // the driving mode display gets its own shorter peek, once per change, however long it holds the focus
         PopupPeek p;
         assert(p.step(false, 199, 198) == PopupPeek::kNone);  // the mode changed, no display (iDrive's setting off)
         assert(p.step(true, 200, 198) == PopupPeek::kDriveMode && !p.active());
         assert(p.step(true, 201, 198) == PopupPeek::kNone && !p.active());
-        assert(p.step(true, 207, 198) == PopupPeek::kNone && !p.active());  // still open past the 6 s: not taken again
-        assert(p.step(false, 208, 198) == PopupPeek::kNone);
-        assert(p.step(true, 220, 198) == PopupPeek::kStart);  // a later popup is a real one
+        assert(p.step(true, 202, 202) == PopupPeek::kDriveMode);  // a second change, the display still up: again
+        assert(p.step(true, 203, 202) == PopupPeek::kNone);
+        assert(p.step(true, 209, 202) == PopupPeek::kNone && !p.active());  // still open past the 6 s: not taken again
+        assert(p.step(false, 210, 202) == PopupPeek::kNone);
+        assert(p.step(true, 220, 202) == PopupPeek::kStart);  // a later popup is a real one
     }
     {  // a long popup does not take the picture again once its time is over; a new span does
         PopupPeek p;

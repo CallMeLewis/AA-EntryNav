@@ -4,7 +4,7 @@
 // stop sequence.
 //
 // The supervisor borrows the car's Bluetooth, runs the service aa-entrynav and gives the Bluetooth back when it ends.
-// Control messages: ping, show, hide, quit, gear <n>, call <0|1>, daynight <n>, drivemode <n>, popup <0|1>.
+// Control messages: ping, show, hide, quit, gear <n>, call <0|1>, daynight <n>, drivemode, popup <0|1>.
 // Single-threaded (the app thread), but for a reaper thread per start that only waits for the supervisor and logs.
 #ifndef AA_ENTRYNAV_HMIAPP_SERVICE_LINK_HPP
 #define AA_ENTRYNAV_HMIAPP_SERVICE_LINK_HPP
