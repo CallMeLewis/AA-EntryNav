@@ -18,7 +18,8 @@ the repository goes public. `tools/publish_release.py` takes three texts from it
 
 `publish_release.py preview` shows the Flare Drive note and the GitHub Release's text as `publish` will use them.
 
-Changes collect under `## [Unreleased]` as they land. At release, that becomes the version's section.
+Changes collect under `## [Unreleased]` as they land. `publish_release.py prepare X.Y.Z "<summary>"` turns that into
+the version's section and makes the release commit.
 
 ## The CHANGELOG section
 
@@ -41,7 +42,7 @@ memory. Only the iDrive app (`libAAEntryNav.so`) changes. This version is unveri
 
 - Verified means this exact build has run in a car. Unverified means it has only been tested on PC and under QEMU.
 - The heading is `## [X.Y.Z]`, ` - `, the release date (YYYY-MM-DD), then ` · Unverified`, or ` · Verified` once this
-  exact build has run in a car. `publish` sets the date to the day it published the release.
+  exact build has run in a car. `prepare` writes it; `publish` sets the date to the day it published the release.
 - The Flare Drive note comes next, as `<!-- Flare Drive: ... -->` (see The Flare Drive note below).
 - Then a short paragraph: what the release does for someone in the car, which programs change, and whether it is
   verified. Anything that needs the reader to act goes in a paragraph of its own before it (see Action needed below).
@@ -51,7 +52,7 @@ memory. Only the iDrive app (`libAAEntryNav.so`) changes. This version is unveri
 - Each bullet says whether that change is verified or unverified, in a closing sentence that starts with "Verified" or
   "Unverified", which the GitHub Release leaves out. Nothing counts as working until a car has shown it.
 - A version links to the commit its archive was built from, in the links at the end of the file. `publish` adds the
-  link, and any still missing, once it has published the release.
+  link once it has published the release, and `prepare` adds any that are still missing.
 
 ## The Flare Drive note
 

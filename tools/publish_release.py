@@ -4,6 +4,7 @@
   uv run --no-project --with cryptography python tools/publish_release.py keygen   create the signing key, once
   uv run --no-project --with cryptography python tools/publish_release.py init     publish an empty signed index, once
   uv run --no-project --with cryptography python tools/publish_release.py verify   check the live index and list it
+  uv run --no-project --with cryptography python tools/publish_release.py prepare VERSION SUMMARY   the release commit
   uv run --no-project --with cryptography python tools/publish_release.py preview [VERSION]   show its two texts
   uv run --no-project --with cryptography python tools/publish_release.py publish [--stable]
   uv run --no-project --with cryptography python tools/publish_release.py notes VERSION   resync its texts
@@ -14,6 +15,10 @@
 A release's texts come from its section of CHANGELOG.md (docs/release-notes.md): the Flare Drive note, written in it as
 <!-- Flare Drive: ... -->, and the GitHub Release's text, made from the section itself. `preview` shows both without
 publishing anything; `notes` brings a published release's note and GitHub Release back in line with the section.
+
+`prepare` raises VERSION and commits it as `Release VERSION: SUMMARY`, and turns CHANGELOG.md's [Unreleased] part into
+the version's section (CHANGELOG.md is outside git, so it is not in the commit). Push that commit, wait for CI, then
+publish.
 
 Each release carries the owner's label, stable or experimental (experimental unless --stable), shown as a pill in Flare
 Drive. `stability` changes it later: the list is signed again, the archive stays as it is. Whether a release has run in
@@ -249,9 +254,10 @@ def release_body(text):
     return "\n".join(lines).strip() + "\n"
 
 
-def with_links(text, index):
-    """text with a link for every published version that has none, to the commit its archive was built from. The links
-    stay at the end: [Unreleased], then the versions newest first."""
+def with_links(text, index, unreleased_from=None):
+    """text with a link for every published version that has none, to the commit its archive was built from, and with
+    [Unreleased] comparing from v<unreleased_from> when given. The links stay at the end: [Unreleased], then the
+    versions newest first."""
     lines = text.rstrip("\n").split("\n")
     links = {}
     while lines and (not lines[-1].strip() or LINK.match(lines[-1])):
@@ -263,10 +269,57 @@ def with_links(text, index):
             links[release["version"]] = (
                 f"[{release['version']}]: https://github.com/{REPO}/tree/{release['sourceCommit']}"
             )
+    if unreleased_from:
+        links["Unreleased"] = f"[Unreleased]: https://github.com/{REPO}/compare/v{unreleased_from}...HEAD"
     versions = sorted((label for label in links if re.fullmatch(r"\d+(\.\d+)*", label)), key=version_key, reverse=True)
     others = [label for label in links if label != "Unreleased" and label not in versions]
     order = (["Unreleased"] if "Unreleased" in links else []) + versions + others
     return "\n".join(lines).rstrip("\n") + "\n\n" + "\n".join(links[label] for label in order) + "\n"
+
+
+def prepare(args):
+    """The release commit: VERSION raised and committed as `Release VERSION: SUMMARY`, then CHANGELOG.md's [Unreleased]
+    part turned into the version's section, with any published version still missing its link given one."""
+    version = args.version
+    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        sys.exit(f"FAIL: {version} is not X.Y.Z.")
+    subject = f"Release {version}: {args.summary}"
+    if len(subject) > 72:
+        sys.exit(f"FAIL: the subject is {len(subject)} characters, more than 72: {subject}")
+    if output("git", "status", "--porcelain"):
+        sys.exit("FAIL: the working tree has changes. The release commit holds VERSION only.")
+    current = (ROOT / "VERSION").read_text().strip()
+    if version_key(version) <= version_key(current):
+        sys.exit(f"FAIL: {version} is not above the current version, {current}.")
+    index = live_index(load_key())
+    if index is None:
+        sys.exit("FAIL: no index is published yet. Run init first.")
+    if any(r["version"] == version for r in index["releases"]):
+        sys.exit(f"FAIL: {version} is already published.")
+    text = read_changelog()
+    if section_span(text, version):
+        sys.exit(f"FAIL: {CHANGELOG.name} already has a section for {version}.")
+    unreleased = section_span(text, "Unreleased")
+    if unreleased is None:
+        sys.exit(f"FAIL: {CHANGELOG.name} has no [Unreleased] section.")
+    if not text[unreleased[0] : unreleased[1]].split("\n", 1)[1].strip():
+        sys.exit(f"FAIL: nothing under [Unreleased] in {CHANGELOG.name}. Write the release's section there first.")
+
+    (ROOT / "VERSION").write_text(version + "\n", newline="\n")
+    committed = git("commit", "--quiet", "-m", subject, "--", "VERSION", check=False)
+    if committed.returncode:
+        git("checkout", "--", "VERSION", check=False)
+        sys.exit(f"FAIL: could not commit VERSION: {(committed.stderr or committed.stdout).strip()}")
+    print(f"Committed {output('git', 'rev-parse', '--short', 'HEAD')}: {subject}")
+
+    heading_end = text.index("\n", unreleased[0]) + 1
+    date = datetime.now().strftime("%Y-%m-%d")
+    text = text[:heading_end] + f"\n## [{version}] - {date} · Unverified\n" + text[heading_end:]
+    write_changelog(with_links(text, index, unreleased_from=version))
+    print(f"{CHANGELOG.name}: [Unreleased] is now {version}'s section, unverified.")
+    if not NOTE.search(section(version)):
+        print(f"WARN: {version}'s section has no Flare Drive note (<!-- Flare Drive: ... -->) yet. publish needs one.")
+    print("Check both texts with preview, push the commit, wait for CI, then publish.")
 
 
 def preview(args):
@@ -544,6 +597,10 @@ def main():
     commands.add_parser("init").set_defaults(func=init)
     commands.add_parser("verify").set_defaults(func=verify)
     commands.add_parser("tags").set_defaults(func=tags)
+    pr = commands.add_parser("prepare")
+    pr.add_argument("version", help="the new version, X.Y.Z")
+    pr.add_argument("summary", help="what's in it, for the commit subject `Release X.Y.Z: SUMMARY`")
+    pr.set_defaults(func=prepare)
     pv = commands.add_parser("preview")
     pv.add_argument("version", nargs="?", help="a version with a CHANGELOG.md section (default: VERSION's)")
     pv.set_defaults(func=preview)

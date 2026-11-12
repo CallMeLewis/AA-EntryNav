@@ -63,8 +63,8 @@ never hold more than about 2 MB.
 ## Releases
 
 A release commit only bumps `VERSION`; its `CHANGELOG.md` section is written alongside, in the copy kept outside git
-until the repository goes public. Its subject is `Release`, the version and a short summary of what's in it, never the
-bare version number:
+until the repository goes public. `tools/publish_release.py prepare X.Y.Z "<summary>"` makes it. Its subject is
+`Release`, the version and a short summary of what's in it, never the bare version number:
 
 ```
 Release 0.1.1: Bluetooth audio as the phone connects, a smaller log
