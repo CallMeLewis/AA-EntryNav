@@ -396,8 +396,9 @@ def publish(args):
     print(f"Flare Drive note: {note}", flush=True)
     # The build and every check CI can't run (tools/verify_arm.py, as the pre-push hook runs them), then the
     # archive. Each step stops the publish on failure. Packaging runs on Linux too: zipped elsewhere, the iDrive app's
-    # zips hold the same files in different bytes.
-    verify_arm.run_all(ROOT, (*verify_arm.CHECKS, "tools/package_release.py"))
+    # zips hold the same files in different bytes. A clean build: objects left from an earlier build would otherwise be
+    # shipped as this commit's.
+    verify_arm.run_all(ROOT, (*verify_arm.CHECKS, "tools/package_release.py"), clean=True)
     archive = ROOT / "artifacts" / f"aa-entrynav-{version}-armhf.tar"
     upload(key, index, archive, version, head, args.stable, note, body)
 

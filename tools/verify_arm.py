@@ -31,15 +31,23 @@ def run(*args, cwd=ROOT):
     subprocess.run([str(a) for a in args], cwd=cwd, check=True)
 
 
-def run_all(root, checks=CHECKS):
-    """The ARM build in root, then each check, each under QEMU with the car's libraries. Stops at the first failure."""
+def run_all(root, checks=CHECKS, clean=False):
+    """The ARM build in root, then each check, each under QEMU with the car's libraries. Stops at the first failure.
+
+    clean: `make clean` first, so that nothing built earlier in root (other flags, an older Makefile) is reused. The
+    objects are git-ignored, so a clean `git status` says nothing about them; publish_release.py ships this build.
+    """
     if sys.platform.startswith("linux"):
+        if clean:
+            run("bash", "toolchain/tc.sh", "make", "clean", cwd=root)
         run("bash", "toolchain/tc.sh", *BUILD, cwd=root)
         for check in checks:
             run(sys.executable, "-I", check, cwd=root)
         return
     rootfs = os.environ.get("HU_ROOTFS", "entrynav2-rootfs")
     docker = ["docker", "run", "--rm", "-v", f"{root}:/work", "-w", "/work"]
+    if clean:
+        run(*docker, "-v", f"{rootfs}:/sysroot:ro", TOOLCHAIN_IMAGE, "make", "clean", cwd=root)
     run(*docker, "-v", f"{rootfs}:/sysroot:ro", TOOLCHAIN_IMAGE, *BUILD, cwd=root)
     for check in checks:
         run(*docker, "-v", f"{rootfs}:/root/entrynav2/rootfs:ro", QEMU_IMAGE, "python3", "-I", check, cwd=root)
