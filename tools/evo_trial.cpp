@@ -613,7 +613,10 @@ int main(int argc, char** argv) {
         usleep(100000);
     }
     // The supervisor is separate from the video/session process: it also restores after a crash. On the cable alone
-    // only the picture has anything to undo.
+    // only the picture has anything to undo, and the udev rule (service_contract.hpp).
+    if (unlink(evo::contract::kUsbUdevRuleFile) == 0) {
+        ELOG("Supervisor", "udev rule for phones left by aa-entrynav: removed");
+    }
     bool restored = cableOnly ? videoRemoved() : recover(baseline, reader);
     if (!restored) {
         ELOG("Supervisor", "restore: RESTORE NOT CONFIRMED: keep bluetooth-retour.txt, use --recover");

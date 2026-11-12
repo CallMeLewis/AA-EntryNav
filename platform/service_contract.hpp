@@ -48,6 +48,11 @@ constexpr char kStateFile[] = "/tmp/aa-entrynav-state";                // "state
 constexpr char kAppKeyFile[] = "/tmp/aa-entrynav-appkey";              // NAV/MEDIA/COM opened an Android Auto app
 constexpr char kDayNightFile[] = "/tmp/aa-entrynav-daynight";          // day or night, written by the app
 constexpr char kWirelessLock[] = "/tmp/aa-entrynav-wireless.lock";     // one wireless start at a time
+// The service's udev rule while Android Auto over a cable is on (usb_link.hpp: kUsbUdevRuleDir/kUsbUdevRuleName). The
+// service removes it as it stops; the supervisor removes it again once the service has ended however it ended, since
+// a crash or the forced stop skips the service's own removal, and the rule would keep BMW's media program away from
+// every Android phone until the next restart.
+constexpr char kUsbUdevRuleFile[] = "/run/udev/rules.d/99-zz-aa-entrynav-usb.rules";
 
 // ---- control messages from the app to the service -----------------------------------------------------------------
 // A Unix datagram socket with this abstract name (platform/control_address.hpp): no file and no port. It was UDP port

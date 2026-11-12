@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 
+#include "service_contract.hpp"
 #include "usb_link.hpp"
 
 #define CHECK(c)                                                 \
@@ -573,7 +574,9 @@ int main() {
         CHECK(strstr(text, "ATTR{idVendor}==\"05ac\", GOTO") && strstr(text, "ATTR{bDeviceClass}==\"09\", GOTO") &&
               strstr(text, "*:08????:*|*:03????:*|*:01????:*|*:09????:*\", GOTO") &&
               strstr(text, "GROUP:=\"root\", MODE:=\"0600\""));
-        CHECK(strcmp(evo::kUsbUdevRuleName, "99-security.rules") > 0);      // read after the car's rule it overrides
+        CHECK(strcmp(evo::kUsbUdevRuleName, "99-security.rules") > 0);  // read after the car's rule it overrides
+        // the supervisor removes the same file after a crash (service_contract.hpp)
+        CHECK(std::string(evo::kUsbUdevRuleDir) + "/" + evo::kUsbUdevRuleName == evo::contract::kUsbUdevRuleFile);
         CHECK(access((dir + "/.aa-entrynav-usb.tmp").c_str(), F_OK) != 0);  // nothing half-written left behind
         evo::removeUsbUdevRule(dir.c_str());
         CHECK(access(path.c_str(), F_OK) != 0);

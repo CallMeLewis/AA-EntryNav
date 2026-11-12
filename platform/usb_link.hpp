@@ -103,8 +103,9 @@ private:
     bool pick(UsbDeviceInfo& out, bool& accessory, bool* present = nullptr);
     // The phone on port refused: left alone for a while, which is returned (ms).
     unsigned leaveAlone(const std::string& port);
-    // Waits for the port's device to change: true with what is there now, false when nothing came back.
-    bool awaitChange(const std::string& port, unsigned device, UsbDeviceInfo& out);
+    // Waits for the port's device to change: true with what is there now, false when nothing came back or the service
+    // stops (the supervisor kills a service still busy 10 s after a stop).
+    bool awaitChange(const std::string& port, unsigned device, UsbDeviceInfo& out, const std::atomic<bool>& quit);
     int openAccessory(const UsbDeviceInfo& device);  // the socket, or -1
     bool hello(int socket, const std::atomic<bool>& quit);
     bool refusedLately(const std::string& port);

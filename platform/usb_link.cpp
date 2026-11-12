@@ -207,9 +207,9 @@ bool UsbLink::phoneWaiting(bool* present) {
     return pick(device, accessory, present);
 }
 
-bool UsbLink::awaitChange(const std::string& port, unsigned device, UsbDeviceInfo& out) {
+bool UsbLink::awaitChange(const std::string& port, unsigned device, UsbDeviceInfo& out, const std::atomic<bool>& quit) {
     const uint32_t start = bus_.nowMs();
-    while (bus_.nowMs() - start < kUsbModeChangeMs) {
+    while (!quit && bus_.nowMs() - start < kUsbModeChangeMs) {
         const std::vector<UsbDeviceInfo> devices = bus_.list();
         for (size_t i = 0; i < devices.size(); ++i) {
             if (devices[i].name == port && devices[i].device != device && !devices[i].descriptors.empty()) {
@@ -304,7 +304,7 @@ int UsbLink::connect(const std::atomic<bool>& quit) {
                 "ended): port reset %s",
                 device.name.c_str(), rc == 0 ? "done" : strerror(-rc));
             UsbDeviceInfo back;
-            if (!awaitChange(device.name, device.device, back)) {
+            if (!awaitChange(device.name, device.device, back, quit)) {
                 say("%s: the phone did not come back after the reset", device.name.c_str());
                 return -1;
             }
@@ -331,14 +331,17 @@ int UsbLink::connect(const std::atomic<bool>& quit) {
                 return -1;
             }
             if (!started) {
-                say("%s: the phone refused the request for accessory mode", device.name.c_str());
+                // Left alone like any refusal: asked again at once, it would be asked every 250 ms.
+                const unsigned ms = leaveAlone(device.name);
+                say("%s: the phone refused the request for accessory mode; left alone for %u s", device.name.c_str(),
+                    ms / 1000);
                 return -1;
             }
             asked_ = true;
             askedPort_ = device.name;
             askedMs_ = bus_.nowMs();
             UsbDeviceInfo back;
-            if (!awaitChange(device.name, device.device, back)) {
+            if (!awaitChange(device.name, device.device, back, quit)) {
                 say("%s: asked for Android Auto (protocol %d), but the phone did not come back", device.name.c_str(),
                     version);
                 return -1;
