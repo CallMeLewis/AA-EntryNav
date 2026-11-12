@@ -36,6 +36,7 @@ ServiceApp::ServiceApp(uint16_t p, bool v, volatile sig_atomic_t* quit)
       wppAccepted(false),
       usbStop(false),
       usbBusy(false),
+      usbPhone(false),
       quit_(quit) {
     pthread_mutex_init(&mu, nullptr);
     pthread_mutex_init(&connectMu, nullptr);
@@ -443,7 +444,9 @@ void* ServiceApp::usb(void* user) {
             carried = false;
         }
         // Only while nothing is connected or being prepared: a phone on Wi-Fi keeps its session.
-        if (!carried && !a->projectionBusy() && link.phoneWaiting()) {
+        bool present = carried;
+        if (!carried && !a->projectionBusy() && link.phoneWaiting(&present)) {
+            a->usbPhone = true;
             a->usbBusy = true;  // the wireless side does not send this phone onto the Wi-Fi meanwhile
             const int socket = link.connect(a->usbStop);
             if (socket >= 0) {
@@ -465,6 +468,7 @@ void* ServiceApp::usb(void* user) {
             }
         }
         a->usbBusy = carried;
+        a->usbPhone = present || carried;
         // A quarter of a second between looks: a phone just plugged in is asked before it has waited long.
         for (int i = 0; i < 5 && !a->usbStop; ++i) {
             usleep(50000);
@@ -472,6 +476,7 @@ void* ServiceApp::usb(void* user) {
     }
     link.close();
     a->usbBusy = false;
+    a->usbPhone = false;
     removeUsbUdevRule(kUsbUdevRuleDir);
     return nullptr;
 }

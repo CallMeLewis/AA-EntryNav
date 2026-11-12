@@ -87,8 +87,9 @@ public:
     UsbLink(UsbBus& bus, Log log, void* user);
     ~UsbLink();
 
-    // A phone, or a phone-like device, is on the bus and is not being left alone after a refusal.
-    bool phoneWaiting();
+    // A phone, or a phone-like device, is on the bus and is not being left alone after a refusal. present: whether
+    // one is on the bus at all, left alone or not.
+    bool phoneWaiting(bool* present = nullptr);
     // One attempt, a few seconds at most. >= 0: the socket Android Auto answers on, which the caller owns and hands to
     // the session. -1: no phone, a refusal, or the other program won every round; the reason is logged.
     int connect(const std::atomic<bool>& quit);
@@ -99,7 +100,7 @@ public:
 
 private:
     void say(const char* format, ...) __attribute__((format(printf, 2, 3)));
-    bool pick(UsbDeviceInfo& out, bool& accessory);
+    bool pick(UsbDeviceInfo& out, bool& accessory, bool* present = nullptr);
     // The phone on port refused: left alone for a while, which is returned (ms).
     unsigned leaveAlone(const std::string& port);
     // Waits for the port's device to change: true with what is there now, false when nothing came back.

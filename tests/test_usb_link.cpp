@@ -411,7 +411,8 @@ int main() {
         for (unsigned i = 0; i < evo::kUsbQuickRetries; ++i) {
             g_lines.clear();
             CHECK(link.connect(quit) == -1 && said("just after a session on the cable: asked again in 2 s"));
-            CHECK(!link.phoneWaiting());  // left alone for now
+            bool present = false;
+            CHECK(!link.phoneWaiting(&present) && present);  // left alone, but on the cable
             bus.step(evo::kUsbQuickRetryMs + 500);
             CHECK(link.phoneWaiting());
         }
@@ -501,7 +502,8 @@ int main() {
         g_lines.clear();
         evo::UsbLink link(bus, keep, nullptr);
         CHECK(link.connect(quit) == -1 && world.starts == 1 && said("refused accessory mode"));
-        CHECK(!link.phoneWaiting());  // not hammered: each request drops it off the bus
+        bool present = false;
+        CHECK(!link.phoneWaiting(&present) && present);  // not hammered: each request drops it off the bus
         CHECK(link.connect(quit) == -1 && world.starts == 1);
         bus.step(evo::kUsbRefusedMs + 1000);
         CHECK(link.phoneWaiting());
@@ -524,7 +526,8 @@ int main() {
         world.mode = World::kUnplugged;
         FakeBus bus(world);
         evo::UsbLink link(bus, keep, nullptr);
-        CHECK(!link.phoneWaiting() && link.connect(quit) == -1);
+        bool present = true;
+        CHECK(!link.phoneWaiting(&present) && !present && link.connect(quit) == -1);
         World leaving;
         FakeBus bus2(leaving);
         g_lines.clear();

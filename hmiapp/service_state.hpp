@@ -9,7 +9,7 @@ namespace evo {
 namespace app {
 
 struct ServiceState {
-    char state[24];  // "idle", "connecting", "running", "connected", ... as the service writes it
+    char state[24];  // "idle", "connecting", "waiting" (cable only, unplugged), "running", "connected", ...
     int pid;         // > 0: the session process; -1: starting, or answering without a state file; 0: not running
     int overlay;     // 1: Android Auto is on screen (knob and touch go to the phone)
 

@@ -125,6 +125,7 @@ public:
     bool wppReply, wppAccepted;
     std::atomic<bool> usbStop;     // set with stopping: read by the cable thread while it waits for the phone
     std::atomic<bool> usbBusy;     // set by the cable thread while it connects a phone or carries its session
+    std::atomic<bool> usbPhone;    // set by the cable thread while a phone is on the cable, connected or not
     std::string bluetoothAdapter;  // under mu: the car's BlueZ adapter path for bluetoothPaired, set by usb()
 
 private:

@@ -280,8 +280,9 @@ void statusRun(void*) {
     serviceStop();
     serviceAutostart(g_initTime);
     ServiceState d = readServiceState();
-    bool connecting = !strcmp(d.state, "connecting"), connected = !strcmp(d.state, "connected");
-    unsigned want = connecting ? kTextConnecting : kTextDefault;
+    const bool connecting = d.is("connecting"), connected = d.is("connected");
+    const bool waiting = d.is("waiting");  // cable only, no phone plugged in: nothing to animate
+    unsigned want = connecting ? kTextConnecting : waiting ? kTextWaiting : kTextDefault;
     if (want != g_shownText) {
         bmw::TextID text(want);
         app->updateModel(kEntryTextModel, text);
@@ -299,7 +300,7 @@ void statusRun(void*) {
     }
     // A (re)started service knows neither: started in reverse, Android Auto would come up over the camera.
     g_hold.tellService(d);
-    unsigned row = connected ? kTextRowOpen : connecting ? kTextRowConnecting : kTextStart;
+    unsigned row = connected ? kTextRowOpen : connecting ? kTextRowConnecting : waiting ? kTextRowWaiting : kTextStart;
     if (row != g_shownRow) {
         bmw::TextID text(row);
         app->updateModel(kStartRowModel, text);

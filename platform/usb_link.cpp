@@ -168,9 +168,12 @@ unsigned UsbLink::leaveAlone(const std::string& port) {
     return refusedForMs_;
 }
 
-bool UsbLink::pick(UsbDeviceInfo& out, bool& accessory) {
+bool UsbLink::pick(UsbDeviceInfo& out, bool& accessory, bool* present) {
     const std::vector<UsbDeviceInfo> devices = bus_.list();
     bool found = false;
+    if (present) {
+        *present = false;
+    }
     for (size_t i = 0; i < devices.size(); ++i) {
         const UsbDeviceInfo& d = devices[i];
         if (d.descriptors.empty()) {
@@ -179,22 +182,29 @@ bool UsbLink::pick(UsbDeviceInfo& out, bool& accessory) {
         if (isAccessoryId(d.vendor, d.product) && hasAccessoryInterface(d.product)) {
             out = d;  // a phone already in accessory mode comes first
             accessory = true;
+            if (present) {
+                *present = true;
+            }
             return true;
         }
-        if (!found && worthAskingForAccessory(d.vendor, &d.descriptors[0], d.descriptors.size()) &&
-            !refusedLately(d.name)) {
-            out = d;
-            accessory = false;
-            found = true;
+        if (worthAskingForAccessory(d.vendor, &d.descriptors[0], d.descriptors.size())) {
+            if (present) {
+                *present = true;
+            }
+            if (!found && !refusedLately(d.name)) {
+                out = d;
+                accessory = false;
+                found = true;
+            }
         }
     }
     return found;
 }
 
-bool UsbLink::phoneWaiting() {
+bool UsbLink::phoneWaiting(bool* present) {
     UsbDeviceInfo device;
     bool accessory = false;
-    return pick(device, accessory);
+    return pick(device, accessory, present);
 }
 
 bool UsbLink::awaitChange(const std::string& port, unsigned device, UsbDeviceInfo& out) {

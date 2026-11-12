@@ -346,7 +346,9 @@ int main(int argc, char** argv) {
             app.session.postVideoFocus(turn.focusMsg == 1);
         }
         if (service) {
-            control.writeState(turn.active ? "connected" : "connecting", turn.onScreen ? 1 : 0);
+            // On the cable alone, nothing happens until a phone is plugged in: "waiting", not "connecting".
+            const bool waiting = cableOnly && !app.usbPhone && !app.usbBusy;
+            control.writeState(turn.active ? "connected" : waiting ? "waiting" : "connecting", turn.onScreen ? 1 : 0);
         }
         if (failed) {
             break;
