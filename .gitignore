@@ -1,0 +1,71 @@
+# Everything stays local unless listed here: build outputs, car logs, copies of BMW files and personal notes never
+# reach git by accident. tools/verify_repo.py checks every pushed commit. CHANGELOG.md, ROADMAP.md, CONTRIBUTING.md,
+# NOTICE.md and the docs other than the two writing guides stay local too until the repository goes public.
+/*
+!/.claude/
+/.claude/*
+!/.claude/skills/
+!/skills-lock.json
+!/.clang-format
+!/.editorconfig
+!/.gitattributes
+!/.githooks/
+!/.github/
+!/.gitignore
+!/CLAUDE.md
+!/Makefile
+!/README.md
+!/VERSION
+!/core/
+!/docs/
+/docs/*
+!/docs/commit-messages.md
+!/docs/release-notes.md
+!/hmiapp/
+!/platform/
+!/pyproject.toml
+!/requirements-dev.txt
+!/tests/
+!/toolchain/
+!/tools/
+
+# Build outputs
+*.o
+*.d
+*.so
+__pycache__/
+/hmiapp/AAEntryNav_ALL_*.zip
+
+# tests/: sources and fixtures only, without the tests of the older kits
+/tests/*
+!/tests/*.c
+!/tests/*.cpp
+!/tests/*.hpp
+!/tests/*.py
+!/tests/*.sh
+!/tests/fixtures/
+
+# tools/: what the build, the release and the checks use
+/tools/*
+!/tools/backup_headunit.sh
+!/tools/evo_capture.cpp
+!/tools/evo_check.cpp
+!/tools/evo_sound.cpp
+!/tools/evo_usb.cpp
+!/tools/evo_mfl.cpp
+!/tools/pc_headunit.cpp
+!/tools/car_sound_probe.sh
+!/tools/setup.sh
+!/tools/evo_trial.cpp
+!/tools/format_sources.py
+!/tools/package_release.py
+!/tools/publish_release.py
+!/tools/verify_arm.py
+!/tools/verify_binary.py
+!/tools/verify_core.py
+!/tools/verify_repo.py
+!/tools/verify_tests.py
+!/tools/verify_wireless.py
+
+# The build image is rebuilt from the Dockerfile; its wrapper is ours to keep
+/toolchain/test/

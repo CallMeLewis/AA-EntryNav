@@ -1,0 +1,38 @@
+#!/bin/sh
+# Copyright (c) 2026 CallMeLewis
+# Refuses a push if a commit being pushed holds the car's password, a compiled program or a local-only folder, and, for
+# main and release/* branches, if the ARM build or a check that needs the copy of the car's system fails
+# (tools/verify_arm.py, on the pushed commit alone). CI runs everything else.
+# git gives the pushed refs on the standard input: "local-ref local-sha remote-ref remote-sha", one line each.
+python=
+for candidate in python3 python py; do
+    if "$candidate" --version >/dev/null 2>&1; then
+        python=$candidate
+        break
+    fi
+done
+if [ -z "$python" ]; then
+    echo "No Python found: push refused." >&2
+    exit 1
+fi
+refs=$(cat)
+printf '%s\n' "$refs" | "$python" tools/verify_repo.py --pre-push || exit 1
+checked=
+printf '%s\n' "$refs" | while read -r _ local_sha remote_ref _; do
+    case $remote_ref in
+        refs/heads/main | refs/heads/release/*) ;;
+        *) continue ;;
+    esac
+    case $local_sha in
+        *[!0]*) ;;
+        *) continue ;; # a deleted branch
+    esac
+    case " $checked " in
+        *" $local_sha "*) continue ;;
+    esac
+    checked="$checked $local_sha"
+    "$python" tools/verify_arm.py --commit "$local_sha" </dev/null || exit 1
+done || {
+    echo "Push refused: the ARM build or its tests failed. See above." >&2
+    exit 1
+}
