@@ -261,10 +261,10 @@ void ServiceApp::command(const ControlCommand& c, void* user) {
         a->focus = false;
         a->pendingFocus = 2;
     } else if (c.verb == "drivemode") {
-        // Sent by the iDrive app only for a real change between two valid modes.
+        // Sent by the iDrive app once iDrive's driving mode display covers Android Auto's state: never while iDrive's
+        // setting to show driving mode changes is off.
         if (a->peek.driveMode(monoMs())) {
-            ELOG("ServiceApp", "driving mode %d: AA picture aside %u ms (after %u ms) for iDrive's display",
-                 c.hasArg ? c.arg : -1, kDriveModeShowMs, kDriveModeDelayMs);
+            ELOG("ServiceApp", "iDrive's driving mode display: AA picture aside %u ms", kDriveModeShowMs);
         }
     } else if (c.verb == "popup") {
         const PeekTiming::Popup popup = a->peek.popup(monoMs(), c.arg != 0);

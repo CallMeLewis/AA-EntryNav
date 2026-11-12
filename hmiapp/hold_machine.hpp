@@ -16,7 +16,8 @@
 //   "visible" used them up for good, and the next BACK left the menu under Android Auto).
 // - iDrive popup: the blank state stays visible but loses the focus. Android Auto steps aside for it ("popup 1", then
 //   "popup 0" when it closes, hmiapp/popup_peek.hpp) however long it stays, and no event 52 is fired over it.
-// - Driving mode change: iDrive keeps its own display over the blank state. Its focus loss is not fought for 15 s, then
+// - Driving mode change: when iDrive's setting to show driving mode changes is on, iDrive opens its own display over
+//   the blank state. Its focus loss steps Android Auto aside for 3.5 s ("drivemode"), and is not fought for 15 s, then
 //   event 52 every two polls without focus.
 // - Hard key (MENU, MEDIA, NAV, COM, MAP, OPTION): iDrive left the blank state. Confirmed on a second poll within 3 s,
 //   Android Auto steps aside ("hide"), the way MENU leaves native CarPlay; the Android Auto entry brings it back.

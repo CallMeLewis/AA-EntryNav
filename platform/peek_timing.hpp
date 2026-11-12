@@ -6,8 +6,8 @@
 //  - volume: the pill over Android Auto once the car has reported a level; before that, or without the pill, the
 //    picture is dimmed (kVolumeDim for kVolumePeekMs) so iDrive's own bar shows through. When the compositor refuses
 //    the opacity, the picture steps aside instead.
-//  - driving mode change (iDrive app, CDS driving.mode/mode35up): picture stepped aside kDriveModeShowMs after
-//    kDriveModeDelayMs.
+//  - iDrive's driving mode display (iDrive app: its focus loss just after a driving mode change, so only when iDrive's
+//    setting to show driving mode changes is on): picture stepped aside kDriveModeShowMs from then.
 //  - iDrive popup (iDrive app, focus lost on our blank state): picture stepped aside kPopupShowMs at most, or until
 //    the popup closes. Inputs go back to iDrive meanwhile, so the driver can answer it.
 // Times are monotonic milliseconds (evo::monoMs), compared with wrap-around; 0 means "none".
@@ -21,8 +21,7 @@ namespace evo {
 
 const unsigned kVolumePeekMs = 2500;     // volume without the pill: picture dimmed
 const float kVolumeDim = 0.25f;          // its opacity
-const unsigned kDriveModeShowMs = 3500;  // driving mode change: picture stepped aside...
-const unsigned kDriveModeDelayMs = 400;  // ...after this delay
+const unsigned kDriveModeShowMs = 3500;  // iDrive's driving mode display: picture stepped aside
 const unsigned kPopupShowMs = 120000;    // iDrive popup over the blank state: until it closes, at most this
 
 class PeekTiming {
@@ -45,7 +44,7 @@ public:
     bool volumeLevel(bool pillReady);
     // A hard key iDrive acts on: every peek ends. False when Android Auto was not on screen (nothing to do).
     bool hardKey();
-    // Driving mode change: the picture steps aside after a delay. False when Android Auto is not on screen.
+    // iDrive's driving mode display opened: the picture steps aside. False when Android Auto is not on screen.
     bool driveMode(uint32_t now);
     // iDrive popup opened (open) or closed.
     Popup popup(uint32_t now, bool open);

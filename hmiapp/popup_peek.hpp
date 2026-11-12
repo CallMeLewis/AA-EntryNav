@@ -8,8 +8,12 @@
 
 class PopupPeek {
 public:
-    enum Action { kNone = 0, kStart = 1, kEnd = -1 };
-    static const int kDriveModeSeconds = 6;  // its own shorter peek already shows the driving mode popup
+    // kDriveMode: the span began within kDriveModeSeconds of a driving mode change, so it is iDrive's driving mode
+    // display. iDrive only opens it when its setting to show driving mode changes is on: with the setting off, nothing
+    // covers our state and Android Auto stays. The display gets its own shorter peek (the service's "drivemode"), since
+    // its focus loss can outlast it (hold_machine.hpp).
+    enum Action { kNone = 0, kStart = 1, kEnd = -1, kDriveMode = 2 };
+    static const int kDriveModeSeconds = 6;
 
     PopupPeek() : peek_(false), decided_(false) {}
 
@@ -30,7 +34,7 @@ public:
         }
         decided_ = true;
         if (lastDriveMode && now - lastDriveMode < kDriveModeSeconds) {
-            return kNone;
+            return kDriveMode;
         }
         peek_ = true;
         return kStart;

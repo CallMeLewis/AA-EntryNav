@@ -250,6 +250,9 @@ void HoldMachine::updatePopupPeek(bool covered, long now) {
     if (a == PopupPeek::kStart) {
         io_.send("popup 1");
         say("popup: iDrive took the focus over state %u (gear %d): Android Auto picture removed", kAaState, gear_);
+    } else if (a == PopupPeek::kDriveMode) {
+        io_.send("drivemode");
+        say("driving mode display: iDrive took the focus over state %u: Android Auto steps aside", kAaState);
     } else if (a == PopupPeek::kEnd) {
         io_.send("popup 0");
         say("popup: focus given back: Android Auto picture back");

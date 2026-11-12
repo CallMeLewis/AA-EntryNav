@@ -289,9 +289,9 @@ int main(int argc, char** argv) {
             ELOG("Main", "touchscreen unavailable for this run");
         }
         ELOG("Main",
-             "volume: pill over AA from the first level received (before that: picture dimmed %u ms); driving mode: "
-             "picture aside %u ms after %u ms; NAV/MEDIA/COM = AA apps, MENU/MAP/OPTION = iDrive",
-             evo::kVolumePeekMs, evo::kDriveModeShowMs, evo::kDriveModeDelayMs);
+             "volume: pill over AA from the first level received (before that: picture dimmed %u ms); driving mode "
+             "display: picture aside %u ms; NAV/MEDIA/COM = AA apps, MENU/MAP/OPTION = iDrive",
+             evo::kVolumePeekMs, evo::kDriveModeShowMs);
         if (video && !app.pill.start(evo::kPillSurfaceId, app.videoConfig.layerId, app.videoConfig.displayWidth,
                                      app.videoConfig.displayHeight)) {
             ELOG("Main", "volume pill not started: the volume dims the picture");

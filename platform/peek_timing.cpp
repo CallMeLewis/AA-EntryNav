@@ -62,7 +62,7 @@ bool PeekTiming::driveMode(uint32_t now) {
     if (!shownNow_) {
         return false;
     }
-    hide(now, now + kDriveModeDelayMs, kDriveModeShowMs);
+    hide(now, now, kDriveModeShowMs);
     return true;
 }
 

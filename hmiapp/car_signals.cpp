@@ -115,10 +115,8 @@ bool onDriveMode(int prop, const bmw::BasicString<unsigned short>& value) {
     if (!change) {
         return true;
     }
-    char msg[32];
-    snprintf(msg, sizeof(msg), "drivemode %d", v);
-    sendToService(msg);
-    alog("drive mode change -> service (%s)", msg);
+    // The service is told only if iDrive's driving mode display then covers Android Auto's state (popup_peek.hpp).
+    alog("drive mode change to %d", v);
     g_hold->driveModeChanged(monoSeconds());
     return true;
 }

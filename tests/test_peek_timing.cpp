@@ -66,16 +66,16 @@ bool driveMode(uint32_t t) {
     evo::PeekTiming off;
     CHECK(!off.driveMode(t) && !off.hideUntil());
     evo::PeekTiming p = shownAt(t);
-    CHECK(p.driveMode(t));
-    CHECK(p.hideFrom() == t + evo::kDriveModeDelayMs);
-    CHECK(p.hideUntil() == t + evo::kDriveModeDelayMs + evo::kDriveModeShowMs);
-    CHECK(p.turn(t + evo::kDriveModeDelayMs - 1, true).shown);  // not yet
-    CHECK(!p.turn(t + evo::kDriveModeDelayMs, true).shown);
+    CHECK(p.driveMode(t));  // sent once the display has opened: aside at once
+    CHECK(p.hideFrom() == t);
+    CHECK(p.hideUntil() == t + evo::kDriveModeShowMs);
+    CHECK(!p.turn(t, true).shown);
     CHECK(p.onScreen());           // the iDrive app is still told Android Auto is on screen
-    CHECK(p.driveMode(t + 1000));  // a second change extends the one in progress, from where it started
-    CHECK(p.hideFrom() == t + evo::kDriveModeDelayMs);
-    CHECK(p.hideUntil() == t + 1000 + evo::kDriveModeDelayMs + evo::kDriveModeShowMs);
-    CHECK(p.turn(t + 1000 + evo::kDriveModeDelayMs + evo::kDriveModeShowMs, true).shown && !p.hideUntil());
+    CHECK(p.driveMode(t + 1000));  // a second display extends the one in progress, from where it started
+    CHECK(p.hideFrom() == t);
+    CHECK(p.hideUntil() == t + 1000 + evo::kDriveModeShowMs);
+    CHECK(!p.turn(t + 1000 + evo::kDriveModeShowMs - 1, true).shown);
+    CHECK(p.turn(t + 1000 + evo::kDriveModeShowMs, true).shown && !p.hideUntil());
     return true;
 }
 
@@ -130,7 +130,7 @@ bool zeroMeansNone() {
 }  // namespace
 
 int main() {
-    if (!all(1000) || !all(0xFFFFF000u) || !all(0xFFFFFFFFu - evo::kDriveModeDelayMs) || !zeroMeansNone()) {
+    if (!all(1000) || !all(0xFFFFF000u) || !all(0xFFFFFFFFu - 1000u) || !zeroMeansNone()) {
         return 1;
     }
     puts("PASS peeks: volume dim then pill, refused opacity steps aside, driving mode, popup, hard key, clock wrap");

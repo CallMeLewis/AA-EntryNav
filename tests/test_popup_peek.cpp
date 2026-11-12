@@ -14,9 +14,11 @@ int main() {
         assert(p.step(false, 103, 0) == PopupPeek::kEnd && !p.active());
         assert(p.step(false, 104, 0) == PopupPeek::kNone);
     }
-    {  // the driving mode popup keeps its own shorter peek, for the whole of its span
+    {  // the driving mode display gets its own shorter peek, once for the whole of its span
         PopupPeek p;
-        assert(p.step(true, 200, 198) == PopupPeek::kNone && !p.active());
+        assert(p.step(false, 199, 198) == PopupPeek::kNone);  // the mode changed, no display (iDrive's setting off)
+        assert(p.step(true, 200, 198) == PopupPeek::kDriveMode && !p.active());
+        assert(p.step(true, 201, 198) == PopupPeek::kNone && !p.active());
         assert(p.step(true, 207, 198) == PopupPeek::kNone && !p.active());  // still open past the 6 s: not taken again
         assert(p.step(false, 208, 198) == PopupPeek::kNone);
         assert(p.step(true, 220, 198) == PopupPeek::kStart);  // a later popup is a real one
@@ -30,6 +32,6 @@ int main() {
         assert(p.step(false, 370, 0) == PopupPeek::kEnd);
         assert(p.step(true, 400, 0) == PopupPeek::kStart);
     }
-    puts("PASS iDrive popups: one step aside per popup, driving mode display left out, no repeat");
+    puts("PASS iDrive popups: one step aside per popup, the driving mode display's own, no repeat");
     return 0;
 }

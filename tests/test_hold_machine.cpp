@@ -320,13 +320,26 @@ void popupOverBlank() {
     CHECK(c.hold.holding());
 }
 
+// iDrive's setting to show driving mode changes is off: no display, nothing covers our state, Android Auto stays.
+void drivingModeWithoutDisplay() {
+    Car c;
+    heldOnBlank(c);
+    c.hold.driveModeChanged(c.now);
+    c.polls(20);
+    CHECK_OUT(c, "");
+    CHECK(c.hold.holding() && !c.hold.popupPeek());
+}
+
 void drivingModeThenBack() {
     Car c;
     heldOnBlank(c);
     c.hold.driveModeChanged(c.now);
     c.blankFocus(false);  // iDrive's driving mode display, without a screen change
-    c.polls(15);
-    CHECK_OUT(c, "");  // its own shorter peek shows it (no popup 1), and its focus loss is not fought for 15 s
+    c.poll();
+    CHECK_OUT(c, "drivemode");  // its own shorter peek shows it (no popup 1)
+    CHECK(c.logged("driving mode display: iDrive took the focus over state 13: Android Auto steps aside"));
+    c.polls(14);
+    CHECK_OUT(c, "");  // and its focus loss is not fought for 15 s
     c.poll();
     CHECK_OUT(c, "event 52");  // then after two polls without focus
     CHECK(c.logged("state lost focus, try 1"));
@@ -823,6 +836,7 @@ int main() {
     comesUpOverOurMenu();
     backToOurMenu();
     popupOverBlank();
+    drivingModeWithoutDisplay();
     drivingModeThenBack();
     reverseGear();
     calls();
