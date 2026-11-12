@@ -27,6 +27,8 @@ private:
     static void* threadStub(void* arg);
     void loop();
     bool load();
+    bool wanted();
+    void waitForNextRequest();
     DataCallback cb_;
     void* user_;
     void* lib_;
@@ -39,6 +41,7 @@ private:
     int (*setParams_)(void*, int, int, unsigned, unsigned, int, unsigned);
     long (*readi_)(void*, void*, unsigned long);
     int (*recover_)(void*, int, int);
+    int (*wait_)(void*, int);  // snd_pcm_wait: 1 data ready, 0 timeout, < 0 error
     int (*close_)(void*);
     const char* (*strerror_)(int);
 };
