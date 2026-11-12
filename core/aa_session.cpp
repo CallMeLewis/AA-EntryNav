@@ -25,7 +25,7 @@ namespace {
 // second. 5 s, so that a short Wi-Fi gap does not end the session.
 const uint64_t kSilenceMs = 5000;
 const unsigned kFramesLoggedFirst = 40;  // per channel, then one frame in kFramesLoggedEvery
-const unsigned kFramesLoggedEvery = 300;
+const unsigned kFramesLoggedEvery = 3000;
 const unsigned kKeysLogged = 200;  // evo_knob logs every key anyway
 const unsigned kMovesLogged = 40;
 const unsigned kMicrophoneLogEvery = 250;

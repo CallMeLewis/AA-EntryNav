@@ -14,7 +14,9 @@ namespace {
 const unsigned kPingsLogged = 5;  // then one in kPingsLogEvery
 const unsigned kPingsLogEvery = 300;
 const unsigned kNavigationLogEvery = 50;
-const unsigned kMediaLogEvery = 30;
+// Once a minute of video at 30 frames a second: the platform's video line counts frames every 10 s. At one in 30, this
+// line filled most of the log, and a diagnostic report's last 128 KiB held only the last 16 minutes.
+const unsigned kMediaLogEvery = 1800;
 const unsigned kAudioLoggedFirst = 3;
 const unsigned kAudioLogEvery = 500;
 
