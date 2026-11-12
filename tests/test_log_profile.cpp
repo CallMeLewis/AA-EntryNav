@@ -44,6 +44,27 @@ int main() {
     close(writer);
     unlink(log);
     unlink(old);
-    puts("PASS production profile without logs, maintenance profile with logs, service log kept within its limit");
+
+    // Root's files in /tmp never written through a link another user left there (platform/tmp_file.hpp).
+    char victim[] = "/tmp/aa-entrynav-victim-XXXXXX";
+    int v = mkstemp(victim);
+    assert(v >= 0 && write(v, "keep", 4) == 4);
+    close(v);
+    char link[64];
+    snprintf(link, sizeof(link), "%s.link", victim);
+    assert(!symlink(victim, link));
+    assert(evo::appendTmpFile(link, 0644) < 0);         // appending through the link: refused
+    assert(!evo::emptyTmpFile(link));                   // emptying through it: refused
+    const int fresh = evo::replaceTmpFile(link, 0644);  // replacing: the link goes, a new file takes its name
+    assert(fresh >= 0 && write(fresh, "new", 3) == 3);
+    close(fresh);
+    struct stat lst;
+    assert(lstat(link, &lst) == 0 && S_ISREG(lst.st_mode) && lst.st_size == 3);
+    assert(stat(victim, &st) == 0 && st.st_size == 4);  // the file it pointed at is untouched
+    unlink(link);
+    unlink(victim);
+    puts(
+        "PASS production profile without logs, maintenance profile with logs, service log kept within its limit, "
+        "no write through a link in /tmp");
     return 0;
 }

@@ -13,6 +13,7 @@
 #include "evo_spp_snapshot.hpp"
 #include "evo_trial_wireless.hpp"
 #include "service_contract.hpp"
+#include "tmp_file.hpp"
 #include "usb_link.hpp"
 
 namespace evo {
@@ -240,11 +241,15 @@ void ServiceApp::knobEvent(const aa::CcsEvent& ev, void* user) {
 void ServiceApp::appKey(const char* name, void* user) {
     (void)user;
     const std::string tmp = std::string(contract::kAppKeyFile) + ".tmp";
-    FILE* f = fopen(tmp.c_str(), "w");
-    if (f) {
-        fprintf(f, "appkey %s\n", name);
-        fclose(f);
-        rename(tmp.c_str(), contract::kAppKeyFile);
+    const int fd = replaceTmpFile(tmp.c_str(), 0644);  // never through a link someone left in /tmp (tmp_file.hpp)
+    if (fd >= 0) {
+        char line[64];
+        const int n = snprintf(line, sizeof(line), "appkey %s\n", name);
+        const bool written = n > 0 && write(fd, line, static_cast<size_t>(n)) == n;
+        close(fd);
+        if (written) {
+            rename(tmp.c_str(), contract::kAppKeyFile);
+        }
     }
     ELOG("ServiceApp", "key %s: opened in Android Auto (as with CarPlay), iDrive brought back under Android Auto",
          name);

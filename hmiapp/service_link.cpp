@@ -102,8 +102,7 @@ void launchService() {
 
     char* argv[] = {const_cast<char*>(contract::kSupervisor), const_cast<char*>("--service"), nullptr};
     int in = open("/dev/null", O_RDONLY | O_CLOEXEC);
-    int out = open(serviceLogPath(contract::kMaintenance, contract::kServiceLog),
-                   O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+    int out = appendTmpFile(serviceLogPath(contract::kMaintenance, contract::kServiceLog), 0644);  // tmp_file.hpp
     if (in < 0 || out < 0) {
         alog("launch: cannot open /dev/null or %s (errno %d)", contract::kServiceLog, errno);
         if (in >= 0) {

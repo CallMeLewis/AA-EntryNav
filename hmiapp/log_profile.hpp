@@ -8,6 +8,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "../platform/tmp_file.hpp"
+
 inline bool maintenanceProfile(const char* marker) {
     return access(marker, F_OK) == 0;
 }
@@ -27,7 +29,7 @@ inline bool boundServiceLog(const char* path, const char* oldPath, off_t limit) 
     }
     int in = open(path, O_RDONLY | O_CLOEXEC);
     if (in >= 0) {
-        int out = open(oldPath, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+        int out = evo::replaceTmpFile(oldPath, 0644);
         if (out >= 0) {
             char buffer[16384];
             ssize_t n;
@@ -41,7 +43,7 @@ inline bool boundServiceLog(const char* path, const char* oldPath, off_t limit) 
         close(in);
     }
     // Emptied even when the copy failed: memory comes before an old copy of the log.
-    return truncate(path, 0) == 0;
+    return evo::emptyTmpFile(path);
 }
 
 #endif

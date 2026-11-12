@@ -16,6 +16,7 @@
 
 #include "control_address.hpp"
 #include "evo_log.hpp"
+#include "tmp_file.hpp"
 
 namespace evo {
 
@@ -140,7 +141,7 @@ void EvoControl::writeState(const char* state, int overlay) {
         return;
     }
     std::string tmp = stateFile_ + ".tmp";
-    int fd = open(tmp.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    int fd = replaceTmpFile(tmp.c_str(), 0644);  // never through a link someone left in /tmp (tmp_file.hpp)
     if (fd < 0) {
         return;
     }

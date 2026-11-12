@@ -6,6 +6,7 @@
 #include <stdlib.h>
 
 #include "../platform/service_contract.hpp"
+#include "../platform/tmp_file.hpp"
 #include "app_log.hpp"
 #include "cds_parse.hpp"
 #include "mono_clock.hpp"
@@ -83,10 +84,18 @@ bool onDayNightChanged(void*, const bmw::BasicString<unsigned short>& value) {
     if (v != 1 && v != 2) {
         return true;
     }
-    FILE* f = fopen(contract::kDayNightFile, "w");
-    if (f) {
-        fprintf(f, "daynight %d\n", v);
-        fclose(f);
+    // Replaced whole, never through a link someone left in /tmp (tmp_file.hpp).
+    char tmp[64];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", contract::kDayNightFile);
+    const int fd = replaceTmpFile(tmp, 0644);
+    if (fd >= 0) {
+        char line[32];
+        const int n = snprintf(line, sizeof(line), "daynight %d\n", v);
+        const bool written = n > 0 && write(fd, line, static_cast<size_t>(n)) == n;
+        close(fd);
+        if (written) {
+            rename(tmp, contract::kDayNightFile);
+        }
     }
     char msg[32];
     snprintf(msg, sizeof(msg), "daynight %d", v);
