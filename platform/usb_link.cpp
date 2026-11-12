@@ -108,7 +108,11 @@ UsbLink::UsbLink(UsbBus& bus, Log log, void* user)
       askedMs_(0),
       asked_(false),
       refusedMs_(0),
-      refused_(false) {}
+      refusedForMs_(kUsbRefusedMs),
+      refused_(false),
+      carrying_(false),
+      endedMs_(0),
+      quickRetries_(0) {}
 
 UsbLink::~UsbLink() {
     close();
@@ -133,13 +137,35 @@ void UsbLink::close() {
         delete io_;
         io_ = nullptr;
     }
+    if (carrying_) {
+        // The phone may still be plugged in, in accessory mode with no Android Auto behind it: opening it again would
+        // only wait kUsbHelloMs for an answer that does not come. The next connect() resets it and asks again.
+        carrying_ = false;
+        asked_ = false;
+        endedMs_ = bus_.nowMs();
+        quickRetries_ = kUsbQuickRetries;
+    }
 }
 
 bool UsbLink::refusedLately(const std::string& port) {
-    if (refused_ && bus_.nowMs() - refusedMs_ >= kUsbRefusedMs) {
+    if (refused_ && bus_.nowMs() - refusedMs_ >= refusedForMs_) {
         refused_ = false;
     }
     return refused_ && refusedPort_ == port;
+}
+
+unsigned UsbLink::leaveAlone(const std::string& port) {
+    const uint32_t now = bus_.nowMs();
+    // A phone that had Android Auto running a moment ago is not one set to "charging only": asked again soon.
+    const bool quick = quickRetries_ > 0 && port == carriedPort_ && now - endedMs_ < kUsbRefusedMs;
+    if (quick) {
+        --quickRetries_;
+    }
+    refused_ = true;
+    refusedPort_ = port;
+    refusedMs_ = now;
+    refusedForMs_ = quick ? kUsbQuickRetryMs : kUsbRefusedMs;
+    return refusedForMs_;
 }
 
 bool UsbLink::pick(UsbDeviceInfo& out, bool& accessory) {
@@ -264,8 +290,9 @@ int UsbLink::connect(const std::atomic<bool>& quit) {
             }
             const int rc = io->reset();
             delete io;
-            say("%s: in accessory mode, not for Android Auto: port reset %s", device.name.c_str(),
-                rc == 0 ? "done" : strerror(-rc));
+            say("%s: in accessory mode, with no Android Auto session behind it (another program's, or one that "
+                "ended): port reset %s",
+                device.name.c_str(), rc == 0 ? "done" : strerror(-rc));
             UsbDeviceInfo back;
             if (!awaitChange(device.name, device.device, back)) {
                 say("%s: the phone did not come back after the reset", device.name.c_str());
@@ -288,11 +315,9 @@ int UsbLink::connect(const std::atomic<bool>& quit) {
             const bool started = version >= 1 && startAccessory(*io, kAndroidAutoIdentity);
             delete io;
             if (version < 1) {
-                say("%s (%04x:%04x): no accessory protocol: not a phone that does Android Auto", device.name.c_str(),
-                    device.vendor, device.product);
-                refused_ = true;
-                refusedPort_ = device.name;
-                refusedMs_ = bus_.nowMs();
+                const unsigned ms = leaveAlone(device.name);
+                say("%s (%04x:%04x): no accessory protocol: not a phone that does Android Auto; left alone for %u s",
+                    device.name.c_str(), device.vendor, device.product, ms / 1000);
                 return -1;
             }
             if (!started) {
@@ -309,12 +334,16 @@ int UsbLink::connect(const std::atomic<bool>& quit) {
                 return -1;
             }
             if (!isAccessoryId(back.vendor, back.product)) {
-                say("%s: the phone came back in its normal mode: it refused accessory mode (its USB setting may be "
-                    "\"charging only\"); left alone for %u s",
-                    device.name.c_str(), kUsbRefusedMs / 1000);
-                refused_ = true;
-                refusedPort_ = device.name;
-                refusedMs_ = bus_.nowMs();
+                const unsigned ms = leaveAlone(device.name);
+                if (ms < kUsbRefusedMs) {
+                    say("%s: the phone came back in its normal mode just after a session on the cable: asked again "
+                        "in %u s",
+                        device.name.c_str(), ms / 1000);
+                } else {
+                    say("%s: the phone came back in its normal mode: it refused accessory mode (its USB setting may "
+                        "be \"charging only\"); left alone for %u s",
+                        device.name.c_str(), ms / 1000);
+                }
                 return -1;
             }
             device = back;
@@ -327,6 +356,9 @@ int UsbLink::connect(const std::atomic<bool>& quit) {
         if (hello(socket, quit)) {
             say("%s: Android Auto answers on the cable (%04x:%04x, round %u)", device.name.c_str(), device.vendor,
                 device.product, attempt + 1);
+            carrying_ = true;
+            carriedPort_ = device.name;
+            quickRetries_ = 0;
             return socket;
         }
         say("%s: in accessory mode, but Android Auto does not answer (another program asked first?)",

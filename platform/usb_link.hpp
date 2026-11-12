@@ -15,6 +15,10 @@
 //     its normal mode. It is then left alone for a while: every request makes it drop off the bus for a second.
 //   - Whether Android Auto is behind an accessory is only known by asking: its version request is sent and an answer
 //     awaited before the session is started. The phone answers that request again when the session sends its own.
+//   - A session can end with the phone still plugged in (seen on the car: the Android Auto logo, then iDrive again).
+//     The phone stays in accessory mode with nothing behind it, so it is reset and asked again at once. Just after
+//     such a session, a phone that comes back in its normal mode has not refused for good: it is asked again a few
+//     times, kUsbQuickRetryMs apart, before it is left alone for kUsbRefusedMs.
 #ifndef AA_ENTRYNAV_PLATFORM_USB_LINK_HPP
 #define AA_ENTRYNAV_PLATFORM_USB_LINK_HPP
 
@@ -74,6 +78,8 @@ const unsigned kUsbModeChangeMs = 5000;  // a phone changing mode is back within
 const unsigned kUsbHelloMs = 3000;       // Android Auto answers its version request within this
 const unsigned kUsbRefusedMs = 30000;    // a phone that refused is left alone this long
 const unsigned kUsbAttempts = 3;         // rounds of "reset and ask again" in one connect()
+const unsigned kUsbQuickRetries = 3;     // after a session on the cable: refusals that are retried soon
+const unsigned kUsbQuickRetryMs = 2000;  // how soon
 
 class UsbLink {
 public:
@@ -87,12 +93,15 @@ public:
     // the session. -1: no phone, a refusal, or the other program won every round; the reason is logged.
     int connect(const std::atomic<bool>& quit);
     bool active() const { return bridge_.running(); }  // the cable still carries the session
-    void close();                                      // ends the bridge and gives the phone back
+    // Ends the bridge and gives the phone back. After a session, the next connect() starts afresh on that phone.
+    void close();
     UsbBridge::Stats stats() const { return bridge_.stats(); }
 
 private:
     void say(const char* format, ...) __attribute__((format(printf, 2, 3)));
     bool pick(UsbDeviceInfo& out, bool& accessory);
+    // The phone on port refused: left alone for a while, which is returned (ms).
+    unsigned leaveAlone(const std::string& port);
     // Waits for the port's device to change: true with what is there now, false when nothing came back.
     bool awaitChange(const std::string& port, unsigned device, UsbDeviceInfo& out);
     int openAccessory(const UsbDeviceInfo& device);  // the socket, or -1
@@ -109,8 +118,12 @@ private:
     uint32_t askedMs_;
     bool asked_;
     std::string refusedPort_;
-    uint32_t refusedMs_;
+    uint32_t refusedMs_, refusedForMs_;
     bool refused_;
+    std::string carriedPort_;  // where the session that runs, or ran last, came from
+    bool carrying_;            // connect() handed out a socket that close() has not ended yet
+    uint32_t endedMs_;         // when the last session on the cable ended
+    unsigned quickRetries_;    // refusals on carriedPort_ still retried soon (kUsbQuickRetries)
 };
 
 }  // namespace evo

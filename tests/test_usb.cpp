@@ -96,6 +96,8 @@ public:
         if (t.endpoint & 0x80) {
             pendingIn_ = &t;
             feedLocked();
+        } else if (holdOut) {
+            pendingOut_ = &t;  // taken by nobody: only a cancel finishes it
         } else {
             int n = t.length;
             if (shortOut > 0 && n > shortOut) {
@@ -120,6 +122,12 @@ public:
             t.status = -ENOENT;
             finishLocked(&t);
             ++cancelled;
+        } else if (pendingOut_ == &t) {
+            pendingOut_ = nullptr;
+            t.done = 0;
+            t.status = -ENOENT;
+            finishLocked(&t);
+            ++cancelledOut;
         }
         pthread_mutex_unlock(&mu_);
         return 0;
@@ -172,6 +180,8 @@ public:
     bool gone;
     int claimed, detached, resets;
     int cancelled = 0;
+    int cancelledOut = 0;
+    bool holdOut = false;  // the phone takes no transfer from the car: its Android Auto stopped reading
     std::vector<Request> requests;
     std::string written;
     std::vector<int> outLengths;
@@ -199,6 +209,7 @@ private:
     pthread_mutex_t mu_;
     int wake_[2];
     evo::UsbTransfer* pendingIn_;
+    evo::UsbTransfer* pendingOut_ = nullptr;
     std::deque<std::string> toHost_;
     std::deque<evo::UsbTransfer*> done_;
 };
@@ -463,6 +474,20 @@ int main() {
         CHECK(recv(session, &byte, 1, 0) == 0);
         close(session);
     }
+    {  // the phone stops taking data, then the session gives up: the bridge ends anyway and frees the cable
+        FakePhone phone;
+        phone.holdOut = true;
+        evo::UsbBridge bridge;
+        const int session = bridge.start(&phone, 0x81, 0x01);
+        CHECK(session >= 0);
+        CHECK(send(session, "ping", 4, 0) == 4);  // queued to the phone, which never takes it
+        usleep(50000);
+        CHECK(bridge.running());
+        close(session);
+        CHECK(waitFor(bridgeStopped, &bridge, 2000));
+        CHECK(bridge.stats().error == 0 && phone.cancelledOut == 1 && phone.cancelled == 1);
+        bridge.stop();
+    }
     {  // the phone is unplugged: the session reads the end of its socket
         FakePhone phone;
         evo::UsbBridge bridge;
@@ -479,6 +504,7 @@ int main() {
     puts(
         "PASS usb: accessory requests byte for byte, descriptors (accessory with adb, file transfer phone, stick, hub, "
         "keyboard, iPhone, cut short), device list from sysfs, bridge both ways in order with the empty packet, a "
-        "transfer cut short, a busy session, the session leaving, the phone unplugged");
+        "transfer cut short, a busy session, the session leaving, the session leaving a phone that takes nothing, the "
+        "phone unplugged");
     return 0;
 }

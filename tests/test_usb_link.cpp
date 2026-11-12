@@ -385,12 +385,47 @@ int main() {
         }
         CHECK(!link.active());
         link.close();
-        // Plugged in still, in accessory mode from the session that ended: reset and asked again, as a fresh start.
+        // Plugged in still, in accessory mode from the session that ended a moment ago: reset and asked again at once,
+        // as a fresh start, without opening the accessory first to wait for an answer that does not come.
         g_lines.clear();
-        bus.step(60000);
         const int again = link.connect(quit);
         CHECK(again >= 0 && world.resets == 1 && world.starts == 2 && sessionSpeaks(again));
+        CHECK(said("no Android Auto session behind it") && !said("does not answer"));
         close(again);
+        link.close();
+    }
+    {  // after a session, the phone comes back in its normal mode: asked again soon a few times, then left alone
+        World world;
+        FakeBus bus(world);
+        evo::UsbLink link(bus, keep, nullptr);
+        int socket = link.connect(quit);
+        CHECK(socket >= 0);
+        close(socket);
+        for (int i = 0; i < 400 && link.active(); ++i) {
+            usleep(5000);
+        }
+        link.close();
+        pthread_mutex_lock(&world.mu);
+        world.allows = false;
+        pthread_mutex_unlock(&world.mu);
+        for (unsigned i = 0; i < evo::kUsbQuickRetries; ++i) {
+            g_lines.clear();
+            CHECK(link.connect(quit) == -1 && said("just after a session on the cable: asked again in 2 s"));
+            CHECK(!link.phoneWaiting());  // left alone for now
+            bus.step(evo::kUsbQuickRetryMs + 500);
+            CHECK(link.phoneWaiting());
+        }
+        g_lines.clear();
+        CHECK(link.connect(quit) == -1 && said("refused accessory mode") && said("left alone for 30 s"));
+        bus.step(evo::kUsbQuickRetryMs + 500);
+        CHECK(!link.phoneWaiting());
+        bus.step(evo::kUsbRefusedMs);
+        pthread_mutex_lock(&world.mu);
+        world.allows = true;
+        pthread_mutex_unlock(&world.mu);
+        socket = link.connect(quit);
+        CHECK(socket >= 0 && world.resets == 1 && world.starts == static_cast<int>(evo::kUsbQuickRetries) + 3);
+        close(socket);
         link.close();
     }
     {  // the rival asked first: the phone is its accessory. Reset, asked before the rival can, Android Auto answers
@@ -404,7 +439,8 @@ int main() {
         evo::UsbLink link(bus, keep, nullptr);
         const int socket = link.connect(quit);
         CHECK(socket >= 0 && world.identity == kAndroidAuto);
-        CHECK(world.resets == 1 && world.starts == 1 && world.rivalStarts == 1 && said("not for Android Auto"));
+        CHECK(world.resets == 1 && world.starts == 1 && world.rivalStarts == 1 &&
+              said("no Android Auto session behind it"));
         CHECK(sessionSpeaks(socket));
         close(socket);
         link.close();
@@ -544,7 +580,8 @@ int main() {
         rmdir(base);
     }
     puts(
-        "PASS usb link: a phone asked once and answering, a fresh start after a session, a rival that asked first "
+        "PASS usb link: a phone asked once and answering, a fresh start straight after a session, refusals just after "
+        "a session retried soon then left alone, a rival that asked first "
         "(reset, asked again), a rival that always wins (given up after 3 rounds), an interface taken back, a phone "
         "that refuses left alone, not a phone, unplugged, stop; the udev rule written whole and removed");
     return 0;

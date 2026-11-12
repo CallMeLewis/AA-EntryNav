@@ -171,6 +171,11 @@ void UsbBridge::run() {
         if (!flushToSession()) {
             break;  // the session closed its socket
         }
+        // The socket is not read while a transfer to the phone is pending, so its end would go unseen. A phone whose
+        // Android Auto stopped may never take that transfer: the bridge would then run, and keep the cable, forever.
+        if (outBusy_ && (fds[1].revents & (POLLHUP | POLLERR))) {
+            break;  // the session closed its socket
+        }
         if (!inQueued && pendingAt_ >= pendingEnd_) {
             in_.length = kUsbChunk;
             if (io_->submit(in_) != 0) {
