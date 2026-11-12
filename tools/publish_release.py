@@ -7,14 +7,12 @@
   uv run --no-project --with cryptography python tools/publish_release.py publish [OPTIONS]
   uv run --no-project --with cryptography python tools/publish_release.py notes VERSION TEXT   rewrite its notes
   uv run --no-project --with cryptography python tools/publish_release.py stability VERSION stable|experimental
-  uv run --no-project --with cryptography python tools/publish_release.py tried VERSION   it has run in a car
   uv run --no-project --with cryptography python tools/publish_release.py retire VERSION... [--delete-archives]
   uv run --no-project --with cryptography python tools/publish_release.py tags     tag releases, with GitHub Releases
 
-OPTIONS: --notes TEXT, --tried-in-car, --stable. Each release carries the owner's label, stable or experimental
-(experimental unless --stable), shown as a pill in Flare Drive. `stability` changes it later, and `tried` records
-that a release published without --tried-in-car has since run in a car: the list is signed again, the archive stays as
-it is.
+OPTIONS: --notes TEXT, --stable. Each release carries the owner's label, stable or experimental (experimental unless
+--stable), shown as a pill in Flare Drive. `stability` changes it later: the list is signed again, the archive stays as
+it is. Whether a release has run in a car (verified or unverified) is recorded in CHANGELOG.md only, not in the list.
 
 `retire` takes releases off the list, which is signed again; Flare Drive stops offering them at its next check, and a
 head unit that has one installed keeps it. With --delete-archives their archives are then deleted from the bucket.
@@ -131,7 +129,12 @@ def live_index(key):
         key.public_key().verify(base64.b64decode(signature), index)
     except InvalidSignature:
         sys.exit("FAIL: the published index is not signed by this key. Nothing was changed.")
-    return json.loads(index)
+    index = json.loads(index)
+    # Lists signed before 2026-11-12 record whether each release ran in a car (triedInCar). Nothing reads it and
+    # CHANGELOG.md records it, so the next signed list leaves it out.
+    for release in index["releases"]:
+        release.pop("triedInCar", None)
+    return index
 
 
 def publish_index(key, index):
@@ -179,10 +182,9 @@ def verify(_):
         sys.exit("No index is published yet. Run init.")
     print(f"{FEED_URL}/index.json: signature OK, published {index['published']}, public key {public_b64(key)}")
     for release in index["releases"]:
-        tried = "tried in a car" if release.get("triedInCar") else "not yet tried in a car"
         label = release.get("stability") or "no label"
         sha, size = release["sha256"][:12], release["size"]
-        print(f"  {release['version']}  {sha}…  {size} bytes  {label}, {tried}  {release['published']}")
+        print(f"  {release['version']}  {sha}…  {size} bytes  {label}  {release['published']}")
     if not index["releases"]:
         print("  (no releases yet)")
 
@@ -247,22 +249,6 @@ def stability(args):
     verify(None)
 
 
-def tried(args):
-    """Records in the live index that one release has run in a car, and signs it again."""
-    key = load_key()
-    index = live_index(key)
-    if index is None:
-        sys.exit("FAIL: no index is published yet.")
-    entries = [r for r in index["releases"] if r["version"] == args.version]
-    if not entries:
-        sys.exit(f"FAIL: {args.version} is not published.")
-    if entries[0].get("triedInCar"):
-        sys.exit(f"{args.version} is already recorded as tried in a car. Nothing was changed.")
-    entries[0]["triedInCar"] = True
-    publish_index(key, {**index, "published": now()})
-    verify(None)
-
-
 def retire(args):
     """Takes releases off the live index and signs it again. With --delete-archives, deletes their archives from the
     bucket afterwards, so no list ever names an archive that is gone."""
@@ -299,7 +285,6 @@ def upload(key, index, archive, version, commit, args):
         "sourceCommit": commit,
         "published": now(),
         "firmware": FIRMWARE,
-        "triedInCar": args.tried_in_car,
         "stability": "stable" if args.stable else "experimental",
         "minApp": MIN_APP,
         "notes": args.notes,
@@ -403,7 +388,6 @@ def main():
     commands.add_parser("tags").set_defaults(func=tags)
     p = commands.add_parser("publish")
     p.add_argument("--notes", default="", help="one short paragraph, shown in Flare Drive")
-    p.add_argument("--tried-in-car", action="store_true", help="only once this exact build has run in a car")
     p.add_argument("--stable", action="store_true", help="label it stable in Flare Drive (default: experimental)")
     p.set_defaults(func=publish)
     n = commands.add_parser("notes")
@@ -414,9 +398,6 @@ def main():
     s.add_argument("version", help="a published version")
     s.add_argument("label", choices=["stable", "experimental"], help="shown as a pill in Flare Drive")
     s.set_defaults(func=stability)
-    t = commands.add_parser("tried")
-    t.add_argument("version", help="a published version that has since run in a car")
-    t.set_defaults(func=tried)
     r = commands.add_parser("retire")
     r.add_argument("versions", nargs="+", help="published versions to take off the list")
     r.add_argument("--delete-archives", action="store_true", help="then delete their archives from the bucket")
