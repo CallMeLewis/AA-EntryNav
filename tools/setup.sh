@@ -352,6 +352,76 @@ payload_version() {
     head -n 1 "$HERE/opt/aa/VERSION" 2>/dev/null
 }
 
+# A version's place in release order (tools/release_version.py): "X Y Z KIND N", KIND 0 for a test build, 1 for a beta
+# build, 2 for the stable build X.Y.Z, which comes after both. Fails for anything but X.Y.Z, X.Y.Z-beta.N and
+# X.Y.Z-test.N (no leading zeros, N from 1, at most 9 digits a number so the shell can compare it).
+version_key() {
+    _v=$1 _kind=2 _n=0
+    case $_v in
+        *-test.*) _kind=0 _n=${_v#*-test.} _v=${_v%%-test.*} ;;
+        *-beta.*) _kind=1 _n=${_v#*-beta.} _v=${_v%%-beta.*} ;;
+        *-*) return 1 ;;
+    esac
+    case $_v in
+        *.*.*) ;;
+        *) return 1 ;;
+    esac
+    _a=${_v%%.*} _r=${_v#*.}
+    _b=${_r%%.*} _c=${_r#*.}
+    for _p in "$_a" "$_b" "$_c"; do
+        case $_p in
+            '' | *[!0-9]* | 0?* | ??????????*) return 1 ;;
+        esac
+    done
+    if [ "$_kind" != 2 ]; then
+        case $_n in
+            '' | *[!0-9]* | 0* | ??????????*) return 1 ;;
+        esac
+    fi
+    echo "$_a $_b $_c $_kind $_n"
+}
+
+# older, same or newer: where version $1 stands against version $2. Fails if either is not a release version.
+version_order() {
+    _ka=$(version_key "$1") && _kb=$(version_key "$2") || return 1
+    # shellcheck disable=SC2086 # split on purpose: one number a word
+    set -- $_kb
+    for _x in $_ka; do
+        if [ "$_x" -lt "$1" ]; then
+            echo older
+            return 0
+        fi
+        if [ "$_x" -gt "$1" ]; then
+            echo newer
+            return 0
+        fi
+        shift
+    done
+    echo same
+}
+
+# The archive's version: a release version, and what installing it does to the one installed.
+check_version() {
+    _new=$(payload_version)
+    if ! version_key "$_new" >/dev/null; then
+        stop "the archive's version, '$_new', is not X.Y.Z, X.Y.Z-beta.N or X.Y.Z-test.N: not an archive of this project"
+        return 1
+    fi
+    case $_new in
+        *-beta.*) info "$_new is a beta build, to try before ${_new%%-*}: ${_new%%-*} itself will be above it" ;;
+        *-test.*) info "$_new is a test build, to try before ${_new%%-*}: its betas and ${_new%%-*} will be above it" ;;
+    esac
+    [ -f "$AA/VERSION" ] || return 0
+    _old=$(head -n 1 "$AA/VERSION" 2>/dev/null)
+    case $(version_order "$_new" "$_old") in
+        newer) info "updates the installed version, $_old" ;;
+        same) info "installs $_old again, the version already installed" ;;
+        older) info "goes back from the installed version, $_old, to an earlier one" ;;
+        *) info "replaces the installed version, $_old" ;;
+    esac
+    return 0
+}
+
 # MD5SUMS of the installed files only, rewritten for another place: $1 for opt/aa, $2 for the iDrive app folder.
 sums_for() {
     while read -r sum name; do
@@ -390,7 +460,7 @@ check_archive() {
         (cd "$HERE" && md5sum -c MD5SUMS 2>&1) | grep -v ': OK$' | while read -r line; do say "        $line"; done
         return 1
     fi
-    return 0
+    check_version
 }
 
 check_software() {

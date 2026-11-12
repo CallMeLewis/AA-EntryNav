@@ -24,6 +24,11 @@ Each release carries the owner's label, stable or experimental (experimental unl
 Drive. `stability` changes it later: the list is signed again, the archive stays as it is. Whether a release has run in
 a car (verified or unverified) is recorded in CHANGELOG.md only, not in the list.
 
+A version is X.Y.Z, or X.Y.Z-beta.N or X.Y.Z-test.N for a build to try before X.Y.Z (tools/release_version.py). Its
+stable build X.Y.Z is always above them, in Flare Drive too: whoever installed 0.1.4-beta.2 is offered 0.1.4 as an
+update. A beta or test build is always experimental (--stable and `stability ... stable` refuse it), and its GitHub
+Release is a pre-release, never Latest.
+
 `retire` takes releases off the list, which is signed again; Flare Drive stops offering them at its next check, and a
 head unit that has one installed keeps it. With --delete-archives their archives are then deleted from the bucket.
 
@@ -67,6 +72,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
+import release_version  # noqa: E402
 import verify_arm  # noqa: E402
 
 BUCKET = "darkzone-updates"
@@ -271,7 +277,7 @@ def with_links(text, index, unreleased_from=None):
             )
     if unreleased_from:
         links["Unreleased"] = f"[Unreleased]: https://github.com/{REPO}/compare/v{unreleased_from}...HEAD"
-    versions = sorted((label for label in links if re.fullmatch(r"\d+(\.\d+)*", label)), key=version_key, reverse=True)
+    versions = sorted((label for label in links if release_version.is_valid(label)), key=version_key, reverse=True)
     others = [label for label in links if label != "Unreleased" and label not in versions]
     order = (["Unreleased"] if "Unreleased" in links else []) + versions + others
     return "\n".join(lines).rstrip("\n") + "\n\n" + "\n".join(links[label] for label in order) + "\n"
@@ -281,8 +287,8 @@ def prepare(args):
     """The release commit: VERSION raised and committed as `Release VERSION: SUMMARY`, then CHANGELOG.md's [Unreleased]
     part turned into the version's section, with any published version still missing its link given one."""
     version = args.version
-    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
-        sys.exit(f"FAIL: {version} is not X.Y.Z.")
+    if not release_version.is_valid(version):
+        sys.exit(f"FAIL: {version} is not {release_version.FORMAT}.")
     subject = f"Release {version}: {args.summary}"
     if len(subject) > 72:
         sys.exit(f"FAIL: the subject is {len(subject)} characters, more than 72: {subject}")
@@ -390,6 +396,10 @@ def publish(args):
     version = (ROOT / "VERSION").read_text().strip()
     if any(r["version"] == version for r in index["releases"]):
         sys.exit(f"FAIL: {version} is already published. Raise VERSION for a new release; a version is never replaced.")
+    if not release_version.is_valid(version):
+        sys.exit(f"FAIL: VERSION says {version}, which is not {release_version.FORMAT}.")
+    if args.stable and release_version.is_prerelease(version):
+        sys.exit(f"FAIL: {version} is a beta or test build: it is always experimental, never --stable.")
     # Both texts before the build, which takes minutes: a missing section or note stops it at once.
     text = section(version)
     note, body = flare_drive_note(version, text), release_body(text)
@@ -440,6 +450,10 @@ def stability(args):
     entries = [r for r in index["releases"] if r["version"] == args.version]
     if not entries:
         sys.exit(f"FAIL: {args.version} is not published.")
+    if args.label == "stable" and release_version.is_prerelease(args.version):
+        sys.exit(
+            f"FAIL: {args.version} is a beta or test build: it stays experimental. Publish X.Y.Z as stable instead."
+        )
     entries[0]["stability"] = args.label
     publish_index(key, {**index, "published": now()})
     verify(None)
@@ -492,8 +506,7 @@ def upload(key, index, archive, version, commit, stable, note, body):
     print(f"Published {version} ({entry['sha256'][:12]}…) from {commit[:7]}.")
     record_published(entry, index)
     if tag_release(entry):
-        newest = all(version_key(r["version"]) < version_key(version) for r in index["releases"])
-        github_release(entry, body, latest=newest)
+        github_release(entry, body, latest=newest_stable(index["releases"], version))
     verify(None)
 
 
@@ -513,7 +526,19 @@ def git(*args, check=True):
 
 
 def version_key(version):
-    return tuple(int(part) for part in version.split("."))
+    """Release order: a stable build above its beta and test builds (tools/release_version.py)."""
+    return release_version.key(version)
+
+
+def newest_stable(releases, version):
+    """version is a stable build above every stable build in releases: the one GitHub marks Latest."""
+    if release_version.is_prerelease(version):
+        return False
+    return all(
+        version_key(r["version"]) < version_key(version)
+        for r in releases
+        if r["version"] != version and not release_version.is_prerelease(r["version"])
+    )
 
 
 def tag_release(entry):
@@ -548,8 +573,8 @@ def tag_release(entry):
 def github_release(entry, body, latest):
     """A GitHub Release for the tag, with body as its text, the archive Flare Drive installs and its SHA-256 file. The
     archive is downloaded from the bucket and must match the index's SHA-256, never taken from artifacts/, which a later
-    build may have replaced. Only [latest] is marked Latest. An existing Release is left as it is (`notes` updates its
-    text); a failure is reported."""
+    build may have replaced. Only [latest] is marked Latest; a beta or test build is marked a pre-release. An existing
+    Release is left as it is (`notes` updates its text); a failure is reported."""
     version, tag = entry["version"], f"v{entry['version']}"
     if subprocess.run(["gh", "release", "view", tag, "-R", REPO], capture_output=True).returncode == 0:
         print(f"{tag} already has a GitHub Release.")
@@ -565,7 +590,8 @@ def github_release(entry, body, latest):
         sums.write_text(f"{entry['sha256']}  {name}\n", newline="\n")
         made = subprocess.run(
             ["gh", "release", "create", tag, str(archive), str(sums), "-R", REPO, "--verify-tag"]
-            + ["--title", f"AA-EntryNav {version}", "--notes", body, f"--latest={'true' if latest else 'false'}"],
+            + ["--title", f"AA-EntryNav {version}", "--notes", body, f"--latest={'true' if latest else 'false'}"]
+            + (["--prerelease"] if release_version.is_prerelease(version) else []),
             capture_output=True,
             text=True,
         )
@@ -577,8 +603,8 @@ def github_release(entry, body, latest):
 
 def tags(args):
     """Tags every published release that has no tag yet, from the live index, and gives each tag a GitHub Release,
-    oldest first, with the newest marked Latest. Its text comes from CHANGELOG.md, or is its Flare Drive note when
-    CHANGELOG.md has no section for it."""
+    oldest first, with the newest stable build marked Latest. Its text comes from CHANGELOG.md, or is its Flare Drive
+    note when CHANGELOG.md has no section for it."""
     index = live_index(load_key())
     if index is None:
         sys.exit("FAIL: no index is published yet.")
@@ -588,7 +614,7 @@ def tags(args):
         if tag_release(entry):
             text = find_section(entry["version"])
             body = release_body(text) if text else (f"{entry['notes']}\n" if entry.get("notes") else "")
-            github_release(entry, body, latest=entry is releases[-1])
+            github_release(entry, body, latest=newest_stable(releases, entry["version"]))
 
 
 def main():

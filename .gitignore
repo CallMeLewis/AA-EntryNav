@@ -60,6 +60,7 @@ __pycache__/
 !/tools/format_sources.py
 !/tools/package_release.py
 !/tools/publish_release.py
+!/tools/release_version.py
 !/tools/verify_arm.py
 !/tools/verify_binary.py
 !/tools/verify_core.py

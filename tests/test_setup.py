@@ -728,7 +728,57 @@ def prepare_uninstall_second_step(unit):
     unit.restart()
 
 
+def case_version_order(unit):
+    """version_key and version_order, run by the unit's shell: the order of tools/release_version.py, a stable build
+    above its beta and test builds, and malformed versions refused."""
+    text = SETUP.read_text()
+    functions = text[text.index("version_key() {") : text.index("# The archive's version:")]
+    ordered = ["0.1.3", "0.1.4-test.1", "0.1.4-test.2", "0.1.4-test.10", "0.1.4-beta.1", "0.1.4", "0.1.10", "1.0.0"]
+    pairs = list(zip(ordered, ordered[1:]))
+    bad = ["2.0", "2.0.0.1", "v2.0.0", "02.0.0", "2.0.0-rc.1", "2.0.0-beta", "2.0.0-beta.0", "2.0.0-beta.1.2", ""]
+    lines = [functions]
+    for lower, higher in pairs:
+        lines.append(f'echo "{lower} {higher} $(version_order {lower} {higher}) $(version_order {higher} {lower})"')
+    lines.append('echo "same $(version_order 0.1.4-beta.2 0.1.4-beta.2)"')
+    for version in bad:
+        lines.append(f"version_key '{version}' >/dev/null && echo 'accepted {version}' || echo 'refused {version}'")
+    unit.write("tmp/order.sh", "\n".join(lines) + "\n")
+    out = expect(unit.run(script="/tmp/order.sh"), 0)
+    for lower, higher in pairs:
+        check(f"{lower} {higher} older newer" in out, f"{lower} not below {higher}:\n{out}")
+    check("same same" in out, f"a version is not the same as itself:\n{out}")
+    for version in bad:
+        check(f"refused {version}\n" in out, f"{version!r} not refused:\n{out}")
+
+
+def case_versions_reported(unit):
+    """check and install name a beta or test build, and say whether they update, reinstall or go back."""
+    beta = unit.unpack("2.0.0-beta.1") + "/setup.sh"
+    out = expect(unit.run("install", script=beta), 0, "2.0.0-beta.1 is a beta build", "version 2.0.0-beta.1")
+    check("updates the installed" not in out, "a fresh install reported an update")
+    unit.restart()
+    unit.unpack("2.0.0")
+    expect(unit.run("check"), 0, "updates the installed version, 2.0.0-beta.1", "Every check passed")
+    test = unit.unpack("2.0.0-test.3") + "/setup.sh"
+    expect(unit.run("check", script=test), 0, "is a test build", "goes back from the installed version, 2.0.0-beta.1")
+    expect(unit.run("check", script=beta), 0, "installs 2.0.0-beta.1 again")
+    expect(
+        unit.run("install"), 0, "updates the installed version, 2.0.0-beta.1", "Installed and checked: version 2.0.0"
+    )
+
+
+def case_malformed_version_refused(unit):
+    for version in ("2.0", "2.0.0-rc.1", "v2.0.0"):
+        script = unit.unpack(version) + "/setup.sh"
+        before = unit.snapshot()
+        expect(unit.run("install", script=script), 1, f"'{version}', is not X.Y.Z")
+        unit.expect_untouched(before, f"an archive of version {version}")
+
+
 CASES = {
+    "version order": case_version_order,
+    "versions reported": case_versions_reported,
+    "malformed version refused": case_malformed_version_refused,
     "check writes nothing": case_check_writes_nothing,
     "fresh install": case_fresh_install,
     "update while iDrive holds the app": case_update_while_idrive_holds_the_app,

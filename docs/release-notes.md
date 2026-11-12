@@ -43,6 +43,10 @@ memory. Only the iDrive app (`libAAEntryNav.so`) changes. This version is unveri
 - Verified means this exact build has run in a car. Unverified means it has only been tested on PC and under QEMU.
 - The heading is `## [X.Y.Z]`, ` - `, the release date (YYYY-MM-DD), then ` · Unverified`, or ` · Verified` once this
   exact build has run in a car. `prepare` writes it; `publish` sets the date to the day it published the release.
+- A build to try before X.Y.Z is `X.Y.Z-test.N` or `X.Y.Z-beta.N`, with a section of its own. Test builds come before
+  beta builds, and X.Y.Z itself is above both, so Flare Drive offers it as an update over them
+  (`tools/release_version.py`). A beta or test build is always experimental, and a pre-release on GitHub. X.Y.Z's
+  section says everything that changed since the previous stable build, betas included: most people never saw them.
 - The Flare Drive note comes next, as `<!-- Flare Drive: ... -->` (see The Flare Drive note below).
 - Then a short paragraph: what the release does for someone in the car, which programs change, and whether it is
   verified. Anything that needs the reader to act goes in a paragraph of its own before it (see Action needed below).

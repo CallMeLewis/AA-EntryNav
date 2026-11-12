@@ -207,6 +207,7 @@ test-host: test-parsers test-spp-host test-kombi-host test-gps-host test-capture
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_crash_guard.cpp -o tests/test-crash-guard
 	./tests/test-crash-guard
 	python3 tests/test_setup.py $(if $(BUSYBOX),--busybox $(BUSYBOX))
+	python3 -I tests/test_release_version.py
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_log_profile.cpp -o tests/test-log-profile
 	./tests/test-log-profile
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_pb.cpp -o tests/test-pb
