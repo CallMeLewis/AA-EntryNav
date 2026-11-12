@@ -418,7 +418,18 @@ AASession::Received AASession::receive(uint8_t& channel, Message& message) {
         plain.swap(payload);
     } else if (!tls_.open(&payload[0], payload.size(), plain)) {
         printf("[AASession] Failed to decrypt encrypted frame (%u bytes).\n", header.length);
-        assembler_.drop(channel);
+        // Its message is lost: acked once, like any dropped media, and the rest of its fragments dropped quietly.
+        const uint8_t position = header.position();
+        const bool continues = position == frame::kMiddle || position == frame::kLast;
+        const bool alreadyDropped = continues && assembler_.skipping(channel);
+        if (position == frame::kFirst || position == frame::kMiddle) {
+            assembler_.skip(channel);
+        } else if (position == frame::kLast) {
+            assembler_.drop(channel);
+        }  // a WHOLE leaves the message being assembled on its channel as it is
+        if (!alreadyDropped) {
+            ackDropped(channel);
+        }
         return kNothing;
     }
     switch (assembler_.add(header, plain, message)) {
