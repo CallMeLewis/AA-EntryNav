@@ -30,6 +30,8 @@ namespace {
 
 long g_lastLaunch = 0;  // monotonic seconds
 pid_t g_launchPid = 0;
+bool g_launchReaped = true;  // a reaper thread waits for g_launchPid; false: launchAlive() reaps it
+pid_t g_stoppingLaunch = 0;  // the supervisor a stop was sent to: no longer shown as connecting
 pid_t g_stopPid = 0;
 long g_stopTime = 0;  // monotonic seconds
 int g_stopStage = 0;
@@ -60,6 +62,23 @@ void* reaper(void* p) {
     return nullptr;
 }
 
+// The supervisor started last is still running. Without a reaper thread it is reaped here, or it would stay a zombie
+// that kill(pid, 0) still finds, and the entry would say Connecting until iDrive restarts.
+bool launchAlive() {
+    if (g_launchPid <= 0) {
+        return false;
+    }
+    if (!g_launchReaped) {
+        int status = 0;
+        if (waitpid(g_launchPid, &status, WNOHANG) == g_launchPid) {
+            alog("service supervisor pid %d ended", static_cast<int>(g_launchPid));
+            g_launchPid = 0;
+            return false;
+        }
+    }
+    return pidAlive(g_launchPid);
+}
+
 // True when a service answers on the control channel. With none, the answer comes at once, not after a 200 ms silence
 // on every status poll of the app's thread.
 bool serviceAnswers() {
@@ -84,7 +103,7 @@ void launchService() {
         alog("launch: %s not found", contract::kSupervisor);
         return;
     }
-    if (g_launchPid > 0 && pidAlive(g_launchPid)) {
+    if (launchAlive()) {
         alog("launch: supervisor pid %d still running", static_cast<int>(g_launchPid));
         return;
     }
@@ -148,6 +167,7 @@ void launchService() {
         return;
     }
     g_launchPid = pid;
+    g_launchReaped = true;
     alog("launch: started %s --service pid %d (log %s)", contract::kSupervisor, static_cast<int>(pid),
          contract::kServiceLog);
     pthread_t t;
@@ -155,7 +175,8 @@ void launchService() {
     pthread_attr_init(&ta);
     pthread_attr_setdetachstate(&ta, PTHREAD_CREATE_DETACHED);
     if (pthread_create(&t, &ta, reaper, reinterpret_cast<void*>(static_cast<intptr_t>(pid))) != 0) {
-        alog("launch: no reaper thread");
+        alog("launch: no reaper thread: the status poll reaps the supervisor");
+        g_launchReaped = false;
     }
     pthread_attr_destroy(&ta);
 }
@@ -193,7 +214,8 @@ ServiceState readServiceState() {
         }
         unlink(contract::kStateFile);  // left by a service that is gone
     }
-    if (g_launchPid > 0 && pidAlive(g_launchPid)) {  // supervisor in its preflight: show "connecting"
+    // The supervisor in its preflight: connecting. Not once it was asked to stop: it is then restoring Bluetooth.
+    if (launchAlive() && g_launchPid != g_stoppingLaunch) {
         strcpy(d.state, "connecting");
         d.pid = -1;
         return d;
@@ -213,6 +235,7 @@ void beginStop() {
         return;
     }
     g_stopPid = d.pid > 0 ? static_cast<pid_t>(d.pid) : -1;
+    g_stoppingLaunch = g_launchPid;
     g_stopTime = monoSeconds();
     g_stopStage = 0;
     sendToService("quit");
@@ -227,8 +250,7 @@ void serviceStop() {
     if (!g_stopPid) {
         return;
     }
-    bool gone = g_stopPid > 0 ? !pidAlive(static_cast<int>(g_stopPid))
-                              : !(g_launchPid > 0 && pidAlive(g_launchPid)) && !serviceAnswers();
+    bool gone = g_stopPid > 0 ? !pidAlive(static_cast<int>(g_stopPid)) : !launchAlive() && !serviceAnswers();
     if (gone) {
         alog("service (pid %d) has exited", static_cast<int>(g_stopPid));
         g_stopPid = 0;
