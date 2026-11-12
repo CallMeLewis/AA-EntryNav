@@ -232,7 +232,7 @@ bool recover(const Baseline& b, evo::SppSnapshotReader& reader) {
 // without a client): hostapd control socket, /tmp/wland/ap.conf, wlan0 IPv4.
 std::string apDiagnosis() {
     std::string s = access("/var/run/hostapd/wlan0", F_OK) == 0 ? "hostapd present" : "hostapd absent";
-    s += access("/tmp/wland/ap.conf", F_OK) == 0 ? ", ap.conf present" : ", ap.conf absent";
+    s += access(evo::contract::kWlandApConf, F_OK) == 0 ? ", ap.conf present" : ", ap.conf absent";
     int fd = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
     std::string ip = "no address";
     if (fd >= 0) {

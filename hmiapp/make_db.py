@@ -10,6 +10,7 @@ Usage: make_db.py <res dir> <output dir>
 
 import struct
 import sys
+import xml.etree.ElementTree as ET
 import zipfile
 import zlib
 from pathlib import Path
@@ -42,8 +43,19 @@ TEXTS = {
     22: "COM / steering wheel phone button: Android Auto phone",
     23: "MENU: iDrive - OPTION: this menu - BACK: back",
     24: "Phone: wireless Android Auto on, paired with the car",
-    30: " ",
-}  # blank title of the page held under Android Auto (no "Android Auto" tab during the volume)
+    25: "Flare Drive",
+    26: "Choose a PIN for Flare Drive (4 to 8 digits)",
+    27: "Enter the new PIN again",
+    28: "Enter the Flare Drive PIN",
+    29: "Wrong PIN. Try again",
+    30: " ",  # blank title of the page held under Android Auto (no "Android Auto" tab during the volume)
+    31: "The two PINs differed. Choose a PIN",
+    32: "Scan this code with Flare Drive",
+    33: "Too many wrong PINs. Try again later",
+    34: "The car's Wi-Fi is off. Start Android Auto, then try again",
+    35: "Not available while driving",
+    36: "The PIN is 4 to 8 digits. Try again",
+}
 LANG_TEXTS = {  # ASCII only
     "fr-FR": {
         2: "Android Auto : connexion...",
@@ -60,6 +72,16 @@ LANG_TEXTS = {  # ASCII only
         22: "COM / bouton telephone du volant : telephone Android Auto",
         23: "MENU : iDrive - OPTION : ce menu - BACK : retour",
         24: "Telephone : Android Auto sans fil active, appaire a la voiture",
+        26: "Choisissez un code PIN pour Flare Drive (4 a 8 chiffres)",
+        27: "Saisissez a nouveau le nouveau code PIN",
+        28: "Saisissez le code PIN de Flare Drive",
+        29: "Code PIN incorrect. Reessayez",
+        31: "Les deux codes PIN differaient. Choisissez un code PIN",
+        32: "Scannez ce code avec Flare Drive",
+        33: "Trop de codes PIN incorrects. Reessayez plus tard",
+        34: "Le Wi-Fi de la voiture est coupe. Demarrez Android Auto, puis reessayez",
+        35: "Indisponible pendant la conduite",
+        36: "Le code PIN compte 4 a 8 chiffres. Reessayez",
     },
     "de": {
         2: "Android Auto: Verbinden...",
@@ -76,6 +98,16 @@ LANG_TEXTS = {  # ASCII only
         22: "COM / Telefontaste am Lenkrad: Android Auto Telefon",
         23: "MENU: iDrive - OPTION: dieses Menue - BACK: zurueck",
         24: "Telefon: Android Auto kabellos an, mit dem Auto gekoppelt",
+        26: "PIN fuer Flare Drive waehlen (4 bis 8 Ziffern)",
+        27: "Neue PIN erneut eingeben",
+        28: "PIN fuer Flare Drive eingeben",
+        29: "Falsche PIN. Erneut versuchen",
+        31: "Die beiden PINs waren verschieden. PIN waehlen",
+        32: "Diesen Code mit Flare Drive scannen",
+        33: "Zu viele falsche PINs. Spaeter erneut versuchen",
+        34: "Das WLAN des Autos ist aus. Android Auto starten, dann erneut versuchen",
+        35: "Waehrend der Fahrt nicht verfuegbar",
+        36: "Die PIN hat 4 bis 8 Ziffern. Erneut versuchen",
     },
 }
 LANG_TEXTS["fr-CA"] = LANG_TEXTS["fr-FR"]
@@ -89,8 +121,21 @@ def add(archive, name, data):
     archive.writestr(info, data)
 
 
+def check_xml_texts(xml):
+    """Every textId the app's XML names has an English text, and every translation an English original."""
+    named = {int(m.get("textId")) for m in ET.parse(xml).getroot().iter("textIdModel")}
+    missing = sorted(named - set(TEXTS))
+    if missing:
+        raise SystemExit(f"FAIL: {xml.name} names texts with no English text: {missing}")
+    for lang, texts in LANG_TEXTS.items():
+        extra = sorted(set(texts) - set(TEXTS))
+        if extra:
+            raise SystemExit(f"FAIL: {lang} translates texts with no English text: {extra}")
+
+
 def write_texts(path):
     """One <lang>.txt per language: English, overridden by the language's own texts."""
+    check_xml_texts(Path(__file__).resolve().parent / "AAEntryNav.xml")
     with zipfile.ZipFile(path, "w") as archive:
         for lang, langname in LANGS.items():
             texts = dict(TEXTS)

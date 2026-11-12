@@ -6,6 +6,7 @@
 //   vehicle.dayNightChangeOver       "daynight <n>" (1 day, 2 night), also written to /tmp/aa-entrynav-daynight
 //   driving.mode / driving.mode35up  a real change between two valid modes only: the hold machine sends "drivemode"
 //                                    if iDrive's driving mode display then covers our state (popup_peek.hpp)
+//   driving.speedActual              kept for the Flare Drive page, which hides its QR code while the car moves
 // Every handler runs on the app thread.
 #ifndef AA_ENTRYNAV_HMIAPP_CAR_SIGNALS_HPP
 #define AA_ENTRYNAV_HMIAPP_CAR_SIGNALS_HPP
@@ -20,6 +21,9 @@ namespace app {
 void subscribeCarSignals(bmw::PluginApp* app, HoldMachine& hold);
 bool callActive();  // either phone line is in a call
 int lastGear();     // kGearUnknown until the first driving.gear value
+// The car moves: driving.speedActual at kMovingKmh or more. False while no speed has come yet.
+const int kMovingKmh = 3;
+bool carMoving();
 
 }  // namespace app
 }  // namespace evo

@@ -15,6 +15,7 @@
 
 #include "evo_log.hpp"
 #include "evo_process.hpp"
+#include "service_contract.hpp"
 
 namespace evo {
 static bool queryHostapd(std::string& out) {
@@ -49,7 +50,7 @@ bool loadAccessPoint(aa::ApInfo& out, std::string& source) {
     if (queryHostapd(text) && parseHostapdConfig(text, ap)) {
         source = "hostapd_cli/wlan0";
     } else {
-        const char* const file = "/tmp/wland/ap.conf";
+        const char* const file = contract::kWlandApConf;
         std::ifstream in(file, std::ios::binary);
         text.clear();
         char buf[1024];

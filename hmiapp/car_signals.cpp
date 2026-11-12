@@ -103,6 +103,23 @@ bool onDayNightChanged(void*, const bmw::BasicString<unsigned short>& value) {
     return true;
 }
 
+// ---- speed: only whether the car moves, for the Flare Drive page ----------------------------------------------------
+const char* const kSpeedProperty = "driving.speedActual";
+int g_moving = -1;  // -1 until the first speed read, then 0 or 1
+bool g_speedSeen = false;
+bool onSpeedChanged(void*, const bmw::BasicString<unsigned short>& value) {
+    char text[160];
+    narrow(value, text, sizeof(text));
+    const int kmh = aa::cdsIntField(text, "speedActual", -1);
+    const int moving = kmh < 0 ? g_moving : kmh >= kMovingKmh ? 1 : 0;
+    if (moving != g_moving || !g_speedSeen) {  // the first value (its layout), then each start and stop
+        alog("CDS %s = '%s' -> %s", kSpeedProperty, text, moving < 0 ? "unknown" : moving ? "moving" : "stopped");
+    }
+    g_speedSeen = true;
+    g_moving = moving;
+    return true;
+}
+
 // ---- driving mode ---------------------------------------------------------------------------------------------------
 int g_lastDriveMode[2] = {-1000, -1000};
 long g_driveModeSubAt = -1;
@@ -153,6 +170,12 @@ void subscribeCarSignals(bmw::PluginApp* app, HoldMachine& hold) {
         addCdsHandler(app, kDriveModeProps[i], i == 0 ? &onDriveMode0 : &onDriveMode1);
         alog("CDS handler for %s registered", kDriveModeProps[i]);
     }
+    addCdsHandler(app, kSpeedProperty, &onSpeedChanged);
+    alog("CDS handler for %s registered", kSpeedProperty);
+}
+
+bool carMoving() {
+    return g_moving == 1;
 }
 
 bool callActive() {

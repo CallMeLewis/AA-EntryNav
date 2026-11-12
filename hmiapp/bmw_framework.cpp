@@ -46,6 +46,13 @@ void addAction(bmw::PluginApp* app, unsigned actionId, ActionStub stub) {
     app->addHandler(actionId, d);
 }
 
+void addMapAction(bmw::PluginApp* app, unsigned actionId, MapActionStub stub) {
+    bmw::MapActionDelegate d;
+    d.object = app;
+    d.stub = stub;
+    app->addHandlerWithMap(actionId, d);
+}
+
 void addStateHandler(bmw::PluginApp* app, unsigned state, unsigned kind, ActionStub stub) {
     bmw::ActionDelegate d;
     d.object = app;
@@ -65,6 +72,33 @@ bool parcelBool(const bmw::Parcel& value) {
     bool b = false;
     value.readBool(b);
     return b;
+}
+
+void parcelText(const bmw::Parcel& value, char* text, size_t cap) {
+    static const unsigned short kEmpty[1] = {0};
+    bmw::BasicString<unsigned short> s(kEmpty);
+    value.readWString(s);
+    narrow(s, text, cap);
+}
+
+bool mapText(const bmw::Map<unsigned, bmw::Variant>& params, unsigned key, char* text, size_t cap, unsigned* type) {
+    text[0] = '\0';
+    // operator[] is the only lookup exported; a missing key is added empty to this message's own map, read by no one
+    // after the handlers.
+    const bmw::Variant& v = const_cast<bmw::Map<unsigned, bmw::Variant>&>(params)[key];
+    *type = v.type();
+    if (*type != bmw::kVariantWideString || !v.holder()) {
+        return false;
+    }
+    // Variant::ObjectContainer<BasicString<unsigned short>>: the vtable, then the string (what Variant::as returns).
+    const char* holder = static_cast<const char*>(v.holder());
+    narrow(*reinterpret_cast<const bmw::BasicString<unsigned short>*>(holder + sizeof(void*)), text, cap);
+    return true;
+}
+
+void showImage(bmw::PluginApp* app, unsigned model, const unsigned char* png, size_t size) {
+    bmw::Image image(png, static_cast<unsigned>(size));
+    app->updateModel(model, image);
 }
 
 void narrow(const bmw::BasicString<unsigned short>& value, char* text, size_t cap) {

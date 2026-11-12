@@ -87,7 +87,8 @@ evo-trial: $(TRIAL_OBJ)
 # iDrive PluginApp (installed in /opt/hmi/data/ro/Plugins/AAEntryNav, loaded by HmiMain3D at boot). Its objects are
 # position independent and hidden: HmiMain3D only looks up pluginAppInfo, the one symbol the library exports.
 HMI_SRC = hmiapp/entry_aa_app.cpp hmiapp/bmw_framework.cpp hmiapp/app_log.cpp hmiapp/app_guards.cpp \
-          hmiapp/service_link.cpp hmiapp/car_signals.cpp hmiapp/hold_machine.cpp hmiapp/bt_audio.cpp
+          hmiapp/service_link.cpp hmiapp/car_signals.cpp hmiapp/hold_machine.cpp hmiapp/bt_audio.cpp \
+          hmiapp/flare_page.cpp hmiapp/qr_code.cpp hmiapp/qr_png.cpp
 HMI_OBJ = $(HMI_SRC:.cpp=.o)
 HMI_LIBDIRS = -L$(SYSROOT)/opt/hmi/lib -Wl,-rpath-link,$(SYSROOT)/opt/hmi/lib
 hmiapp: hmiapp/libAAEntryNav.so
@@ -195,6 +196,14 @@ test-host: test-parsers test-spp-host test-kombi-host test-gps-host test-capture
 	./tests/test-hold-machine
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_bt_audio_plan.cpp -o tests/test-bt-audio-plan
 	./tests/test-bt-audio-plan
+	$(HOST_CXX) $(HOST_FLAGS) tests/test_pin_lock.cpp -o tests/test-pin-lock
+	./tests/test-pin-lock
+	$(HOST_CXX) $(HOST_FLAGS) tests/test_qr_code.cpp hmiapp/qr_code.cpp -o tests/test-qr-code
+	./tests/test-qr-code
+	$(HOST_CXX) $(HOST_FLAGS) tests/test_flare_link.cpp hmiapp/qr_code.cpp -o tests/test-flare-link
+	./tests/test-flare-link
+	$(HOST_CXX) $(HOST_FLAGS) tests/test_qr_png.cpp hmiapp/qr_png.cpp hmiapp/qr_code.cpp -o tests/test-qr-png
+	./tests/test-qr-png
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_crash_guard.cpp -o tests/test-crash-guard
 	./tests/test-crash-guard
 	python3 tests/test_setup.py $(if $(BUSYBOX),--busybox $(BUSYBOX))

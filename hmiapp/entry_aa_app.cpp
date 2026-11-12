@@ -22,6 +22,7 @@
 //   car_signals    gear, phone calls, day/night and driving mode from the car's CDS
 //   hold_machine   iDrive kept on the blank state while Android Auto is on screen (pure, tested on the PC)
 //   bt_audio       iDrive's own source switch to Bluetooth audio as the phone connects (when, in bt_audio_plan)
+//   flare_page     the Flare Drive row: PIN, then a QR code with the car's Wi-Fi for the Flare Drive phone app
 // Uninstall: delete the plugin folder and reboot.
 #include <dlfcn.h>
 #include <stdint.h>
@@ -37,6 +38,7 @@
 #include "bt_audio.hpp"
 #include "bt_audio_plan.hpp"
 #include "car_signals.hpp"
+#include "flare_page.hpp"
 #include "hold_machine.hpp"
 #include "log_profile.hpp"
 #include "mono_clock.hpp"
@@ -124,10 +126,18 @@ bool menuFocus(unsigned state, const bmw::Parcel& p) {
     return true;
 }
 bool onMenuFocus(void*, const bmw::Parcel& p) {
+    flareMenuFocus(parcelBool(p));
     return menuFocus(kMenuState, p);
 }
 bool onHelpFocus(void*, const bmw::Parcel& p) {
     return menuFocus(kHelpState, p);
+}
+bool onFlarePinFocus(void*, const bmw::Parcel& p) {
+    return menuFocus(kFlarePinState, p);
+}
+bool onFlarePageFocus(void* self, const bmw::Parcel& p) {
+    flarePageFocus(static_cast<bmw::PluginApp*>(self), parcelBool(p));
+    return menuFocus(kFlarePageState, p);
 }
 
 // ---- connecting animation of the entry button -----------------------------------------------------------------------
@@ -309,6 +319,7 @@ void statusRun(void*) {
     }
     const long now = monoSeconds();  // one moment for both
     switchToBluetoothAudio(d, now);
+    flarePagePoll(app);
     g_hold.poll(d, now);
     postRunnable(app, g_statusRunnable, kStatusPollMs);
 }
@@ -331,6 +342,9 @@ bool appOnInit(bmw::PluginApp* self) {
     addAction(self, kActAutostart, &onAutostartToggle);
     addStateHandler(self, kMenuState, kHandlerFocus, &onMenuFocus);
     addStateHandler(self, kHelpState, kHandlerFocus, &onHelpFocus);
+    registerFlarePage(self);
+    addStateHandler(self, kFlarePinState, kHandlerFocus, &onFlarePinFocus);
+    addStateHandler(self, kFlarePageState, kHandlerFocus, &onFlarePageFocus);
     addStateHandler(self, kAaState, kHandlerFocus, &onAaFocus);
     addStateHandler(self, kAaState, kHandlerVisible, &onAaVisible);
     g_initTime = monoSeconds();

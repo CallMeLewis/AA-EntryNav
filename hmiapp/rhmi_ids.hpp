@@ -8,23 +8,32 @@ namespace evo {
 namespace app {
 
 // ---- hmiStates -----------------------------------------------------------------------------------------------------
-const unsigned kMenuState = 10;  // the app's menu
-const unsigned kHelpState = 12;  // "Help", child of the menu
-const unsigned kAaState = 13;    // inert blank state held while Android Auto is on screen (exclusivity)
+const unsigned kMenuState = 10;       // the app's menu
+const unsigned kHelpState = 12;       // "Help", child of the menu
+const unsigned kAaState = 13;         // inert blank state held while Android Auto is on screen (exclusivity)
+const unsigned kFlarePinState = 14;   // the speller asking the Flare Drive PIN (inputHmiState, masked PIN mode)
+const unsigned kFlarePageState = 15;  // the Flare Drive page: a text and the QR code
 // State handler kinds, as bmw::PluginApp::addHandler(state, kind, ...) takes them.
 const unsigned kHandlerFocus = 1;
 const unsigned kHandlerVisible = 11;
 
 // ---- focusEvents ---------------------------------------------------------------------------------------------------
-const unsigned kEvGoHome = 50;    // -> NativeStateID 1 (iDrive main menu)
-const unsigned kEvOpenMenu = 51;  // -> state 10 (the app's menu)
-const unsigned kEvHoldAa = 52;    // -> state 13 (the blank state)
+const unsigned kEvGoHome = 50;         // -> NativeStateID 1 (iDrive main menu)
+const unsigned kEvOpenMenu = 51;       // -> state 10 (the app's menu)
+const unsigned kEvHoldAa = 52;         // -> state 13 (the blank state)
+const unsigned kEvOpenPin = 53;        // -> state 14
+const unsigned kEvOpenFlarePage = 54;  // -> state 15
 
 // ---- raActions -----------------------------------------------------------------------------------------------------
 const unsigned kActEntry = 2;  // entry button "Android Auto" (iDrive Media menu)
 const unsigned kActStart = 21;
 const unsigned kActStop = 22;
 const unsigned kActAutostart = 24;
+const unsigned kActFlareRow = 26;  // the menu's "Flare Drive" row
+const unsigned kActPinOk = 27;     // the speller's OK: the whole PIN, as a string
+// The speller's keystrokes. Without an inputAction the HMI never keeps the typed text, and OK sends it empty
+// (CAbstractInputHmiState::spellerCurrentInputString returns at once when the state has none: seen in the car).
+const unsigned kActPinInput = 28;
 
 // ---- the entry button ----------------------------------------------------------------------------------------------
 const unsigned kEntryTextModel = 3;
@@ -45,6 +54,24 @@ const unsigned kTextRowWaiting = 17;     // "Plug in the phone's USB cable"
 const unsigned kAutostartModel = 34;
 const unsigned kStartButton = 61;
 const unsigned kStopButton = 62;  // hidden while Android Auto is stopped
+
+// ---- Flare Drive (flare_page.hpp) ----------------------------------------------------------------------------------
+const unsigned kPinResultModel = 85;    // raDataModel: the speller's text, emptied after each OK
+const unsigned kPinTitleModel = 86;     // the speller's title
+const unsigned kQrImageModel = 87;      // raImageModel: the QR code, as a PNG file
+const unsigned kFlareStatusModel = 89;  // the page's text
+const unsigned kQrImage = 72;           // the page's image component
+const unsigned kTextPinChoose = 26;     // "Choose a PIN for Flare Drive (4 to 8 digits)"
+const unsigned kTextPinAgain = 27;      // "Enter the new PIN again"
+const unsigned kTextPinEnter = 28;      // "Enter the Flare Drive PIN"
+const unsigned kTextPinWrong = 29;      // "Wrong PIN. Try again"
+const unsigned kTextPinMismatch = 31;   // "The two PINs differed. Choose a PIN"
+const unsigned kTextFlareScan = 32;     // "Scan this code with Flare Drive"
+const unsigned kTextFlareLocked = 33;   // "Too many wrong PINs. Try again later"
+const unsigned kTextFlareWifiOff = 34;  // "The car's Wi-Fi is off. Start Android Auto, then try again"
+const unsigned kTextFlareDriving = 35;  // "Not available while driving"
+const unsigned kTextPinInvalid = 36;    // "The PIN is 4 to 8 digits. Try again"
+
 // Component properties, as bmw::PluginApp::setProperty takes them.
 const unsigned kPropVisible = 3;
 const unsigned kPropWaiting = 8;

@@ -11,6 +11,9 @@
       <raAction id="22"/>
       <raAction id="24"/>
       <hmiAction id="25" target="12"/>
+      <raAction id="26"/>
+      <raAction id="27"/>
+      <raAction id="28"/>
     </actions>
     <models>
       <textIdModel id="3" textId="1">
@@ -52,11 +55,24 @@
         <synonyms/>
       </textIdModel>
       <raIntModel id="40" modelType="NativeStateID" value="1"/>
+      <raDataModel id="85"/>
+      <textIdModel id="86" textId="28">
+        <synonyms/>
+      </textIdModel>
+      <raImageModel id="87"/>
+      <textIdModel id="88" textId="25">
+        <synonyms/>
+      </textIdModel>
+      <textIdModel id="89" textId="32">
+        <synonyms/>
+      </textIdModel>
     </models>
     <events>
       <focusEvent id="50" targetModel="40"/>
       <focusEvent id="51" target="10"/>
       <focusEvent id="52" target="13"/>
+      <focusEvent id="53" target="14"/>
+      <focusEvent id="54" target="15"/>
     </events>
     <hmiStates>
       <hmiState id="10" text="Android Auto" textModel="3">
@@ -66,6 +82,7 @@
           <separator id="66"/>
           <checkbox action="24" id="64" model="34" text="Demarrage automatique" textModel="35"/>
           <separator id="67"/>
+          <button action="26" id="68" model="88" text="Flare Drive"/>
           <button action="25" id="65" model="36" text="Aide"/>
         </components>
       </hmiState>
@@ -77,6 +94,19 @@
           <label id="93" model="83"/>
           <separator id="95"/>
           <label id="94" model="84"/>
+        </components>
+      </hmiState>
+      <inputHmiState id="14" parentId="10" text="PIN" textModel="86" inputId="96" inputType="7" inputAction="28" resultAction="27" resultModel="85"/>
+      <hmiState id="15" parentId="10" text="Flare Drive" textModel="88">
+        <components>
+          <label id="73" model="89"/>
+          <image id="72" model="87">
+            <properties>
+              <property id="3" value="false"/>
+              <property id="9" value="360"/>
+              <property id="10" value="360"/>
+            </properties>
+          </image>
         </components>
       </hmiState>
       <hmiState id="13" parentId="10" text=" " textModel="37">

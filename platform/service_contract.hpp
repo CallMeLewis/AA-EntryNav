@@ -33,6 +33,9 @@ constexpr char kWirelessOff[] = "/var/local/data/AA/wireless-off";
 // present: as the phone connects, the iDrive app switches iDrive's sound to Bluetooth audio (hmiapp/bt_audio.hpp). Not
 // with kAudioWifi.
 constexpr char kSelectBtAudio[] = "/var/local/data/AA/select-bt-audio";
+// The PIN of the Flare Drive page, as a salted hash, and the wrong PINs in a row (hmiapp/pin_lock.hpp). Deleting it
+// lets the next person to open the page choose a new PIN.
+constexpr char kFlarePin[] = "/var/local/data/AA/flare-pin";
 constexpr char kAppLog[] = "/var/local/data/AA/app.log";
 constexpr char kAppLogOld[] = "/var/local/data/AA/app.old.log";
 constexpr char kAppDisable[] = "/var/local/data/AA/app.disable";  // present: the app stays off (set by hand)
@@ -48,6 +51,7 @@ constexpr char kStateFile[] = "/tmp/aa-entrynav-state";                // "state
 constexpr char kAppKeyFile[] = "/tmp/aa-entrynav-appkey";              // NAV/MEDIA/COM opened an Android Auto app
 constexpr char kDayNightFile[] = "/tmp/aa-entrynav-daynight";          // day or night, written by the app
 constexpr char kWirelessLock[] = "/tmp/aa-entrynav-wireless.lock";     // one wireless start at a time
+constexpr char kWlandApConf[] = "/tmp/wland/ap.conf";  // BMW's hotspot settings, written by wland (platform/evo_ap.cpp)
 // The service's udev rule while Android Auto over a cable is on (usb_link.hpp: kUsbUdevRuleDir/kUsbUdevRuleName). The
 // service removes it as it stops; the supervisor removes it again once the service has ended however it ended, since
 // a crash or the forced stop skips the service's own removal, and the rule would keep BMW's media program away from
