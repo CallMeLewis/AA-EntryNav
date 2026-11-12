@@ -363,10 +363,18 @@ bool ServiceApp::bluetoothPaired(const std::string& phone, void* user) {
     return paired == 1;
 }
 
-void ServiceApp::startSession(int fd, void* user, const std::string& carBluetooth) {
+void ServiceApp::startSession(int fd, void* user, const std::string& carBluetooth, bool cable) {
     ServiceApp* a = static_cast<ServiceApp*>(user);
     pthread_mutex_lock(&a->connectMu);
     if (a->stopRequested()) {
+        close(fd);
+        pthread_mutex_unlock(&a->connectMu);
+        return;
+    }
+    if (cable && a->session.isActive()) {
+        // The cable thread saw nothing running, then spent seconds asking the phone: a phone on Wi-Fi connected
+        // meanwhile. Replacing it here would stop its session without its ended() (microphone, cluster, focus).
+        ELOG("ServiceApp", "a phone on Wi-Fi connected while the cable was being set up: the cable waits");
         close(fd);
         pthread_mutex_unlock(&a->connectMu);
         return;
@@ -469,7 +477,7 @@ void* ServiceApp::usb(void* user) {
                 } else {
                     ELOG("Bluetooth", "the car's Bluetooth stack did not answer: the phone is not told about it");
                 }
-                startSession(socket, a, adapter.address);  // owns the socket from here, as with a phone on Wi-Fi
+                startSession(socket, a, adapter.address, true);  // owns the socket from here, as with Wi-Fi
             }
         }
         a->usbBusy = carried;
