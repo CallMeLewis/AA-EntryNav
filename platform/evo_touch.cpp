@@ -419,7 +419,15 @@ void EvoTouch::updateSteal(bool want) {
 
 void EvoTouch::emit(const aa::TouchEventOut* ev, int n) {
     const bool send = mode_ == INPUT_FORWARD && owned_ && cb_;
+    // The picture went while a finger the phone saw was down, and the lift came before run() could release it: the
+    // phone still gets the lift (RELEASE / POINTER_UP), or it would keep that finger down until the next touch.
+    const bool lifts = !send && mode_ == INPUT_FORWARD && fingerSent_ && cb_;
     for (int i = 0; i < n; ++i) {
+        if (lifts && (ev[i].action == 1 || ev[i].action == 6)) {
+            cb_(ev[i], user_);
+            ++sent_;
+            ELOG("Touch", "finger lifted just after the picture went: release sent to AA");
+        }
         ++events_;
         if (eventsLogged_ < 300 && (ev[i].action != 2 || eventsLogged_ < 60)) {
             ++eventsLogged_;
@@ -437,7 +445,7 @@ void EvoTouch::emit(const aa::TouchEventOut* ev, int n) {
             ++sent_;
         }
     }
-    if (send) {
+    if (send || lifts) {
         fingerSent_ = tracker_.activeCount() > 0;
     }
 }

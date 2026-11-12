@@ -5,6 +5,7 @@
 //   1. HMI with SO_REUSEADDR: our connected socket takes the controller's datagrams while owned, gives them back after.
 //   2. HMI without reuse flags: bind refused, copy-only fallback, HMI keeps receiving everything.
 //   3. Observe mode never sends.
+// And a lift that arrives just after the picture went still reaches the phone.
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -120,6 +121,13 @@ int main() {
     usleep(250000);
     sendTouch(ctl, 5, 5, 1, 84);
     CHECK(events() == 4 && drain(hmi) == 0);
+    // The picture goes with that finger down and the lift arrives before the thread's next turn: the phone still gets
+    // the lift, or it would keep the finger down.
+    t.setOwned(false);
+    sendTouch(ctl, 5, 5, 3, 90);
+    usleep(150000);
+    CHECK(events() == 5 && got[4].action == 1);
+    drain(hmi);
     t.stop();  // stop always returns the port
     sendTouch(ctl, 5, 5, 3, 96);
     CHECK(drain(hmi) == 1);
