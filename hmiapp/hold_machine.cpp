@@ -345,6 +345,9 @@ void HoldMachine::poll(const ServiceState& service, long now) {
         holdShownAt_ = 0;
     }
     if (!overlay || !holding_ || blank) {
+        if (blank) {
+            leftSeen_ = 0;  // iDrive came back: a later departure needs its own two polls
+        }
         return;
     }
     if (now - holdTime_ < 1) {

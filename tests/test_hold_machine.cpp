@@ -664,6 +664,19 @@ void hardKeys() {
         c.poll();
         CHECK_OUT(c, "hide");
     }
+    {  // iDrive left for one poll and came back: a second departure within 3 s needs its own two polls
+        Car c;
+        heldOnBlank(c);
+        c.blankLeft();
+        c.poll();
+        c.blankShown();
+        c.poll();
+        c.blankLeft();
+        c.poll();
+        CHECK_OUT(c, "");
+        c.poll();
+        CHECK_OUT(c, "hide");
+    }
     {  // iDrive back on the blank state before the service stepped aside: still no main menu, it was asked to go
         Car c;
         heldOnBlank(c);
