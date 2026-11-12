@@ -8,12 +8,12 @@
 #include "evo_video.hpp"
 
 static unsigned height = 0, opacityCommands = 0, decodeFailures = 0;
-static uint32_t decoded = 0;  // length of the last buffer handed to the decoder
-static bool visible = false;
+static uint32_t decoded = 0;                    // length of the last buffer handed to the decoder
+static bool visible = false, poolBusy = false;  // poolBusy: the decoder holds every buffer
 static float opacity = 1.f;
 static uint8_t bufferMemory[256];
 namespace evo {
-// One buffer, always free: the fake decoder never holds it.
+// One buffer, free unless poolBusy: the fake decoder never holds it otherwise.
 DmaBufPool::DmaBufPool() : drmFd_(-1), dev_(0) {}
 DmaBufPool::~DmaBufPool() {}
 bool DmaBufPool::init(unsigned, uint32_t) {
@@ -25,7 +25,7 @@ void DmaBufPool::destroy() {
     bufs_.clear();
 }
 int DmaBufPool::acquireFree() {
-    return bufs_.empty() ? -1 : 0;
+    return bufs_.empty() || poolBusy ? -1 : 0;
 }
 int DmaBufPool::find(int fd) {
     return !bufs_.empty() && fd == 7 ? 0 : -1;
@@ -125,12 +125,38 @@ int main() {
     assert(video.postVideoFrame(kIdr, sizeof(kIdr), 0) && configThenIdr());
     assert(video.postVideoFrame(kIdr, sizeof(kIdr), 0) && decoded == sizeof(kIdr));  // sent once
 
+    // A lost frame: a new IDR is asked for, at most every kKeyframeAskMs, until one reaches the decoder.
+    assert(!video.takeKeyframeRequest(1000));
+    decodeFailures = 1;
+    assert(!video.postVideoFrame(kSlice, sizeof(kSlice), 0));
+    assert(video.takeKeyframeRequest(1000));
+    assert(!video.takeKeyframeRequest(1000 + evo::kKeyframeAskMs - 1));
+    assert(video.takeKeyframeRequest(1000 + evo::kKeyframeAskMs));
+    assert(video.postVideoFrame(kSlice, sizeof(kSlice), 0));  // a slice does not end it
+    assert(video.takeKeyframeRequest(1000 + 2 * evo::kKeyframeAskMs));
+    assert(video.postVideoFrame(kIdr, sizeof(kIdr), 0));  // an IDR does
+    assert(!video.takeKeyframeRequest(1000 + 3 * evo::kKeyframeAskMs));
+
+    // The decoder keeps every buffer: frames are dropped after a short wait, then, once nothing came back for
+    // kVideoStallMs, at once, and the stall is reported once.
+    poolBusy = true;
+    assert(!video.postVideoFrame(kSlice, sizeof(kSlice), 0) && !video.takeStall());
+    usleep((evo::kVideoStallMs + 200) * 1000);
+    assert(!video.postVideoFrame(kSlice, sizeof(kSlice), 0));
+    assert(video.takeStall() && !video.takeStall());
+    assert(!video.takeKeyframeRequest(100000));  // no point asking a stuck decoder
+    poolBusy = false;
+
     video.stop();
     assert(!visible && !video.isVisible() && !video.isReady());
     assert(!video.postVideoFrame(kIdr, sizeof(kIdr), 0));
     assert(video.init(cfg) && video.start() && video.isReady());
     assert(opacity == 1.f && video.setOpacity(0.25f) && opacity == 0.25f);   // fresh surface, fresh cache
     assert(video.postVideoFrame(kIdr, sizeof(kIdr), 0) && configThenIdr());  // the new decoder gets SPS/PPS again
+    assert(!video.takeStall());                                              // and starts unstuck
     video.stop();
-    puts("PASS video presentation: visibility, opacity cache, camera hide, SPS/PPS after a refused IDR, reconnect");
+    puts(
+        "PASS video presentation: visibility, opacity cache, camera hide, SPS/PPS after a refused IDR, a new IDR asked "
+        "for after a lost "
+        "frame, a stuck decoder reported once, reconnect");
 }

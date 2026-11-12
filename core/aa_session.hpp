@@ -51,6 +51,9 @@ public:
     bool start(int client_fd);
     // Ends the session and joins its thread. The ended callback does not run.
     void stop();
+    // Ends the session as if the phone had left, from any thread, the session thread included (stop() would join
+    // itself there): the socket is shut down, the thread finishes, and the ended callback runs.
+    void end() { interrupt(); }
     bool isActive() const { return running(); }
 
     // Set before start().

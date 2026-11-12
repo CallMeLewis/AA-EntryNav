@@ -39,7 +39,12 @@ EvoVideo::EvoVideo()
       framesIn_(0),
       framesDropped_(0),
       idrSeen_(0),
-      framesAtStart_(0) {
+      framesAtStart_(0),
+      lastReleaseMs_(0),
+      stalled_(false),
+      stallTaken_(false),
+      needKeyframe_(false),
+      keyframeAskMs_(0) {
     pthread_mutex_init(&mu_, nullptr);
     // The wait for a free buffer must not stretch or end early when the car sets its clock (GPS, RTC at boot).
     pthread_condattr_t attr;
@@ -108,6 +113,11 @@ bool EvoVideo::start() {
     started_ = true;
     configSent_ = false;
     framesAtStart_ = framesIn_;
+    pthread_mutex_lock(&mu_);
+    lastReleaseMs_ = monoMs();
+    stalled_ = stallTaken_ = needKeyframe_ = false;
+    keyframeAskMs_ = 0;
+    pthread_mutex_unlock(&mu_);
     if (pthread_create(&evThread_, nullptr, eventStub, this) == 0) {
         evStarted_ = true;
     } else {
@@ -238,11 +248,14 @@ bool EvoVideo::postVideoFrame(const uint8_t* data, size_t len, uint64_t pts) {
     size_t need = len + (prependCfg ? codecCfg_.size() : 0);
 
     int bi = pool_.acquireFree();
-    // Bounded wait for a free buffer (the event thread releases one on each DMABUF_COMPLETE).
+    if (bi < 0 && !stalled_ && arrivedMs - lastReleaseMs_ >= kVideoStallMs) {
+        stalled_ = true;  // reported once through takeStall()
+    }
+    // Bounded wait for a free buffer (the event thread releases one on each DMABUF_COMPLETE); none once stuck.
     struct timespec ts;
     ts.tv_sec = 0;
     ts.tv_nsec = 0;
-    while (bi < 0 && running_) {
+    while (bi < 0 && running_ && !stalled_) {
         struct timespec now;
         clock_gettime(CLOCK_MONOTONIC, &now);  // the clock cv_ was created with
         ts = now;
@@ -263,6 +276,7 @@ bool EvoVideo::postVideoFrame(const uint8_t* data, size_t len, uint64_t pts) {
     if (bi < 0) {
         ++framesDropped_;
         ++stats_.dropped;
+        needKeyframe_ = needKeyframe_ || !idr;
         logStatsIfDue(monoMs());
         pthread_mutex_unlock(&mu_);
         return false;
@@ -272,6 +286,7 @@ bool EvoVideo::postVideoFrame(const uint8_t* data, size_t len, uint64_t pts) {
     if (need > b.size) {
         ++framesDropped_;
         ++stats_.dropped;
+        needKeyframe_ = needKeyframe_ || !idr;
         pthread_mutex_unlock(&mu_);
         ELOG("Video", "frame %zu B > buffer %u B", need, b.size);
         return false;
@@ -297,12 +312,17 @@ bool EvoVideo::postVideoFrame(const uint8_t* data, size_t len, uint64_t pts) {
     }
     if (rc >= 0) {
         ++stats_.decoded;
+        if (idr) {
+            needKeyframe_ = false;  // the picture starts afresh from this one
+        }
     }
     logStatsIfDue(doneMs);
     pthread_mutex_unlock(&mu_);
     if (rc < 0) {
         pthread_mutex_lock(&mu_);
         b.inFlight = false;
+        lastReleaseMs_ = monoMs();
+        needKeyframe_ = needKeyframe_ || !idr;
         if (prependCfg) {
             configSent_ = false;  // the decoder never got SPS/PPS: put them in front of the next IDR again
         }
@@ -311,6 +331,27 @@ bool EvoVideo::postVideoFrame(const uint8_t* data, size_t len, uint64_t pts) {
         return false;
     }
     return true;
+}
+
+bool EvoVideo::takeStall() {
+    pthread_mutex_lock(&mu_);
+    const bool now = stalled_ && !stallTaken_;
+    stallTaken_ = stallTaken_ || stalled_;
+    pthread_mutex_unlock(&mu_);
+    if (now) {
+        ELOG("Video", "the decoder gave no buffer back for %u ms (all %u in use): stuck", kVideoStallMs, pool_.count());
+    }
+    return now;
+}
+
+bool EvoVideo::takeKeyframeRequest(uint32_t nowMs) {
+    pthread_mutex_lock(&mu_);
+    const bool ask = needKeyframe_ && !stalled_ && (!keyframeAskMs_ || nowMs - keyframeAskMs_ >= kKeyframeAskMs);
+    if (ask) {
+        keyframeAskMs_ = nowMs ? nowMs : 1;
+    }
+    pthread_mutex_unlock(&mu_);
+    return ask;
 }
 
 void EvoVideo::logStatsIfDue(uint32_t nowMs) {
@@ -369,6 +410,7 @@ void EvoVideo::eventLoop() {
                 int bi = pool_.find(evt[1]);
                 if (bi >= 0) {
                     pool_.at(bi).inFlight = false;
+                    lastReleaseMs_ = monoMs();
                     pthread_cond_signal(&cv_);
                 }
                 pthread_mutex_unlock(&mu_);

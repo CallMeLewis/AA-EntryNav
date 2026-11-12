@@ -43,6 +43,8 @@ struct EvoVideoConfig {
 // What the picture path did since the last "[Video] last ..." log line: where a slow picture loses its time (the
 // phone sending late, no free buffer, the decoder call, or the compositor). Kept under EvoVideo's mutex.
 const uint32_t kVideoStatsMs = 10000;
+const uint32_t kVideoStallMs = 3000;   // no buffer given back by the decoder for this long: it is stuck
+const uint32_t kKeyframeAskMs = 2000;  // a new IDR is asked for at most this often
 struct VideoStats {
     uint32_t sinceMs;                             // start of the stretch (evo::monoMs)
     uint32_t lastFrameMs;                         // previous frame from the phone, 0 before the first
@@ -97,6 +99,14 @@ public:
     // False when no buffer frees up in time (frame dropped) or the stream is not started.
     bool postVideoFrame(const uint8_t* data, size_t len, uint64_t pts);
 
+    // Once, when the decoder has held every buffer for kVideoStallMs: it gave none back (after an error, a watchdog or
+    // an abort, libxsvideo may send no completion), so the picture would stay frozen for the session. The caller ends
+    // the session; the next one starts a new decoder. Until then frames are dropped at once, not after a wait.
+    bool takeStall();
+    // A frame was dropped since the last IDR, so the picture smears until the phone sends one: true at most every
+    // kKeyframeAskMs while that lasts. The caller asks the phone for one (video focus, which makes it start afresh).
+    bool takeKeyframeRequest(uint32_t nowMs);
+
 private:
     static void* eventStub(void* self);
     void eventLoop();
@@ -119,7 +129,11 @@ private:
     std::vector<uint8_t> codecCfg_;  // cached SPS/PPS
     bool seenFirstFrame_;
     uint64_t framesIn_, framesDropped_, idrSeen_, framesAtStart_;
-    VideoStats stats_;  // under mu_
+    uint32_t lastReleaseMs_;  // a buffer last came back from the decoder (or the stream started); under mu_
+    bool stalled_, stallTaken_;
+    bool needKeyframe_;       // a frame was dropped since the last IDR handed to the decoder
+    uint32_t keyframeAskMs_;  // the last request (0: none)
+    VideoStats stats_;        // under mu_
     // Logs the stretch and starts a new one when it is due. Called with mu_ held; releases it around the log line.
     void logStatsIfDue(uint32_t nowMs);
 };
