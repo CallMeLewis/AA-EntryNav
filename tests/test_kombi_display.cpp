@@ -186,6 +186,27 @@ void metresFromText() {
     m.hasMetres = true;
     m.metres = 42;
     CHECK(metresToManeuver(m, metres) && metres == 42);  // the phone's metres first
+    // Out of range: never cast as is. Not a number is refused, below zero is 0 (just past the turn), and beyond
+    // 20,000 km is 20,000 km.
+    m.metres = -5;
+    CHECK(metresToManeuver(m, metres) && metres == 0);
+    m.metres = -9200000000000000000LL;
+    CHECK(metresToManeuver(m, metres) && metres == 0);
+    m.metres = 9200000000000000000LL;
+    CHECK(metresToManeuver(m, metres) && metres == 2.0e7);
+    m.hasMetres = false;
+    m.distanceUnit = kUnitMiles;
+    m.distanceText = "1e300";
+    CHECK(metresToManeuver(m, metres) && metres == 2.0e7);
+    m.distanceText = "nan";
+    CHECK(!metresToManeuver(m, metres));
+    m.distanceText = "-3";
+    CHECK(metresToManeuver(m, metres) && metres == 0);
+    std::string text;
+    int unit = 0;
+    m.distanceText = "1e300";  // too long for the cluster: worked out from the metres, in whole miles
+    shortDistance(m, 3, text, unit);
+    CHECK(text.size() <= 3 && text != "-");
 }
 
 // At most three characters with a cluster unit: the phone's text when it fits, else from the metres in its system.

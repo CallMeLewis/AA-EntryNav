@@ -246,10 +246,29 @@ int roundaboutExit(const Maneuver& m) {
     return m.exitNumber >= 2 && m.exitNumber <= kHighestExit ? m.exitNumber : 0;
 }
 
+namespace {
+// The phone's distances come from its messages and its text: negative, not a number, or far beyond any route, they
+// would overflow the whole numbers the cluster's texts are made from (undefined behaviour, a garbage distance).
+// Not-a-number is refused. A negative distance is 0: the phone sends a few metres below zero just past the turn.
+// Anything past 20,000 km is shown as 20,000 km.
+const double kFarthestMetres = 2.0e7;
+bool sane(double& metres) {
+    if (metres != metres) {
+        return false;
+    }
+    if (metres < 0.0) {
+        metres = 0.0;
+    } else if (metres > kFarthestMetres) {
+        metres = kFarthestMetres;
+    }
+    return true;
+}
+}  // namespace
+
 bool metresToManeuver(const Maneuver& m, double& metres) {
     if (m.hasMetres) {
         metres = static_cast<double>(m.metres);
-        return true;
+        return sane(metres);
     }
     double perUnit;
     switch (m.distanceUnit) {
@@ -286,7 +305,7 @@ bool metresToManeuver(const Maneuver& m, double& metres) {
         return false;
     }
     metres = value * perUnit;
-    return true;
+    return sane(metres);
 }
 
 void milesAndFeet(double metres, std::string& text, int& displayUnit) {

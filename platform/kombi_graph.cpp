@@ -123,6 +123,12 @@ Bytes utf16(const std::string& s) {
             }
             cp = cp << 6 | (next & 0x3F);
         }
+        // The phone's text is checked as UTF-8 only loosely (kombi_phone.cpp): an overlong form, a surrogate or a
+        // code point past U+10FFFF would become UTF-16 the cluster can't read, lone surrogates among it.
+        static const uint32_t kLeast[] = {0, 0, 0x80, 0x800, 0x10000};
+        if (cp != 0xFFFD && (cp < kLeast[width] || (cp >= 0xD800 && cp <= 0xDFFF) || cp > 0x10FFFF)) {
+            cp = 0xFFFD;
+        }
         i += width;
         if (cp >= 0x10000) {
             cp -= 0x10000;

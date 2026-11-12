@@ -228,6 +228,22 @@ void textAsUtf16() {
         }
     }
     CHECK(roads == 2);
+
+    // What passes for UTF-8 but is not: an overlong '/', a surrogate, a code point past U+10FFFF. One U+FFFD each,
+    // never a lone surrogate.
+    out.clear();
+    CHECK(
+        RouteGraph().routeStart(ClusterManeuver(1, "\xc0\xaf\xed\xa0\x80\xf7\xbf\xbf\xbf", "1", kClusterMetres), out));
+    const uint8_t replaced[] = {10, 0xFE, 0xFF, 0xFF, 0xFD, 0xFF, 0xFD, 0xFF, 0xFD, 0, 0};
+    roads = 0;
+    for (size_t i = 0; i < out.size(); ++i) {
+        if (is(out[i], 0x0003, 3, 0)) {
+            const Bytes& b = out[i].body;
+            CHECK(b.size() >= 27 + sizeof(replaced) && !memcmp(&b[27], replaced, sizeof(replaced)));
+            ++roads;
+        }
+    }
+    CHECK(roads == 2);
 }
 
 void cancels() {
