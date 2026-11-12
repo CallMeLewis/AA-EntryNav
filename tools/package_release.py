@@ -118,9 +118,11 @@ def release_files(version: str) -> dict:
 def main() -> None:
     version = (ROOT / "VERSION").read_text().strip()
     top = f"aa-entrynav-{version}"
-    epoch = int(
-        subprocess.run(["git", "log", "-1", "--format=%ct"], cwd=ROOT, capture_output=True, text=True).stdout or 0
-    )
+    # Every file carries the commit's time, so the same commit always packs the same bytes.
+    committed = subprocess.run(["git", "log", "-1", "--format=%ct"], cwd=ROOT, capture_output=True, text=True)
+    if committed.returncode or not committed.stdout.strip().isdigit():
+        raise SystemExit(f"FAIL: git can't read the commit's time here: {committed.stderr.strip() or 'no commit'}")
+    epoch = int(committed.stdout)
     archive = ROOT / f"artifacts/{top}-armhf.tar"
     archive.parent.mkdir(exist_ok=True)
     payload = io.BytesIO()
