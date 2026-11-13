@@ -420,19 +420,29 @@ int compatReport() {
     if (!ilm.renderOrderTopFirst(topFirst)) {
         compatLine("block", "order");
     }
+    // The slot a start would take (chooseSlot): slot 5 when it is free, slot 0 when the car has no slot 5 to give.
     evo::SppSnapshotReader reader;
     evo::SppSlotSnapshot slot;
-    if (!reader.open() || !reader.read(0, slot)) {
+    if (!reader.open()) {
         compatLine("block", "alps", reader.error());
     } else {
-        compatLine(slot.idle() ? "ok" : "warn", "alps");
-        compatLine(evo::trialBaselineSupported(slot.uuidPayload) ? "ok" : "block", "uuid", hex(slot.uuidPayload));
-        evo::AlpsSppLink bt;
-        bt.setMonitorOnly(true);
-        std::vector<uint8_t> cfg;
-        const bool readable =
-            bt.start(0) && bt.readConfiguration(0, 0x6203, cfg, 2000) && cfg.size() == 1 && cfg[0] <= 1;
-        compatLine(readable ? "ok" : "block", "spp");
+        const bool spareRead = reader.read(evo::kAaSlot, slot);
+        const evo::SlotOffer offer = evo::spareSlotOffer(spareRead, slot, aaPayload());
+        if (offer == evo::kSlotBusy) {
+            compatLine("warn", "alps", "SPP 5 busy");  // a start waits until it is free
+        } else if (offer == evo::kSlotFree) {
+            // Its 0x6203 cannot be read through the stack: a start saves it as 0 (chooseSlot).
+            compatLine("ok", "alps", "SPP 5");
+            compatLine("ok", "uuid", hex(slot.uuidPayload));
+            compatLine("ok", "spp", "SPP 5");
+        } else if (!reader.read(evo::kAaFallbackSlot, slot)) {
+            compatLine("block", "alps", reader.error());
+        } else {
+            compatLine(slot.idle() ? "ok" : "warn", "alps", "SPP 0");
+            compatLine(evo::trialBaselineSupported(slot.uuidPayload) ? "ok" : "block", "uuid", hex(slot.uuidPayload));
+            std::vector<uint8_t> cfg;
+            compatLine(slotInterface(evo::kAaFallbackSlot, cfg) ? "ok" : "block", "spp", "SPP 0");
+        }
     }
     aa::ApInfo ap;
     std::string source;
