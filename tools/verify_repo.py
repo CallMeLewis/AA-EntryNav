@@ -74,6 +74,12 @@ def local_secrets():
     key_file = Path(os.environ.get("FLARE_DRIVE_SIGNING_KEY", Path.home() / ".flare-drive" / "release-signing-key"))
     if key_file.is_file() and key_file.read_text(encoding="utf-8").strip():
         found.append(("the release signing key", key_file.read_text(encoding="utf-8").strip().encode()))
+    # The Cloudflare API token publish_release.py retire purges the cache with.
+    token_file = Path(
+        os.environ.get("FLARE_DRIVE_PURGE_TOKEN", Path.home() / ".flare-drive" / "cloudflare-purge-token")
+    )
+    if token_file.is_file() and token_file.read_text(encoding="utf-8").strip():
+        found.append(("the Cloudflare purge token", token_file.read_text(encoding="utf-8").strip().encode()))
     return found
 
 

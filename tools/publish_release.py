@@ -30,7 +30,11 @@ update. A beta or test build is always experimental (--stable and `stability ...
 Release is a pre-release, never Latest.
 
 `retire` takes releases off the list, which is signed again; Flare Drive stops offering them at its next check, and a
-head unit that has one installed keeps it. With --delete-archives their archives are then deleted from the bucket.
+head unit that has one installed keeps it. With --delete-archives their archives are then deleted from the bucket and
+purged from Cloudflare's cache, which would otherwise serve them for up to a year (they are uploaded as immutable), and
+each download link is checked to answer 404. The purge uses a Cloudflare API token with the Cache Purge permission on
+the darkzone.dev zone, kept on this PC (~/.flare-drive/cloudflare-purge-token, or FLARE_DRIVE_PURGE_TOKEN); it is read
+before anything changes.
 
 `publish` builds what CI tested: it refuses a dirty tree, a HEAD whose CI has not passed, a version already published,
 and a version whose CHANGELOG.md section or Flare Drive note is missing. It then builds the ARM programs, runs the QEMU
@@ -62,6 +66,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -80,6 +85,7 @@ FEED = "aa-entrynav"
 FEED_URL = f"https://updates.darkzone.dev/{FEED}"
 WRANGLER = "wrangler@4.146.0"  # the version the Flare apps pin
 REPO = "CallMeLewis/AA-EntryNav"
+ZONE_ID = "b2b2305591d3edbf29a4ffb14bc274a0"  # darkzone.dev, which serves updates.darkzone.dev
 # Firmware this project's releases are tried on (tools/setup.sh TRIED_SOFTWARE). The index may narrow, never widen,
 # what Flare Drive allows; the trial firmware still installs only releases Flare Drive itself has reviewed.
 FIRMWARE = ["202111011321", "202306092158"]
@@ -102,6 +108,70 @@ def load_key():
     if not path.is_file():
         sys.exit(f"FAIL: no signing key at {path}. Run keygen first, or set FLARE_DRIVE_SIGNING_KEY.")
     return Ed25519PrivateKey.from_private_bytes(base64.b64decode(path.read_text().strip()))
+
+
+def purge_token_path():
+    return Path(os.environ.get("FLARE_DRIVE_PURGE_TOKEN", Path.home() / ".flare-drive" / "cloudflare-purge-token"))
+
+
+def load_purge_token():
+    path = purge_token_path()
+    token = path.read_text().strip() if path.is_file() else ""
+    if not token:
+        sys.exit(
+            f"FAIL: no Cloudflare API token at {path}, needed to purge deleted archives from the cache. Create one "
+            "with Zone > Cache Purge on darkzone.dev and save it there, or set FLARE_DRIVE_PURGE_TOKEN. Nothing was "
+            "changed."
+        )
+    return token
+
+
+def purge_cache(token, urls):
+    """Purges urls from Cloudflare's cache, then checks each one answers 404. False, with the reason printed, if not."""
+    request = urllib.request.Request(
+        f"https://api.cloudflare.com/client/v4/zones/{ZONE_ID}/purge_cache",
+        data=json.dumps({"files": urls}).encode(),
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "User-Agent": "FlareDrivePublish",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            result = json.load(response)
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode(errors="replace")[:300]
+        print(f"FAIL: Cloudflare refused the cache purge (HTTP {error.code}): {detail}")
+        return False
+    except (urllib.error.URLError, OSError) as error:
+        print(f"FAIL: the cache purge did not reach Cloudflare: {error}")
+        return False
+    if not result.get("success"):
+        print(f"FAIL: the cache purge failed: {result.get('errors')}")
+        return False
+    # A purge reaches every data centre within seconds.
+    left = list(urls)
+    for _ in range(10):
+        left = [url for url in left if not answers_404(url)]
+        if not left:
+            print(f"Purged {len(urls)} archive(s) from Cloudflare's cache; each link answers 404.")
+            return True
+        time.sleep(3)
+    print("FAIL: still downloadable after the purge: " + ", ".join(left))
+    return False
+
+
+def answers_404(url):
+    request = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "FlareDrivePublish"})
+    try:
+        urllib.request.urlopen(request, timeout=30).close()
+    except urllib.error.HTTPError as error:
+        return error.code == 404
+    except (urllib.error.URLError, OSError):
+        return False
+    return False
 
 
 def public_b64(key):
@@ -471,14 +541,22 @@ def retire(args):
     missing = sorted(set(args.versions) - {r["version"] for r in index["releases"]})
     if missing:
         sys.exit(f"FAIL: not published: {', '.join(missing)}. Nothing was changed.")
+    token = load_purge_token() if args.delete_archives else None
     gone = [r for r in index["releases"] if r["version"] in args.versions]
     kept = [r for r in index["releases"] if r["version"] not in args.versions]
     publish_index(key, {**index, "published": now(), "releases": kept})
     print(f"Retired {', '.join(r['version'] for r in gone)}.")
+    purged = True
     if args.delete_archives:
         for entry in gone:
             wrangler_object("delete", entry["file"])
+        purged = purge_cache(token, [f"{FEED_URL}/{entry['file']}" for entry in gone])
     verify(None)
+    if not purged:
+        sys.exit(
+            "FAIL: the archives are deleted from the bucket but may still download from the cache. Purge them by "
+            "URL in Cloudflare's dashboard (Caching > Configuration > Custom Purge)."
+        )
 
 
 def upload(key, index, archive, version, commit, stable, note, body):
@@ -645,7 +723,11 @@ def main():
     s.set_defaults(func=stability)
     r = commands.add_parser("retire")
     r.add_argument("versions", nargs="+", help="published versions to take off the list")
-    r.add_argument("--delete-archives", action="store_true", help="then delete their archives from the bucket")
+    r.add_argument(
+        "--delete-archives",
+        action="store_true",
+        help="then delete their archives from the bucket and purge them from the cache",
+    )
     r.set_defaults(func=retire)
     args = parser.parse_args()
     args.func(args)
