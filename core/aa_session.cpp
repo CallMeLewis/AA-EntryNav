@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The session's thread and wire: start and stop, frames in and out, the silence limit, the car input sent out.
+// The session's thread and wire: start and stop, frames in and out, the silence limit and our pings to a quiet phone,
+// the car input sent out.
 #include "aa_session.hpp"
 
 #include <sys/select.h>
@@ -20,10 +21,17 @@ namespace aa {
 namespace {
 
 // Silence from the phone after which it is gone: a wireless phone can vanish without closing the socket, and its last
-// picture would stay on screen. It pings every second and reports its media status every second, even while iDrive
-// has the screen. Measured on the clock (tests/test_session_silence): car input wakes the thread about 10 times a
-// second. 5 s, so that a short Wi-Fi gap does not end the session.
+// picture would stay on screen. Measured on the clock (tests/test_session_silence): car input wakes the thread about
+// 10 times a second. 5 s, so that a short Wi-Fi gap does not end the session.
 const uint64_t kSilenceMs = 5000;
+// Not every phone speaks by itself. Some ping every second. Others go quiet once iDrive has the screen and no music
+// plays: an X3 G01 on the cable lost its session 5 s after MENU or MAP (reported upstream). So once TLS is up, after
+// kPingAfterMs of silence the head unit sends a ping of its own, then another every kPingEveryMs. The answer is data
+// like any other. Only data from the phone resets the silence, so a phone that never answers still hits kSilenceMs.
+const uint64_t kPingAfterMs = 2000;
+const uint64_t kPingEveryMs = 1000;
+const unsigned kOwnPingsLogged = 5;  // then one in kOwnPingsLogEvery
+const unsigned kOwnPingsLogEvery = 300;
 // From the version request to the end of the TLS handshake. Over a cable or Wi-Fi it takes well under a second, and
 // the phone asks the driver nothing before it. Seen on the car on 13 November 2026: a phone answered the version
 // request with a frame header that announced 5001 bytes, then sent only a few dozen bytes in 14 s. The silence limit
@@ -187,7 +195,7 @@ void AASession::closeSocket() {
 }
 
 void AASession::resetCounters() {
-    keysLogged_ = movesLogged_ = navigationLogged_ = pings_ = 0;
+    keysLogged_ = movesLogged_ = navigationLogged_ = pings_ = pingsAsked_ = pingAnswers_ = 0;
     playbackState_ = kNoField;
     memset(framesSeen_, 0, sizeof(framesSeen_));
 }
@@ -295,6 +303,8 @@ void AASession::finish() {
 bool AASession::receiveExactly(uint8_t* to, size_t size, size_t* received) {
     size_t got = 0;
     uint64_t lastDataMs = locationClockMs();
+    uint64_t lastPingMs = 0;  // our last ping in this silence, 0 before the first
+    unsigned unanswered = 0;  // our pings sent in this silence
     const int wakeFd = inbox_.wakeFd();
     if (received) {
         *received = 0;
@@ -333,11 +343,18 @@ bool AASession::receiveExactly(uint8_t* to, size_t size, size_t* received) {
         }
         if (ready == 0 || !FD_ISSET(fd, &readable)) {
             // Silence is measured on the clock: car input wakes this loop far more often than once a second.
-            const uint64_t silentMs = locationClockMs() - lastDataMs;
+            const uint64_t nowMs = locationClockMs();
+            const uint64_t silentMs = nowMs - lastDataMs;
             if (silentMs >= kSilenceMs) {
-                printf("[AASession] No data from phone for %u s: treating session as dead.\n",
-                       static_cast<unsigned>(silentMs / 1000));
+                printf(
+                    "[AASession] No data from phone for %u s (%u of our pings unanswered): treating session as "
+                    "dead.\n",
+                    static_cast<unsigned>(silentMs / 1000), unanswered);
                 return false;
+            }
+            if (silentMs >= kPingAfterMs && (!lastPingMs || nowMs - lastPingMs >= kPingEveryMs) && askPhone(silentMs)) {
+                lastPingMs = nowMs;
+                ++unanswered;
             }
             continue;
         }
@@ -394,6 +411,22 @@ bool AASession::sendPlain(uint8_t channel, const Message& message) {
 bool AASession::sendSealed(uint8_t channel, const Message& message, uint8_t flags) {
     std::vector<uint8_t> records;
     return tls_.seal(&message[0], message.size(), records) && sendFrame(channel, flags, &records[0], records.size());
+}
+
+// Our ping is encrypted, as the phone's own pings are. False before the TLS handshake has ended: nothing can be sealed
+// yet, and the handshake has its own deadline (kSetupMs). A ping that could not be sent still counts as asked: a failed
+// send has already shut the socket (sendExactly), and the silence limit covers the rest.
+bool AASession::askPhone(uint64_t silentMs) {
+    if (!tls_.established()) {
+        return false;
+    }
+    const bool sent = sendSealed(channel::kControl, message::pingRequest(monotonicUs()));
+    ++pingsAsked_;
+    if (!sent || pingsAsked_ <= kOwnPingsLogged || pingsAsked_ % kOwnPingsLogEvery == 0) {
+        printf("[AASession] phone silent for %u ms: our PingRequest %u %s\n", static_cast<unsigned>(silentMs),
+               pingsAsked_, sent ? "sent" : "SEND FAILED");
+    }
+    return true;
 }
 
 AASession::Received AASession::receive(uint8_t& channel, Message& message) {

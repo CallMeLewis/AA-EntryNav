@@ -34,6 +34,8 @@ Message discoveryResponse(const std::vector<uint8_t>& description);
 Message channelOpenResponse();
 // Echoes the request's timestamp bytes as they came, when the request starts with that field.
 Message pingResponse(const Message& request);
+// The head unit's own ping, carrying its clock. The phone answers it with a ping response.
+Message pingRequest(uint64_t timestampUs);
 Message audioFocusResponse(uint32_t state);
 Message navigationFocusResponse();
 Message byeByeResponse();

@@ -120,6 +120,7 @@ private:
     bool sendFrame(uint8_t channel, uint8_t flags, const uint8_t* payload, size_t size);
     bool sendPlain(uint8_t channel, const Message& message);
     bool sendSealed(uint8_t channel, const Message& message, uint8_t flags = frame::kSealed);
+    bool askPhone(uint64_t silentMs);  // our own ping to a silent phone; false when it cannot go yet
     Received receive(uint8_t& channel, Message& message);
 
     // Car input (aa_session.cpp).
@@ -186,6 +187,7 @@ private:
     // Log throttles, per session.
     unsigned framesSeen_[256];
     unsigned keysLogged_, movesLogged_, navigationLogged_, pings_;
+    unsigned pingsAsked_, pingAnswers_;  // our own pings, and the phone's answers to them
     uint32_t playbackState_;
 };
 
