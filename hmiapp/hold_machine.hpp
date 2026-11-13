@@ -22,8 +22,9 @@
 //   MENU). Nothing tells an app when that ends, and the answer itself is dropped before it reaches the app. So after
 //   one refusal the app opens its own empty popup (popupEvent 55, what RHMI gives an app to come to the front:
 //   iDrive lets an app's focus event through when the topmost popup is an app's), asks for the blank state under it
-//   a second later, closes it and sends "show". Should iDrive refuse even that, Android Auto is on screen without the
-//   hold, as above.
+//   a second later, closes it and sends "show" (again every 2 s while the service still keeps it aside). Should iDrive
+//   refuse even that, Android Auto is on screen without the hold, as above. A call or the reverse gear closes our
+//   popup at once: it is not left over iDrive's call screen or the camera.
 // - BACK or tilt to our menu: event 52 at once (at most every 300 ms), and at each poll while the menu keeps the focus;
 //   at most 8 events 52 until the blank state shows again.
 // - Focus given back to the blank state: the hold worked, its tries start over (a focus lost and given back without
@@ -41,7 +42,8 @@
 //   for 2 s after the app itself makes iDrive change screen (expectScreenChange: the Bluetooth audio switch).
 // - Android Auto steps aside by itself (exit icon, signal lost) over the blank state: event 50 (iDrive main menu), or
 //   event 51 when OPTION opened iDrive's option panel over it. Nothing in reverse or after a hard key.
-// - Open row, but Android Auto never came up (session dropped): after 3 s on the blank state, event 51 (menu back).
+// - Open row, or the blank state asked for under our popup, but Android Auto never came up (session dropped): after
+//   3 s on the blank state, event 51 (menu back).
 // - iDrive back on the blank state by itself while Android Auto is minimized (BACK walks its history, or a screen that
 //   only took the focus closed, as park distance control without reverse): "show", like CarPlay, once per return.
 // - Reverse gear: the camera wins. No event 50, 51 or 52 over it, whatever the service's state file still says, no
@@ -136,6 +138,9 @@ private:
     void backToBlank();
     void updatePopupPeek(bool covered, long now);
     void closeOwnPopup();
+    void openOwnPopup(long now);
+    void holdUnderPopup(long now);
+    void yieldOwnPopup(const char* why);
     void beginWait(long now);
     void bringIdrive(const ServiceState& service, long now);
     void askWithoutHold(long now);
@@ -157,7 +162,7 @@ private:
     bool backAsked_;       // "show" sent for this return to the blank state while minimized (backToBlank)
     bool prevOverlay_;     // Android Auto was on screen at the previous poll
     long holdTime_;        // last event 51 or 52
-    long holdShownAt_;     // when showAndHold asked for the blank state before Android Auto confirmed
+    long holdShownAt_;     // when the blank state was asked for before Android Auto showed (Open row, under our popup)
     int holdTries_;        // events 52 since the blank state last showed
     int menuRouteTries_;   // events 51 since the blank state last showed
     bool popupTried_;      // our own popup was opened for it since the blank state last showed

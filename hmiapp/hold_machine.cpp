@@ -62,10 +62,16 @@ void HoldMachine::callChanged(bool inCall, long now) {
         callEnd_ = now;
     }
     inCall_ = inCall;
+    if (inCall) {
+        yieldOwnPopup("a call");
+    }
 }
 
 void HoldMachine::gearChanged(int gear) {
     gear_ = gear;
+    if (gear == kReverseGear) {
+        yieldOwnPopup("reverse gear");
+    }
 }
 
 void HoldMachine::driveModeChanged(long now) {
@@ -104,6 +110,7 @@ void HoldMachine::holdViaMenu(const char* why, long now) {
 void HoldMachine::showAndHold(const char* why, long now) {
     waiting_ = false;
     unheld_ = false;
+    underPopup_ = false;
     closeOwnPopup();  // our menu opened by itself meanwhile
     io_.send("show");
     prevOverlay_ = false;  // the coming overlay is new
@@ -307,8 +314,41 @@ void HoldMachine::closeOwnPopup() {
     }
 }
 
+// Our popup over an iDrive screen that refuses our pages, so that iDrive performs our next focus event.
+void HoldMachine::openOwnPopup(long now) {
+    popupOpen_ = true;
+    holdTime_ = now;
+    io_.ownPopup(true);
+}
+
+// The blank state asked for under our popup, which then closes. Until the blank state has the focus, what refused our
+// pages is still on top of it: no popup peek, no event 52 for a lost focus.
+void HoldMachine::holdUnderPopup(long now) {
+    io_.triggerEvent(kEvHoldAa);
+    closeOwnPopup();
+    underPopup_ = true;
+    aaSeen_ = false;
+    holdTime_ = now;
+}
+
+// A call or the reverse gear while our popup is open: left there, it would sit empty over iDrive's call screen or the
+// camera, holding the focus, until the call or the reverse gear ends (nothing is asked under it meanwhile). It is
+// opened again afterwards if it is still needed.
+void HoldMachine::yieldOwnPopup(const char* why) {
+    if (!popupOpen_) {
+        return;
+    }
+    closeOwnPopup();
+    popupTried_ = false;
+    if (asks_ >= 2) {
+        asks_ = 1;  // a phone waiting aside: the popup comes before the request under it again
+    }
+    say("hold: %s: our own popup closed until it ends", why);
+}
+
 void HoldMachine::beginWait(long now) {
     waiting_ = true;
+    underPopup_ = false;
     waitSince_ = now;
     askedAt_ = 0;
     asks_ = 0;
@@ -337,21 +377,19 @@ void HoldMachine::bringIdrive(const ServiceState& service, long now) {
         // Refused, and iDrive may refuse until a key is pressed. With a popup of ours on top it performs our focus
         // events: opened now, used at the next poll.
         ++asks_;
-        popupOpen_ = true;
-        io_.ownPopup(true);
+        openOwnPopup(now);
         say("hold: iDrive refused our menu: our own popup opened (event %u) to ask under it", kEvOwnPopup);
         return;
     }
     if (asks_ >= 2) {
-        io_.triggerEvent(kEvHoldAa);
-        closeOwnPopup();
-        underPopup_ = true;
+        holdUnderPopup(now);
         waiting_ = false;
         unheld_ = true;
         holding_ = true;
         hideSent_ = false;
         holdGaveUp_ = false;
         prevOverlay_ = false;
+        holdShownAt_ = now;  // the phone may leave before Android Auto shows: the menu back after 3 s, as for Open
         io_.send("show");
         say("hold: event %u -> state %u asked under our popup, popup closed: Android Auto comes up after %ld s",
             kEvHoldAa, kAaState, now - waitSince_);
@@ -392,6 +430,7 @@ void HoldMachine::poll(const ServiceState& service, long now) {
     if (rose) {
         backAsked_ = false;
         waiting_ = false;
+        holdShownAt_ = 0;
         if (unheld_) {
             holding_ = true;  // shown without the hold: our menu goes on being asked for below, from the next poll
             return;
@@ -439,12 +478,18 @@ void HoldMachine::poll(const ServiceState& service, long now) {
     if (unheld_) {
         if (service.pid <= 0 || !service.is("connected")) {
             unheld_ = false;  // the session is over
+            underPopup_ = false;
         } else if (blank || aaFocused_) {
             unheld_ = false;
             say("hold: iDrive is on our blank state after %d request(s): Android Auto is held", asks_);
         } else {
             if (overlay) {
                 askWithoutHold(now);
+            } else if (service.asks() && !inCall_ && gear_ != kReverseGear && now - askedAt_ >= 2) {
+                // Still aside: the "show" got lost (dropped while the service's queue was full). Sent again.
+                askedAt_ = now;
+                io_.send("show");
+                say("hold: Android Auto still waits aside after our \"show\": sent again");
             }
             return;
         }
@@ -526,18 +571,12 @@ void HoldMachine::poll(const ServiceState& service, long now) {
         // on the car: Android Auto back over iDrive's screen, every request refused, and the knob driving that screen
         // underneath.
         if (popupOpen_) {
-            io_.triggerEvent(kEvHoldAa);
-            closeOwnPopup();
-            underPopup_ = true;
-            aaSeen_ = false;
-            holdTime_ = now;
+            holdUnderPopup(now);
             say("hold: event %u -> state %u asked under our popup over an iDrive screen, popup closed", kEvHoldAa,
                 kAaState);
         } else if (menuRouteTries_ == 1 && !popupTried_) {
             popupTried_ = true;
-            popupOpen_ = true;
-            holdTime_ = now;
-            io_.ownPopup(true);
+            openOwnPopup(now);
             say("hold: iDrive refused our menu over its screen: our own popup opened (event %u) to ask under it",
                 kEvOwnPopup);
         } else if (menuRouteTries_ < kMenuRouteTries) {

@@ -499,6 +499,86 @@ void recallOverIdriveScreen() {
     }
 }
 
+// Our own popup is never left behind: a call or the reverse gear closes it at once (it would otherwise sit empty over
+// iDrive's call screen or the camera, holding the focus), a "show" that got lost after it is sent again, and a phone
+// that leaves before Android Auto shows gives the driver the menu back.
+void ownPopupNotLeftBehind() {
+    {  // a phone waiting aside, our popup open, then a call: closed at once, opened again after the call
+        Car c;
+        connected(c);
+        c.overlay(2);
+        c.polls(2);
+        CHECK_OUT(c, "event 51, own popup 1");
+        c.call(true);
+        CHECK_OUT(c, "own popup 0");
+        CHECK(c.logged("hold: a call: our own popup closed until it ends"));
+        c.polls(5);
+        CHECK_OUT(c, "");
+        c.call(false);
+        c.poll();
+        CHECK_OUT(c, "own popup 1");
+        c.poll();
+        CHECK_OUT(c, "event 52, own popup 0, show");
+    }
+    {  // Android Auto over an iDrive screen, our popup open, then reverse: closed at once, nothing over the camera
+        Car c;
+        heldThenIdriveScreen(c);
+        c.hold.gearChanged(evo::app::kReverseGear);
+        CHECK_OUT(c, "own popup 0");
+        CHECK(c.logged("hold: reverse gear: our own popup closed until it ends"));
+        c.overlay(0);  // the service hides the picture for the camera
+        c.polls(5);
+        CHECK_OUT(c, "");
+    }
+    {  // the same, then a call: closed at once; when the call ends, event 52
+        Car c;
+        heldThenIdriveScreen(c);
+        c.call(true);
+        CHECK_OUT(c, "own popup 0");
+        c.polls(5);
+        CHECK_OUT(c, "");
+        c.call(false);
+        c.poll();
+        CHECK_OUT(c, "event 52");
+    }
+    {  // the "show" sent after the request under our popup got lost: the service still waits, it is sent again
+        Car c;
+        connected(c);
+        c.overlay(2);
+        c.polls(3);
+        CHECK_OUT(c, "event 51, own popup 1, event 52, own popup 0, show");
+        c.poll();
+        CHECK_OUT(c, "");
+        c.poll();
+        CHECK_OUT(c, "show");
+        CHECK(c.logged("still waits aside after our \"show\": sent again"));
+        c.overlay(1);
+        c.poll();
+        CHECK_OUT(c, "");
+        CHECK(c.hold.holding());
+    }
+    {  // iDrive performed the request under our popup, but the phone leaves before Android Auto shows: the menu back
+       // after 3 s; a later session over the blank state, never focused, still gets the popup peek
+        Car c;
+        connected(c);
+        c.overlay(2);
+        c.polls(3);
+        c.take();
+        c.blankVisible(true);  // shown, the focus still with what refused our menu
+        c.service("connecting", 42, 0);
+        c.polls(2);
+        CHECK_OUT(c, "");
+        c.poll();
+        CHECK_OUT(c, "event 51");
+        CHECK(!c.hold.holding());
+        c.service("connected", 42, 1);  // iDrive kept the blank state; this service shows Android Auto by itself
+        c.poll();
+        CHECK_OUT(c, "call 0, gear 1");
+        c.polls(2);
+        CHECK_OUT(c, "popup 1");  // the blank state unfocused under Android Auto: an iDrive popup
+    }
+}
+
 void comesUpOverOurMenu() {
     Car c;
     connected(c);
@@ -1095,6 +1175,7 @@ int main() {
     waitsAsideForIdrive();
     shownWithoutWaitingRefused();
     recallOverIdriveScreen();
+    ownPopupNotLeftBehind();
     comesUpOverOurMenu();
     backToOurMenu();
     popupOverBlank();
@@ -1115,7 +1196,8 @@ int main() {
     }
     puts(
         "PASS hold machine: its clock, manual open, automatic start through the menu, refusals, waiting aside, our own "
-        "popup over an iDrive screen, BACK, popups, driving mode, reverse, calls, app keys, the Bluetooth audio "
+        "popup over an iDrive screen and never left behind, BACK, popups, driving mode, reverse, calls, app keys, the "
+        "Bluetooth audio "
         "switch, "
         "hard keys, stepping aside, service restart");
     return 0;
