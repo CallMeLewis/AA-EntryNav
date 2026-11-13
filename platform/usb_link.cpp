@@ -9,6 +9,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
@@ -111,7 +112,10 @@ UsbLink::UsbLink(UsbBus& bus, Log log, void* user)
       refusedForMs_(kUsbRefusedMs),
       refused_(false),
       carrying_(false),
-      endedMs_(0),
+      touchedMs_(0),
+      touched_(false),
+      quickFromMs_(0),
+      quickWhy_(""),
       quickRetries_(0) {}
 
 UsbLink::~UsbLink() {
@@ -142,9 +146,28 @@ void UsbLink::close() {
         // only wait kUsbHelloMs for an answer that does not come. The next connect() resets it and asks again.
         carrying_ = false;
         asked_ = false;
-        endedMs_ = bus_.nowMs();
+        quickPort_ = carriedPort_;
+        quickFromMs_ = bus_.nowMs();
+        quickWhy_ = "a session on the cable";
         quickRetries_ = kUsbQuickRetries;
     }
+}
+
+void UsbLink::plugged(const std::string& port) {
+    if (refused_ && refusedPort_ == port) {
+        refused_ = false;
+        say("%s: plugged in again: asked at once", port.c_str());
+    }
+    quickPort_ = port;
+    quickFromMs_ = bus_.nowMs();
+    quickWhy_ = "it was plugged in";
+    quickRetries_ = kUsbQuickRetries;
+}
+
+void UsbLink::touched(const std::string& port) {
+    touchedPort_ = port;
+    touchedMs_ = bus_.nowMs();
+    touched_ = true;
 }
 
 bool UsbLink::refusedLately(const std::string& port) {
@@ -154,10 +177,11 @@ bool UsbLink::refusedLately(const std::string& port) {
     return refused_ && refusedPort_ == port;
 }
 
-unsigned UsbLink::leaveAlone(const std::string& port) {
+unsigned UsbLink::leaveAlone(const std::string& port, bool soon) {
     const uint32_t now = bus_.nowMs();
-    // A phone that had Android Auto running a moment ago is not one set to "charging only": asked again soon.
-    const bool quick = quickRetries_ > 0 && port == carriedPort_ && now - endedMs_ < kUsbRefusedMs;
+    // A phone just plugged in, or that had Android Auto running a moment ago, may not be ready yet; it is not
+    // necessarily one set to "charging only": asked again soon.
+    const bool quick = soon && quickRetries_ > 0 && port == quickPort_ && now - quickFromMs_ < kUsbRefusedMs;
     if (quick) {
         --quickRetries_;
     }
@@ -170,6 +194,27 @@ unsigned UsbLink::leaveAlone(const std::string& port) {
 
 bool UsbLink::pick(UsbDeviceInfo& out, bool& accessory, bool* present) {
     const std::vector<UsbDeviceInfo> devices = bus_.list();
+    // Ports with a phone now. One that just had a request or a reset is kept while it changes mode: its phone coming
+    // back is not a plug-in.
+    std::vector<std::string> ports;
+    for (size_t i = 0; i < devices.size(); ++i) {
+        const UsbDeviceInfo& d = devices[i];
+        if (!d.descriptors.empty() && ((isAccessoryId(d.vendor, d.product) && hasAccessoryInterface(d.product)) ||
+                                       worthAskingForAccessory(d.vendor, &d.descriptors[0], d.descriptors.size()))) {
+            ports.push_back(d.name);
+        }
+    }
+    for (size_t i = 0; i < ports.size(); ++i) {
+        if (std::find(ports_.begin(), ports_.end(), ports[i]) == ports_.end()) {
+            plugged(ports[i]);
+        }
+    }
+    const bool changing = touched_ && bus_.nowMs() - touchedMs_ < kUsbModeChangeMs;
+    if (changing && std::find(ports.begin(), ports.end(), touchedPort_) == ports.end() &&
+        std::find(ports_.begin(), ports_.end(), touchedPort_) != ports_.end()) {
+        ports.push_back(touchedPort_);
+    }
+    ports_.swap(ports);
     bool found = false;
     if (present) {
         *present = false;
@@ -263,23 +308,33 @@ bool UsbLink::hello(int socket, const std::atomic<bool>& quit) {
     if (send(socket, request, sizeof(request), MSG_NOSIGNAL) != static_cast<ssize_t>(sizeof(request))) {
         return false;
     }
+    // The answer: channel 0, a VersionResponse (message 2), 8 bytes from Android Auto 1.7. It is read to its end and no
+    // further, by its header's length: a byte more would be taken from what the session reads next, and the session
+    // would read every frame after it from the wrong place.
     uint8_t answer[64];
-    size_t got = 0;
+    size_t got = 0, want = 4;
     const uint32_t start = bus_.nowMs();
-    // The answer: channel 0, 8 bytes of VersionResponse (message 2).
-    while (got < 12 && !quit && bus_.nowMs() - start < kUsbHelloMs) {
+    while (got < want && !quit && bus_.nowMs() - start < kUsbHelloMs) {
         pollfd fd = {socket, POLLIN, 0};
         if (poll(&fd, 1, 50) <= 0) {
             continue;
         }
-        const ssize_t n = recv(socket, answer + got, sizeof(answer) - got, MSG_DONTWAIT);
+        const ssize_t n = recv(socket, answer + got, want - got, MSG_DONTWAIT);
         if (n > 0) {
             got += static_cast<size_t>(n);
         } else if (n == 0) {
             return false;  // the phone left
         }
+        if (got == 4 && want == 4) {
+            want = 4 + ((static_cast<size_t>(answer[2]) << 8) | answer[3]);
+            if (want < 6 || want > sizeof(answer)) {
+                say("unexpected answer to the version request: %02x %02x %02x %02x", answer[0], answer[1], answer[2],
+                    answer[3]);
+                return false;
+            }
+        }
     }
-    return got >= 10 && answer[0] == 0 && answer[4] == 0 && answer[5] == 2;
+    return got == want && want >= 6 && answer[0] == 0 && answer[4] == 0 && answer[5] == 2;
 }
 
 int UsbLink::connect(const std::atomic<bool>& quit) {
@@ -300,6 +355,7 @@ int UsbLink::connect(const std::atomic<bool>& quit) {
             }
             const int rc = io->reset();
             delete io;
+            touched(device.name);
             say("%s: in accessory mode, with no Android Auto session behind it (another program's, or one that "
                 "ended): port reset %s",
                 device.name.c_str(), rc == 0 ? "done" : strerror(-rc));
@@ -324,15 +380,18 @@ int UsbLink::connect(const std::atomic<bool>& quit) {
             const int version = accessoryProtocol(*io);
             const bool started = version >= 1 && startAccessory(*io, kAndroidAutoIdentity);
             delete io;
+            if (version >= 1) {
+                touched(device.name);
+            }
             if (version < 1) {
-                const unsigned ms = leaveAlone(device.name);
+                const unsigned ms = leaveAlone(device.name, false);
                 say("%s (%04x:%04x): no accessory protocol: not a phone that does Android Auto; left alone for %u s",
                     device.name.c_str(), device.vendor, device.product, ms / 1000);
                 return -1;
             }
             if (!started) {
                 // Left alone like any refusal: asked again at once, it would be asked every 250 ms.
-                const unsigned ms = leaveAlone(device.name);
+                const unsigned ms = leaveAlone(device.name, true);
                 say("%s: the phone refused the request for accessory mode; left alone for %u s", device.name.c_str(),
                     ms / 1000);
                 return -1;
@@ -347,11 +406,10 @@ int UsbLink::connect(const std::atomic<bool>& quit) {
                 return -1;
             }
             if (!isAccessoryId(back.vendor, back.product)) {
-                const unsigned ms = leaveAlone(device.name);
+                const unsigned ms = leaveAlone(device.name, true);
                 if (ms < kUsbRefusedMs) {
-                    say("%s: the phone came back in its normal mode just after a session on the cable: asked again "
-                        "in %u s",
-                        device.name.c_str(), ms / 1000);
+                    say("%s: the phone came back in its normal mode just after %s: asked again in %u s",
+                        device.name.c_str(), quickWhy_, ms / 1000);
                 } else {
                     say("%s: the phone came back in its normal mode: it refused accessory mode (its USB setting may "
                         "be \"charging only\"); left alone for %u s",

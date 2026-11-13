@@ -65,6 +65,7 @@ struct World {
     uint32_t backAt;
     Mode backAs;
     std::string backIdentity;
+    std::string extra;  // sent once, in the same transfer as Android Auto's first answer
     uint32_t rivalAt;
     bool rivalPending, broken, protectedNode;
     int resets, starts, rivalStarts, claims, detaches;
@@ -204,7 +205,8 @@ public:
             if (t.length == 10 && t.data[5] == 1 && w_.mode == World::kAccessory && w_.identity == kAndroidAuto &&
                 !w_.broken) {
                 static const char answer[] = {0, 3, 0, 8, 0, 2, 0, 1, 0, 7, 0, 0};
-                toHost_.push_back(std::string(answer, sizeof(answer)));
+                toHost_.push_back(std::string(answer, sizeof(answer)) + w_.extra);
+                w_.extra.clear();
             }
             t.done = t.length;
             t.status = 0;
@@ -430,6 +432,19 @@ int main() {
         close(socket);
         link.close();
     }
+    {  // the cable's hello reads Android Auto's answer and nothing after it: what follows is the session's
+        World world;
+        world.extra = std::string("\x00\x03\x00\x02\xab\xcd", 6);
+        FakeBus bus(world);
+        evo::UsbLink link(bus, keep, nullptr);
+        const int socket = link.connect(quit);
+        CHECK(socket >= 0);
+        pollfd fd = {socket, POLLIN, 0};
+        uint8_t got[16];
+        CHECK(poll(&fd, 1, 2000) > 0 && recv(socket, got, sizeof(got), 0) == 6 && got[4] == 0xab && got[5] == 0xcd);
+        close(socket);
+        link.close();
+    }
     {  // the rival asked first: the phone is its accessory. Reset, asked before the rival can, Android Auto answers
         World world;
         world.rivalDelayMs = 600;
@@ -496,23 +511,72 @@ int main() {
         close(socket);
         link.close();
     }
-    {  // a phone that refuses: said once, then left alone for a while, then asked again
+    {  // a phone that refuses: asked again soon a few times after it is plugged in, then left alone for a while
         World world;
         world.allows = false;
         FakeBus bus(world);
-        g_lines.clear();
         evo::UsbLink link(bus, keep, nullptr);
-        CHECK(link.connect(quit) == -1 && world.starts == 1 && said("refused accessory mode"));
+        for (unsigned i = 0; i < evo::kUsbQuickRetries; ++i) {
+            g_lines.clear();
+            CHECK(link.connect(quit) == -1 && said("just after it was plugged in: asked again in 2 s"));
+            bus.step(evo::kUsbQuickRetryMs + 500);
+        }
+        g_lines.clear();
+        CHECK(link.connect(quit) == -1 && said("refused accessory mode") && said("left alone for 30 s"));
+        const int asked = world.starts;
+        CHECK(asked == static_cast<int>(evo::kUsbQuickRetries) + 1);
         bool present = false;
         CHECK(!link.phoneWaiting(&present) && present);  // not hammered: each request drops it off the bus
-        CHECK(link.connect(quit) == -1 && world.starts == 1);
+        CHECK(link.connect(quit) == -1 && world.starts == asked);
         bus.step(evo::kUsbRefusedMs + 1000);
         CHECK(link.phoneWaiting());
         world.allows = true;
         const int socket = link.connect(quit);
-        CHECK(socket >= 0 && world.starts == 2);
+        CHECK(socket >= 0 && world.starts == asked + 1);
         close(socket);
         link.close();
+    }
+    {  // left alone after refusing, then unplugged and plugged in again: asked at once
+        World world;
+        world.allows = false;
+        FakeBus bus(world);
+        evo::UsbLink link(bus, keep, nullptr);
+        for (unsigned i = 0; i <= evo::kUsbQuickRetries; ++i) {
+            CHECK(link.connect(quit) == -1);
+            bus.step(evo::kUsbQuickRetryMs + 500);
+        }
+        CHECK(!link.phoneWaiting());
+        bus.step(evo::kUsbModeChangeMs);
+        world.mode = World::kUnplugged;
+        bool present = true;
+        CHECK(!link.phoneWaiting(&present) && !present);
+        world.mode = World::kNormal;
+        ++world.device;
+        world.allows = true;
+        g_lines.clear();
+        CHECK(link.phoneWaiting() && said("plugged in again"));
+        const int socket = link.connect(quit);
+        CHECK(socket >= 0 && world.starts == static_cast<int>(evo::kUsbQuickRetries) + 2);
+        close(socket);
+        link.close();
+    }
+    {  // the port empty for a moment just after a request is the phone changing mode, not a plug-in: still left alone
+        World world;
+        world.allows = false;
+        FakeBus bus(world);
+        evo::UsbLink link(bus, keep, nullptr);
+        for (unsigned i = 0; i < evo::kUsbQuickRetries; ++i) {
+            CHECK(link.connect(quit) == -1);
+            bus.step(evo::kUsbQuickRetryMs + 500);
+        }
+        CHECK(link.connect(quit) == -1);  // the last request: left alone for 30 s
+        world.mode = World::kUnplugged;
+        CHECK(!link.phoneWaiting());
+        world.mode = World::kNormal;
+        ++world.device;
+        g_lines.clear();
+        bool present = false;
+        CHECK(!link.phoneWaiting(&present) && present && !said("plugged in again"));
     }
     {  // not a phone that does Android Auto: one question, nothing started
         World world;
@@ -589,6 +653,7 @@ int main() {
         "PASS usb link: a phone asked once and answering, a fresh start straight after a session, refusals just after "
         "a session retried soon then left alone, a rival that asked first "
         "(reset, asked again), a rival that always wins (given up after 3 rounds), an interface taken back, a phone "
-        "that refuses left alone, not a phone, unplugged, stop; the udev rule written whole and removed");
+        "that refuses retried soon after its plug-in then left alone, plugged in again and asked at once, a mode "
+        "change not taken for a plug-in, not a phone, unplugged, stop; the udev rule written whole and removed");
     return 0;
 }

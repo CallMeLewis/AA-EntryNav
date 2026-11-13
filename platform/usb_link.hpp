@@ -16,9 +16,13 @@
 //   - Whether Android Auto is behind an accessory is only known by asking: its version request is sent and an answer
 //     awaited before the session is started. The phone answers that request again when the session sends its own.
 //   - A session can end with the phone still plugged in (seen on the car: the Android Auto logo, then iDrive again).
-//     The phone stays in accessory mode with nothing behind it, so it is reset and asked again at once. Just after
-//     such a session, a phone that comes back in its normal mode has not refused for good: it is asked again a few
-//     times, kUsbQuickRetryMs apart, before it is left alone for kUsbRefusedMs.
+//     The phone stays in accessory mode with nothing behind it, so it is reset and asked again at once.
+//   - Just after such a session, or just after it is plugged in, a phone that comes back in its normal mode has not
+//     refused for good: it is asked again a few times, kUsbQuickRetryMs apart, before it is left alone for
+//     kUsbRefusedMs. Seen on the car on 13 November 2026: a phone plugged in refused once, then took the request
+//     30 s later.
+//   - A phone left alone and then unplugged and plugged in again is asked at once: the driver did that on purpose. A
+//     port that empties within kUsbModeChangeMs of a request or reset is the phone changing mode, not a plug-in.
 #ifndef AA_ENTRYNAV_PLATFORM_USB_LINK_HPP
 #define AA_ENTRYNAV_PLATFORM_USB_LINK_HPP
 
@@ -78,7 +82,7 @@ const unsigned kUsbModeChangeMs = 5000;  // a phone changing mode is back within
 const unsigned kUsbHelloMs = 3000;       // Android Auto answers its version request within this
 const unsigned kUsbRefusedMs = 30000;    // a phone that refused is left alone this long
 const unsigned kUsbAttempts = 3;         // rounds of "reset and ask again" in one connect()
-const unsigned kUsbQuickRetries = 3;     // after a session on the cable: refusals that are retried soon
+const unsigned kUsbQuickRetries = 3;     // after a plug-in or a session on the cable: refusals retried soon
 const unsigned kUsbQuickRetryMs = 2000;  // how soon
 
 class UsbLink {
@@ -101,8 +105,13 @@ public:
 private:
     void say(const char* format, ...) __attribute__((format(printf, 2, 3)));
     bool pick(UsbDeviceInfo& out, bool& accessory, bool* present = nullptr);
-    // The phone on port refused: left alone for a while, which is returned (ms).
-    unsigned leaveAlone(const std::string& port);
+    // A phone appeared on port: plugged in, or there at the service's first look.
+    void plugged(const std::string& port);
+    // A request or a reset on port: the phone drops off the bus for a moment, which is not a plug-in.
+    void touched(const std::string& port);
+    // The phone on port refused: left alone for a while, which is returned (ms). soon: a refusal that may be retried
+    // soon, when the phone was just plugged in or just carried a session.
+    unsigned leaveAlone(const std::string& port, bool soon);
     // Waits for the port's device to change: true with what is there now, false when nothing came back or the service
     // stops (the supervisor kills a service still busy 10 s after a stop).
     bool awaitChange(const std::string& port, unsigned device, UsbDeviceInfo& out, const std::atomic<bool>& quit);
@@ -122,10 +131,16 @@ private:
     std::string refusedPort_;
     uint32_t refusedMs_, refusedForMs_;
     bool refused_;
-    std::string carriedPort_;  // where the session that runs, or ran last, came from
-    bool carrying_;            // connect() handed out a socket that close() has not ended yet
-    uint32_t endedMs_;         // when the last session on the cable ended
-    unsigned quickRetries_;    // refusals on carriedPort_ still retried soon (kUsbQuickRetries)
+    std::string carriedPort_;         // where the session that runs, or ran last, came from
+    bool carrying_;                   // connect() handed out a socket that close() has not ended yet
+    std::vector<std::string> ports_;  // ports with a phone at the last look
+    std::string touchedPort_;         // where the last request or reset went, and when
+    uint32_t touchedMs_;
+    bool touched_;
+    std::string quickPort_;  // where refusals are still retried soon, since when, and why
+    uint32_t quickFromMs_;
+    const char* quickWhy_;
+    unsigned quickRetries_;  // how many (kUsbQuickRetries)
 };
 
 }  // namespace evo
