@@ -245,9 +245,13 @@ bool setLaneModels(Bytes& b, const std::vector<uint32_t>& ids) {
 }  // namespace
 
 RouteGraph::RouteGraph(uint32_t handle, int bar, bool singleManeuver)
-    : handle_(handle), bar_(bar), singleManeuver_(singleManeuver), carRequest_(-1), carAt_(0) {
+    : handle_(handle),
+      bar_(bar),
+      templateCount_(singleManeuver ? kSingleManeuverCount : tmpl::phase_b_count),
+      carRequest_(-1),
+      carAt_(0) {
     // The car's position in the template: its last destination info with a route position (4132 m).
-    const size_t count = singleManeuver_ ? kSingleManeuverCount : tmpl::phase_b_count;
+    const size_t count = templateCount_;
     for (size_t i = 0; i < count; ++i) {
         const tmpl::Frame& t = tmpl::phase_b[i];
         if (t.method != kRouteMethod || t.len < kCarAt + 8 || t.body[kModelTypeAt] != kDestinationModel) {
@@ -312,7 +316,7 @@ bool RouteGraph::patch(Request& r, const ClusterManeuver& m) const {
 
 bool RouteGraph::routeStart(const ClusterManeuver& m, std::vector<Request>& out, LaneSection* section) const {
     out.clear();
-    const size_t count = singleManeuver_ ? kSingleManeuverCount : tmpl::phase_b_count;
+    const size_t count = templateCount_;
     out.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         out.push_back(copied(i));
@@ -409,7 +413,7 @@ bool RouteGraph::maneuverUpdate(const ClusterManeuver& m, bool withGuiding, std:
 
 bool RouteGraph::distanceUpdate(const std::string& text, int unit, std::vector<Request>& out) const {
     out.clear();
-    const size_t count = singleManeuver_ ? kSingleManeuverCount : tmpl::phase_b_count;
+    const size_t count = templateCount_;
     for (size_t i = count; i-- > 0;) {
         if (tmpl::phase_b[i].method != kManeuverMethod) {
             continue;

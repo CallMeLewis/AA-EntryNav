@@ -82,8 +82,8 @@ private:
 
     uint32_t handle_;
     int bar_;
-    bool singleManeuver_;
-    int carRequest_;  // the template's destination info holding the car's route position; -1 when there is none
+    size_t templateCount_;  // the template's requests sent: all of them, or the single-manoeuvre graph's first 14
+    int carRequest_;        // the template's destination info holding the car's route position; -1 when there is none
     double carAt_;
 };
 
