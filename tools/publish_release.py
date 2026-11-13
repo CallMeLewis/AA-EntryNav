@@ -7,14 +7,16 @@
   uv run --no-project --with cryptography python tools/publish_release.py prepare VERSION SUMMARY   the release commit
   uv run --no-project --with cryptography python tools/publish_release.py preview [VERSION]   show its two texts
   uv run --no-project --with cryptography python tools/publish_release.py publish [--stable]
-  uv run --no-project --with cryptography python tools/publish_release.py notes VERSION   resync its texts
+  uv run --no-project --with cryptography python tools/publish_release.py notes VERSION...   resync their texts
   uv run --no-project --with cryptography python tools/publish_release.py stability VERSION stable|experimental
   uv run --no-project --with cryptography python tools/publish_release.py retire VERSION... [--delete-archives]
   uv run --no-project --with cryptography python tools/publish_release.py tags     tag releases, with GitHub Releases
 
 A release's texts come from its section of CHANGELOG.md (docs/release-notes.md): the Flare Drive note, written in it as
-<!-- Flare Drive: ... -->, and the GitHub Release's text, made from the section itself. `preview` shows both without
-publishing anything; `notes` brings a published release's note and GitHub Release back in line with the section.
+<!-- Flare Drive: ... -->, and the GitHub Release's text, made from the section itself. The list carries both: the note
+as `notes`, and the GitHub Release's text as `changes`, which Flare Drive shows behind View release notes. `preview`
+shows both without publishing anything; `notes` brings published releases' list entries and GitHub Releases back in
+line with their sections.
 
 `prepare` raises VERSION and commits it as `Release VERSION: SUMMARY`, and turns CHANGELOG.md's [Unreleased] part into
 the version's section (CHANGELOG.md is outside git, so it is not in the commit). Push that commit, wait for CI, then
@@ -486,30 +488,46 @@ def publish(args):
 
 
 def notes(args):
-    """Brings one published release's Flare Drive note and GitHub Release text back in line with its CHANGELOG.md
-    section. The list is signed again only when the note changed; the archives stay as they are."""
+    """Brings published releases' texts back in line with their CHANGELOG.md sections: the Flare Drive note and full
+    notes in the list, and the GitHub Release's text. The list is signed again once, and only when an entry changed;
+    the archives stay as they are."""
     key = load_key()
     index = live_index(key)
     if index is None:
         sys.exit("FAIL: no index is published yet.")
-    entries = [r for r in index["releases"] if r["version"] == args.version]
-    if not entries:
-        sys.exit(f"FAIL: {args.version} is not published.")
-    text = section(args.version)
-    note, body = flare_drive_note(args.version, text), release_body(text)
-    if entries[0].get("notes") == note:
-        print("The Flare Drive note already matches CHANGELOG.md.")
-    else:
-        entries[0]["notes"] = note
+    missing = sorted(set(args.versions) - {r["version"] for r in index["releases"]})
+    if missing:
+        sys.exit(f"FAIL: not published: {', '.join(missing)}. Nothing was changed.")
+    # Every section and note read before anything changes, so a missing one stops the command with nothing published.
+    texts = {}
+    for version in args.versions:
+        text = section(version)
+        texts[version] = (flare_drive_note(version, text), release_body(text))
+    changed = []
+    for entry in index["releases"]:
+        if entry["version"] not in texts:
+            continue
+        note, body = texts[entry["version"]]
+        if entry.get("notes") != note or entry.get("changes") != body:
+            entry["notes"], entry["changes"] = note, body
+            changed.append(entry["version"])
+    if changed:
         publish_index(key, {**index, "published": now()})
-    tag = f"v{args.version}"
-    edited = subprocess.run(
-        ["gh", "release", "edit", tag, "-R", REPO, "--notes", body], capture_output=True, text=True, check=False
-    )
-    if edited.returncode:
-        print(f"WARN: the GitHub Release {tag} was not updated: {edited.stderr.strip()}")
+        print(f"List updated for {', '.join(changed)}.")
     else:
-        print(f"GitHub Release {tag} updated.")
+        print("The list already matches CHANGELOG.md.")
+    for version in args.versions:
+        tag = f"v{version}"
+        edited = subprocess.run(
+            ["gh", "release", "edit", tag, "-R", REPO, "--notes", texts[version][1]],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if edited.returncode:
+            print(f"WARN: the GitHub Release {tag} was not updated: {edited.stderr.strip()}")
+        else:
+            print(f"GitHub Release {tag} updated.")
     verify(None)
 
 
@@ -578,6 +596,7 @@ def upload(key, index, archive, version, commit, stable, note, body):
         "stability": "stable" if stable else "experimental",
         "minApp": MIN_APP,
         "notes": note,
+        "changes": body,
     }
     wrangler_put(entry["file"], archive, "application/x-tar", "public, max-age=31536000, immutable")
     if fetch(entry["file"]) != data:
@@ -715,7 +734,7 @@ def main():
     p.add_argument("--stable", action="store_true", help="label it stable in Flare Drive (default: experimental)")
     p.set_defaults(func=publish)
     n = commands.add_parser("notes")
-    n.add_argument("version", help="a published version")
+    n.add_argument("versions", nargs="+", help="published versions")
     n.set_defaults(func=notes)
     s = commands.add_parser("stability")
     s.add_argument("version", help="a published version")

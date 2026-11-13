@@ -11,10 +11,13 @@ the repository goes public. `tools/publish_release.py` takes three texts from it
   `setup.sh`, not a record of every change: that record is the git history, written following
   [commit-messages.md](commit-messages.md).
 - **The Flare Drive note**: one short paragraph, written in the section as an HTML comment, `<!-- Flare Drive: ... -->`.
-  Flare Drive shows it on the release's page.
+  Flare Drive 2.0.10 and earlier show it on the release's page. Later versions show it only for a release whose list
+  entry has no full notes.
 - **The GitHub Release's text**, which `publish` makes from the section: an `Action needed:` paragraph becomes a
   `> [!IMPORTANT]` callout, `###` headings become `##`, the verified or unverified wording is left out, and each
-  paragraph or bullet goes on one line, since GitHub shows hard line breaks.
+  paragraph or bullet goes on one line, since GitHub shows hard line breaks. `publish` also puts it in Flare Drive's
+  release list as the release's full notes, which Flare Drive opens from View release notes. Flare Drive shows the
+  callout, `##` headings, bullets, bold and inline code; a link shows as its text only.
 
 `publish_release.py preview` shows the Flare Drive note and the GitHub Release's text as `publish` will use them.
 
@@ -75,8 +78,9 @@ service's log can no longer fill the head unit's memory.
 - Say which Flare Drive version a new switch needs, when an older one doesn't have it.
 - Whether it is stable or experimental is not part of the note: `publish` records it (`--stable`) and Flare Drive
   shows it. Whether it is verified is not part of the note either: only the CHANGELOG records that.
-- To change a published release's texts, edit its CHANGELOG section, then run `publish_release.py notes X.Y.Z`: it
-  updates the note in Flare Drive's release list and the GitHub Release's text. `stability` changes the label.
+- To change a published release's texts, edit its CHANGELOG section, then run `publish_release.py notes X.Y.Z` (several
+  versions at once are fine): it updates the note and full notes in Flare Drive's release list and the GitHub Release's
+  text. `stability` changes the label.
 
 ## Writing them
 
