@@ -136,7 +136,7 @@ ServiceApp::Turn ServiceApp::turn(bool service) {
     return t;
 }
 
-bool ServiceApp::refreshAdvertisementIfIdle(bool service, SppSnapshotReader& reader) {
+bool ServiceApp::refreshAdvertisementIfIdle(bool service, SppSnapshotReader& reader, unsigned slot) {
     // Same lock order as connected(): a TCP session cannot start during an idle refresh.
     bool failed = false;
     pthread_mutex_lock(&connectMu);
@@ -144,7 +144,7 @@ bool ServiceApp::refreshAdvertisementIfIdle(bool service, SppSnapshotReader& rea
     bool idle = !tcpPreparing && !session.isActive() && (service || (!sppLinks && !tcpLinks));
     pthread_mutex_unlock(&mu);
     if (idle) {
-        failed = !refreshTrialAdvertisement(bt, reader);
+        failed = !refreshTrialAdvertisement(bt, reader, slot);
     }
     pthread_mutex_unlock(&connectMu);
     return !failed;

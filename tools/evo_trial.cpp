@@ -83,7 +83,7 @@ bool load(Baseline& b) {
     std::ifstream f(journal);
     std::string magic, encoded, extra;
     if (!(f >> magic >> b.pid >> b.identity >> b.instance >> b.interface >> encoded) || magic != "ENTRY_AA_TRIAL_V1" ||
-        b.pid <= 0 || b.instance != 0 || b.interface > 1 || b.identity.empty() ||
+        b.pid <= 0 || !evo::aaSlotAllowed(b.instance) || b.interface > 1 || b.identity.empty() ||
         b.identity.find_first_not_of("0123456789") != std::string::npos || encoded.size() < 12 || encoded.size() > 68 ||
         encoded.size() % 2 || (f >> extra)) {
         return false;
@@ -198,11 +198,14 @@ bool recover(const Baseline& b, evo::SppSnapshotReader& reader) {
         }
     }
     std::vector<uint8_t> cfg;
-    if (!bt.readConfiguration(b.instance, 0x6203, cfg, 2000) || cfg.size() != 1 || cfg[0] > 1) {
+    // Slot 5's 0x6203 cannot be read back (slotConfigurationReadable): it is written back every time, confirmed by
+    // the write's status, under the same conditions as a change seen on a readable slot.
+    const bool readable = evo::slotConfigurationReadable(b.instance);
+    if (readable && (!bt.readConfiguration(b.instance, 0x6203, cfg, 2000) || cfg.size() != 1 || cfg[0] > 1)) {
         ELOG("Supervisor", "restore: 0x6203 unreadable or invalid");
         return false;
     }
-    if (cfg[0] != b.interface) {
+    if (!readable || cfg[0] != b.interface) {
         if (!recoverySnapshot(reader, b.instance, now) || !now.idle() || now.uuidPayload != b.uuid) {
             ELOG("Supervisor", "restore: original SPP busy or changed: interface restore postponed, journal kept");
             return false;
@@ -216,12 +219,13 @@ bool recover(const Baseline& b, evo::SppSnapshotReader& reader) {
         ELOG("Supervisor", "restore: original UUID not read back after the restore");
         return false;
     }
-    if (!bt.readConfiguration(b.instance, 0x6203, cfg, 2000) || cfg.size() != 1 || cfg[0] != b.interface) {
+    if (readable &&
+        (!bt.readConfiguration(b.instance, 0x6203, cfg, 2000) || cfg.size() != 1 || cfg[0] != b.interface)) {
         ELOG("Supervisor", "restore: original 0x6203 not read back after the restore");
         return false;
     }
-    ELOG("Supervisor", "restore: original UUID and SPP interface read back: restore confirmed (instance %u)",
-         b.instance);
+    ELOG("Supervisor", "restore: original UUID %s: restore confirmed (instance %u)",
+         readable ? "and SPP interface read back" : "read back, SPP interface written back and confirmed", b.instance);
     if (!videoRemoved()) {
         ELOG("Supervisor", "restore: journal kept");
         return false;
@@ -266,6 +270,63 @@ bool videoTargetReady() {
     return true;
 }
 
+// The SPP data interface of a slot (0x6203), read through a link that changes nothing.
+bool slotInterface(unsigned slot, std::vector<uint8_t>& cfg) {
+    evo::AlpsSppLink bt;
+    bt.setMonitorOnly(true);
+    const uint8_t id = static_cast<uint8_t>(slot);
+    return bt.start(id) && bt.readConfiguration(id, 0x6203, cfg, 2000) && cfg.size() == 1 && cfg[0] <= 1;
+}
+// Slot 5 when BMW started it and nobody uses it (evo_trial_state.hpp), slot 0 as before otherwise. Only reads.
+bool chooseSlot(evo::SppSnapshotReader& reader, unsigned& slotId, evo::SppSlotSnapshot& slot,
+                std::vector<uint8_t>& cfg) {
+    evo::SppSlotSnapshot spare;
+    const bool spareRead = reader.read(evo::kAaSlot, spare);
+    if (spareRead) {
+        ELOG("Supervisor", "preflight: SPP %u: state=%u transport=%u connected=%u UUID=%s", evo::kAaSlot, spare.state,
+             spare.transportState, spare.connected ? 1 : 0, hex(spare.uuidPayload).c_str());
+    } else {
+        ELOG("Supervisor", "preflight: SPP %u unreadable: %s", evo::kAaSlot, reader.error().c_str());
+    }
+    const evo::SlotOffer offer = evo::spareSlotOffer(spareRead, spare, aaPayload());
+    if (offer == evo::kSlotBusy) {
+        ELOG("Supervisor", "preflight: SPP %u connected or already holding Android Auto: start refused for now",
+             evo::kAaSlot);
+        return false;
+    }
+    if (offer == evo::kSlotFree) {
+        // Its 0x6203 cannot be read through the stack (slotConfigurationReadable). BMW never sets it
+        // (stack/etc/evo_config.xml sets slots 0 and 1), so its start value, 0, is saved and written back at the end.
+        slotId = evo::kAaSlot;
+        slot = spare;
+        cfg.assign(1, 0);
+        ELOG("Supervisor", "preflight: Android Auto takes SPP %u (free, generic pair); SPP 0 (BMW Apps) left alone",
+             slotId);
+        return true;
+    }
+    slotId = evo::kAaFallbackSlot;
+    ELOG("Supervisor", "preflight: SPP %u not available on this car: Android Auto takes SPP %u, as before",
+         evo::kAaSlot, slotId);
+    if (!reader.read(slotId, slot)) {
+        ELOG("Supervisor", "preflight: %s", reader.error().c_str());
+        return false;
+    }
+    ELOG("Supervisor", "preflight: SPP %u: state=%u transport=%u connected=%u UUID=%s", slotId, slot.state,
+         slot.transportState, slot.connected ? 1 : 0, hex(slot.uuidPayload).c_str());
+    if (!slot.idle()) {
+        ELOG("Supervisor", "preflight: instance %u busy or changing: start refused; instance 1 left alone", slotId);
+        return false;
+    }
+    if (!evo::trialBaselineSupported(slot.uuidPayload)) {
+        ELOG("Supervisor", "preflight: unknown original UUID pair: start refused before any change; keep this log");
+        return false;
+    }
+    if (!slotInterface(slotId, cfg)) {
+        ELOG("Supervisor", "preflight: SPP %u interface (0x6203) unreadable or invalid: no change", slotId);
+        return false;
+    }
+    return true;
+}
 bool preflight(evo::SppSnapshotReader& reader, Baseline& b) {
     if (!videoTargetReady()) {
         return false;
@@ -275,29 +336,14 @@ bool preflight(evo::SppSnapshotReader& reader, Baseline& b) {
         ELOG("Supervisor", "preflight: %s", reader.error().empty() ? "cannot open Alps" : reader.error().c_str());
         return false;
     }
+    unsigned slotId = evo::kAaFallbackSlot;
     evo::SppSlotSnapshot slot;
-    if (!reader.read(0, slot)) {
-        ELOG("Supervisor", "preflight: %s", reader.error().c_str());
-        return false;
-    }
-    ELOG("Supervisor", "preflight: SPP 0: state=%u transport=%u connected=%u UUID=%s", slot.state, slot.transportState,
-         slot.connected ? 1 : 0, hex(slot.uuidPayload).c_str());
-    if (!slot.idle()) {
-        ELOG("Supervisor", "preflight: instance 0 busy or changing: start refused; instance 1 left alone");
-        return false;
-    }
-    if (!evo::trialBaselineSupported(slot.uuidPayload)) {
-        ELOG("Supervisor", "preflight: unknown original UUID pair: start refused before any change; keep this log");
-        return false;
-    }
-    evo::AlpsSppLink bt;
-    bt.setMonitorOnly(true);
     std::vector<uint8_t> cfg;
-    if (!bt.start(0) || !bt.readConfiguration(0, 0x6203, cfg, 2000) || cfg.size() != 1 || cfg[0] > 1) {
-        ELOG("Supervisor", "preflight: SPP 0 interface (0x6203) unreadable or invalid: no change");
+    if (!chooseSlot(reader, slotId, slot, cfg)) {
         return false;
     }
-    ELOG("Supervisor", "preflight: UUID pair recognised; the SPP 0 interface can be saved: 0x6203=%u", cfg[0]);
+    ELOG("Supervisor", "preflight: UUID pair recognised; the SPP %u interface can be saved: 0x6203=%u%s", slotId,
+         cfg[0], evo::slotConfigurationReadable(slotId) ? "" : " (start value; the stack cannot read it back)");
     aa::ApInfo ap;
     std::string source;
     if (!evo::loadAccessPoint(ap, source)) {
@@ -307,10 +353,10 @@ bool preflight(evo::SppSnapshotReader& reader, Baseline& b) {
     }
     b.pid = reader.pid();
     b.identity = reader.identity();
-    b.instance = 0;
+    b.instance = slotId;
     b.interface = cfg[0];
     b.uuid = slot.uuidPayload;
-    ELOG("Supervisor", "preflight OK: target free, SPP 0 idle, UUID can be saved, hotspot available");
+    ELOG("Supervisor", "preflight OK: target free, SPP %u idle, UUID can be saved, hotspot available", slotId);
     return true;
 }
 // --compat: what a start would find on this car, one line per point, for the compatibility check
@@ -532,8 +578,9 @@ int main(int argc, char** argv) {
     }
     // Everything the service needs is on its command line: its mode, and the Alps state saved above, which it checks
     // again before registering the Android Auto UUID.
-    char expectedPid[32];
+    char expectedPid[32], slot[8];
     snprintf(expectedPid, sizeof(expectedPid), "%d", baseline.pid);
+    snprintf(slot, sizeof(slot), "%u", baseline.instance);
     std::vector<std::string> argList;
     argList.push_back(daemon);
     argList.push_back("--run");
@@ -542,6 +589,8 @@ int main(int argc, char** argv) {
     argList.push_back("forward");
     argList.push_back("--service");
     if (!cableOnly) {
+        argList.push_back("--spp-instance");
+        argList.push_back(slot);
         argList.push_back("--alps-pid");
         argList.push_back(expectedPid);
         argList.push_back("--alps-start");

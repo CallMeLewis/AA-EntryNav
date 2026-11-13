@@ -36,8 +36,7 @@ void onSignal(int) {
     quit = 1;
 }
 // This car's fixed values, observed working on the car. There are no runtime settings.
-const unsigned kSppInstance = 0;  // Alps SPP instance of the head unit
-const uint16_t kAaPort = 50000;   // TCP port told to the phone during the Bluetooth handshake
+const uint16_t kAaPort = 50000;  // TCP port told to the phone during the Bluetooth handshake
 const unsigned kTrialMaxSeconds = 180;
 
 // Unsigned number from a command-line argument (decimal or 0x hex), at most max.
@@ -67,8 +66,9 @@ bool trialReady(evo::SppSnapshotReader& reader, unsigned instance, const TrialBa
     char expected[32];
     snprintf(expected, sizeof(expected), "%d", reader.pid());
     evo::SppSlotSnapshot slot;
-    bool ok = pid && identity && pair && instance == 0 && !strcmp(expected, pid) && reader.identity() == identity &&
-              reader.read(instance, slot) && evo::trialSnapshotMatchesBaseline(slot, pair);
+    bool ok = pid && identity && pair && evo::aaSlotAllowed(instance) && !strcmp(expected, pid) &&
+              reader.identity() == identity && reader.read(instance, slot) &&
+              evo::trialSnapshotMatchesBaseline(slot, pair);
     if (!ok) {
         ELOG("Main", "Alps state changed since evo-trial saved it: start refused");
     }
@@ -82,6 +82,7 @@ void usage(const char* argv0) {
         "  --run         register the Android Auto UUID and open the TCP server (50000)\n"
         "Options of --run, given by evo-trial:\n"
         "  --configure-spp        allow setting 0x6203 to 1 when needed\n"
+        "  --spp-instance N       the Alps SPP slot evo-trial chose: 5, or 0 (default) where 5 is not started\n"
         "  --cable-only           Android Auto over the cable only (needs the usb file): no hotspot, no Bluetooth "
         "change\n"
         "  --no-video             no picture\n"
@@ -97,6 +98,7 @@ int main(int argc, char** argv) {
     bool cableOnly = false;
     const char* inputArg = nullptr;
     unsigned long trialSeconds = 0;
+    unsigned long sppInstance = evo::kAaFallbackSlot;
     TrialBaseline baseline = {nullptr, nullptr, nullptr};
     for (int i = 1; i < argc; ++i) {
         const char* value = i + 1 < argc ? argv[i + 1] : nullptr;
@@ -105,6 +107,12 @@ int main(int argc, char** argv) {
             ++i;
         } else if (!strcmp(argv[i], "--trial-seconds") && value) {
             if (!parseNumber(value, kTrialMaxSeconds, trialSeconds) || !trialSeconds) {
+                usage(argv[0]);
+                return 2;
+            }
+            ++i;
+        } else if (!strcmp(argv[i], "--spp-instance") && value) {
+            if (!parseNumber(value, evo::kAaSlot, sppInstance) || !evo::aaSlotAllowed(sppInstance)) {
                 usage(argv[0]);
                 return 2;
             }
@@ -148,7 +156,7 @@ int main(int argc, char** argv) {
     signal(SIGINT, onSignal);
     signal(SIGTERM, onSignal);
     signal(SIGHUP, onSignal);
-    const unsigned instance = kSppInstance;
+    const unsigned instance = static_cast<unsigned>(sppInstance);
     if (!run) {
         evo::AlpsSppLink bt;
         bt.setMonitorOnly(true);
@@ -361,7 +369,7 @@ int main(int argc, char** argv) {
             break;
         }
         if (guarded && turn.idleForAdvert && advertisement.due(evo::monoMs() - trialStart)) {
-            failed = !app.refreshAdvertisementIfIdle(service, trialReader);
+            failed = !app.refreshAdvertisementIfIdle(service, trialReader, instance);
             if (failed) {
                 break;
             }
