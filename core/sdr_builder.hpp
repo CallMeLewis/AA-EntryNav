@@ -27,14 +27,27 @@ bool validCarYear(const std::string& s);
 // Accepted id: a UUID as /proc/sys/kernel/random/uuid prints it, 8-4-4-4-12 lowercase hex digits.
 bool validVehicleId(const std::string& s);
 
+// The picture the phone draws. The panel is 1280x480 and shows the canvas's top shownHeight rows, the full width:
+//   720p    1280x720 shown 1:1, density 140 (seen on the car: the rail icons no longer overlap)
+//   1080p   1920x1080, its top 1920x720 shrunk onto the panel by the car's compositor. Density 210 keeps every
+//           button the same size on the panel; the phone draws 1.5 times the detail, so diagonal edges come out
+//           smoother and colours bleed less around thin lines.
+struct Canvas {
+    uint32_t resolution;     // the VideoConfig's code: 2 for 1280x720, 3 for 1920x1080
+    uint32_t width, height;  // also the touchscreen's size: touches arrive in canvas pixels
+    uint32_t shownHeight;    // rows shown on the panel; the rest is the bottom inset
+    uint32_t density;
+};
+const Canvas& canvasFor(bool hd);
+
 // The steps of buildCarServiceDiscovery, in its order; each prints what it changed.
 // The identity strings replaced, at the top level and in the head unit info (field 17); everything else untouched.
 std::vector<uint8_t> buildServiceDiscovery(const uint8_t* base, size_t baseLen, const SdrIdentity& id);
-// Main display (channel 6): density 140 (seen on the car: the rail icons no longer overlap) and a bottom inset of
-// 240, so that the phone keeps its UI in the top 480 rows of its 1280x720 canvas, which the panel shows 1:1.
-bool tuneMainDisplay(std::vector<uint8_t>& sdr);
-// The touchscreen (channel 7) as 1280 x 720, the phone's canvas: touch coordinates go through unscaled.
-bool declareTouchscreen(std::vector<uint8_t>& sdr);
+// Main display (channel 6): the canvas's resolution and density, and a bottom inset that keeps the phone's UI in the
+// rows the panel shows.
+bool tuneMainDisplay(std::vector<uint8_t>& sdr, const Canvas& canvas);
+// The touchscreen (channel 7) as large as the canvas.
+bool declareTouchscreen(std::vector<uint8_t>& sdr, const Canvas& canvas);
 // No media sink (channel 9): media plays over the car's Bluetooth. The phone refuses the session without an audio
 // sink or without the microphone, so 8 (speech and guidance) and 14 stay. Returns the descriptors removed.
 int removeMediaChannel(std::vector<uint8_t>& sdr);
@@ -60,10 +73,11 @@ void setDiscoveryTrim(DiscoveryTrim trim);
 // platform plays the phone's sound itself, so the template's sinks stay as they are (media on channel 9, 48 kHz
 // stereo; guidance on channel 8, 16 kHz mono first) and neither removeMediaChannel nor retypeGuidanceSink runs.
 // bluetoothAddress: the car's, for addBluetoothService; empty (as on Wi-Fi, where the phone is already connected to
-// the car's Bluetooth) leaves the description without it.
+// the car's Bluetooth) leaves the description without it. hdVideo: the 1080p canvas, else 720p (canvasFor).
 std::vector<uint8_t> buildCarServiceDiscovery(const uint8_t* base, size_t baseLen, const char* vehicleFile,
                                               bool wifiAudio = false,
-                                              const std::string& bluetoothAddress = std::string());
+                                              const std::string& bluetoothAddress = std::string(),
+                                              bool hdVideo = false);
 
 }  // namespace aa
 

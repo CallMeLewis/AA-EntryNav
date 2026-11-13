@@ -70,6 +70,10 @@ public:
     // The file holding the car's model and year (SdrIdentity::loadVehicleFile), read at each service discovery; kept
     // as given, so it must outlive the session. None by default: the reference car.
     void setVehicleFile(const char* path) { vehicleFile_ = path; }
+    // The phone draws the 1080p canvas instead of the 720p one (canvasFor in core/sdr_builder.hpp), and touches are
+    // then expected in its pixels. Off by default. Set before start(): it goes into the service discovery.
+    void setHdVideo(bool on) { hdVideo_ = on; }
+    bool hdVideo() const { return hdVideo_; }
     // The car's Bluetooth for the sessions started from now on: the phone is told its address (a service of its own,
     // core/sdr_builder.hpp); `paired` is asked for the log when the phone asks about pairing. An empty address, the
     // default, leaves the phone untold, as on Wi-Fi where it reached the car through its Bluetooth. Set before start().
@@ -165,6 +169,7 @@ private:
     Callback<AudioDataCallback> audio_;
     Callback<AudioStreamCallback> audioStream_;
     const char* vehicleFile_;
+    bool hdVideo_;
     std::string bluetoothAddress_;
     Callback<BluetoothPairedCallback> bluetoothPaired_;
 

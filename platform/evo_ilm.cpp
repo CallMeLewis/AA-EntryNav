@@ -399,7 +399,7 @@ bool EvoIlm::setSurfaceOpacity(uint32_t surfaceId, float opacity) {
     return exec(a, nullptr);
 }
 
-bool EvoIlm::attachSurface(uint32_t surfaceId, uint32_t layerId, uint32_t w, uint32_t h) {
+bool EvoIlm::attachSurface(uint32_t surfaceId, uint32_t layerId, uint32_t w, uint32_t h, uint32_t srcW, uint32_t srcH) {
     bool topFirst = false;
     if (!renderOrderTopFirst(topFirst)) {
         return false;  // Before any "set": a picture hidden behind the HMI is worse than no picture.
@@ -412,8 +412,9 @@ bool EvoIlm::attachSurface(uint32_t surfaceId, uint32_t layerId, uint32_t w, uin
     if (!setSurfaceVisibility(surfaceId, false)) {
         return false;
     }
-    // Source and destination regions: the whole layer.
-    if (!setRegion(surfaceId, "source", 0, 0, w, h) || !setRegion(surfaceId, "destination", 0, 0, w, h)) {
+    // Destination: the whole layer. Source: the part of the surface drawn there.
+    if (!setRegion(surfaceId, "source", 0, 0, srcW ? srcW : w, srcH ? srcH : h) ||
+        !setRegion(surfaceId, "destination", 0, 0, w, h)) {
         return false;
     }
     // Layer render order: the existing list is kept and our surface goes above the others.

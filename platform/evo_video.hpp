@@ -7,8 +7,9 @@
 //   OMAP dma-bufs       carry the Annex B H.264 stream to the decoder (omap_dmabuf.hpp).
 //   LayerManager (ILM)  attaches and hides our surface in a layer that is already visible (evo_ilm.hpp).
 //
-// The phone renders a 1280x720 canvas; the panel is 1280x480 (omapdrm fb0 1280,480). The surface is cropped to the
-// top 480 lines, which hold the phone's UI.
+// The phone renders a 1280x720 or a 1920x1080 canvas (core/sdr_builder.hpp: canvasFor); the panel is 1280x480
+// (omapdrm fb0 1280,480). The surface shows the canvas's top lines, which hold the phone's UI: 1280x480 of them 1:1,
+// or 1920x720 shrunk onto the panel by the compositor.
 #ifndef AA_ENTRYNAV_PLATFORM_EVO_VIDEO_HPP
 #define AA_ENTRYNAV_PLATFORM_EVO_VIDEO_HPP
 
@@ -30,14 +31,16 @@ namespace evo {
 const uint32_t kAaSurfaceId = 0x7eaa0001, kPillSurfaceId = 0x7eaa0002, kAaLayerId = 0x80000000;
 
 struct EvoVideoConfig {
-    uint32_t width, height;                // phone stream: 1280x720
-    uint32_t displayWidth, displayHeight;  // shown part of it: the 1280x480 panel
-    uint32_t fps;                          // 0 = not imposed
-    uint32_t surfaceId;                    // kAaSurfaceId
-    uint32_t layerId;                      // kAaLayerId, already visible
-    unsigned bufCount;                     // 8 dma-bufs
-    uint32_t bufSize;                      // 1 MiB each
-    EvoVideoConfig();                      // this car's values
+    uint32_t width, height;                    // phone stream: 1280x720, or 1920x1080 with hd
+    uint32_t shownWidth, shownHeight;          // its top-left part on the panel: 1280x480, or 1920x720 with hd
+    uint32_t displayWidth, displayHeight;      // the panel: 1280x480
+    uint32_t fps;                              // 0 = not imposed
+    uint32_t surfaceId;                        // kAaSurfaceId
+    uint32_t layerId;                          // kAaLayerId, already visible
+    unsigned bufCount;                         // 8 dma-bufs
+    uint32_t bufSize;                          // 1 MiB each, 2 MiB with hd (an IDR frame is larger)
+    explicit EvoVideoConfig(bool hd = false);  // this car's values, for the 720p or the 1080p canvas
+    bool hd() const { return width > displayWidth; }
 };
 
 // What the picture path did since the last "[Video] last ..." log line: where a slow picture loses its time (the

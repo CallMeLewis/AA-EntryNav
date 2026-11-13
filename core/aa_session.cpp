@@ -58,6 +58,7 @@ AASession::AASession()
       running_(false),
       thread_(0),
       vehicleFile_(nullptr),
+      hdVideo_(false),
       setupUntilMs_(0),
       videoReady_(false),
       mediaMessages_(0),

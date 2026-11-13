@@ -20,21 +20,20 @@ const uint32_t kMediaSinkField = 3;      // in a service
 const uint32_t kInputSourceField = 4;    // in a service
 const uint32_t kAudioTypeField = 2;      // in a media sink
 const uint32_t kVideoConfigField = 4;    // in a media sink
+const uint32_t kResolutionField = 1;     // in a video config: 2 for 1280x720, 3 for 1920x1080
 const uint32_t kDensityField = 5;        // in a video config, with kRealDensityField
 const uint32_t kRealDensityField = 9;
-const uint32_t kUiConfigField = 11;         // in a video config: the insets as its field 1, then theme and the like
-const uint32_t kInsetsField = 1;            // top, bottom, left, right
-const uint32_t kTouchscreenField = 2;       // in an input source
-const uint32_t kHeightField = 2;            // in a touchscreen
+const uint32_t kUiConfigField = 11;    // in a video config: the insets as its field 1, then theme and the like
+const uint32_t kInsetsField = 1;       // top, bottom, left, right
+const uint32_t kTouchscreenField = 2;  // in an input source
+const uint32_t kWidthField = 1;        // in a touchscreen, with kHeightField
+const uint32_t kHeightField = 2;
 const uint32_t kBluetoothServiceField = 6;  // in a service
 const uint32_t kCarAddressField = 1;        // in a Bluetooth service, with its pairing methods (packed enums)
 const uint32_t kPairingMethodsField = 2;
 const uint64_t kPairingNumericComparison = 2;
 const uint64_t kPairingPin = 4;
 
-const uint32_t kDensity = 140;
-const uint32_t kBottomInset = 240;
-const uint32_t kTouchHeight = 720;
 const uint64_t kGuidanceAudio = 1;
 const uint8_t kSystemAudio = 2;
 
@@ -99,12 +98,16 @@ bool rewriteChannel(Bytes& sdr, uint8_t channel, Edit edit, bool& changed) {
 }
 
 // The video config of the main display: both densities set, and the UI config written last, its insets replaced.
-bool tuneVideoConfig(const pb::Field& config, Bytes& out) {
+bool tuneVideoConfig(const pb::Field& config, Bytes& out, const Canvas& canvas) {
     Bytes ui;
     Bytes body;
     const bool ok = pb::rewriteMessage(config.data, config.size, body, [&](const pb::Field& field, Bytes& to) -> bool {
         if (field.type == pb::kVarint && (field.number == kDensityField || field.number == kRealDensityField)) {
-            pb::appendUint(to, field.number, kDensity);
+            pb::appendUint(to, field.number, canvas.density);
+            return true;
+        }
+        if (field.type == pb::kVarint && field.number == kResolutionField) {
+            pb::appendUint(to, field.number, canvas.resolution);
             return true;
         }
         if (pb::isMessage(field, kUiConfigField)) {
@@ -118,7 +121,7 @@ bool tuneVideoConfig(const pb::Field& config, Bytes& out) {
     }
     Bytes insets;
     pb::appendUint(insets, 1, 0);
-    pb::appendUint(insets, 2, kBottomInset);
+    pb::appendUint(insets, 2, canvas.height - canvas.shownHeight);
     pb::appendUint(insets, 3, 0);
     pb::appendUint(insets, 4, 0);
     Bytes rebuilt;
@@ -218,43 +221,52 @@ std::vector<uint8_t> buildServiceDiscovery(const uint8_t* base, size_t baseLen, 
     return ok ? out : Bytes(base, base + baseLen);
 }
 
-bool tuneMainDisplay(std::vector<uint8_t>& sdr) {
+const Canvas& canvasFor(bool hd) {
+    static const Canvas k720 = {2, 1280, 720, 480, 140};
+    static const Canvas k1080 = {3, 1920, 1080, 720, 210};
+    return hd ? k1080 : k720;
+}
+
+bool tuneMainDisplay(std::vector<uint8_t>& sdr, const Canvas& canvas) {
     bool changed = false;
     const bool ok = rewriteChannel(
         sdr, channel::kVideo,
-        [](const pb::Field& field, Bytes& to) -> bool {
+        [&](const pb::Field& field, Bytes& to) -> bool {
             return pb::isMessage(field, kMediaSinkField) &&
-                   rewriteInner(field, to, [](const pb::Field& sink, Bytes& into) -> bool {
-                       return pb::isMessage(sink, kVideoConfigField) && tuneVideoConfig(sink, into);
+                   rewriteInner(field, to, [&](const pb::Field& sink, Bytes& into) -> bool {
+                       return pb::isMessage(sink, kVideoConfigField) && tuneVideoConfig(sink, into, canvas);
                    });
         },
         changed);
     if (ok && changed) {
-        printf("[SDR] main VideoConfig: dpi=%u insets=(0,%u,0,0)\n", kDensity, kBottomInset);
+        printf("[SDR] main VideoConfig: %ux%u dpi=%u insets=(0,%u,0,0)\n", canvas.width, canvas.height, canvas.density,
+               canvas.height - canvas.shownHeight);
     }
     return ok && changed;
 }
 
-bool declareTouchscreen(std::vector<uint8_t>& sdr) {
+bool declareTouchscreen(std::vector<uint8_t>& sdr, const Canvas& canvas) {
     bool changed = false;
     const bool ok = rewriteChannel(
         sdr, channel::kInput,
-        [](const pb::Field& field, Bytes& to) -> bool {
+        [&](const pb::Field& field, Bytes& to) -> bool {
             return pb::isMessage(field, kInputSourceField) &&
-                   rewriteInner(field, to, [](const pb::Field& source, Bytes& into) -> bool {
+                   rewriteInner(field, to, [&](const pb::Field& source, Bytes& into) -> bool {
                        return pb::isMessage(source, kTouchscreenField) &&
-                              rewriteInner(source, into, [](const pb::Field& size, Bytes& sized) -> bool {
-                                  if (size.type != pb::kVarint || size.number != kHeightField) {
+                              rewriteInner(source, into, [&](const pb::Field& size, Bytes& sized) -> bool {
+                                  if (size.type != pb::kVarint ||
+                                      (size.number != kWidthField && size.number != kHeightField)) {
                                       return false;
                                   }
-                                  pb::appendUint(sized, kHeightField, kTouchHeight);
+                                  pb::appendUint(sized, size.number,
+                                                 size.number == kWidthField ? canvas.width : canvas.height);
                                   return true;
                               });
                    });
         },
         changed);
     if (ok && changed) {
-        printf("[SDR] touchscreen declared 1280x%u\n", kTouchHeight);
+        printf("[SDR] touchscreen declared %ux%u\n", canvas.width, canvas.height);
     }
     return ok && changed;
 }
@@ -373,7 +385,7 @@ bool addBluetoothService(std::vector<uint8_t>& sdr, const std::string& carAddres
 }
 
 std::vector<uint8_t> buildCarServiceDiscovery(const uint8_t* base, size_t baseLen, const char* vehicleFile,
-                                              bool wifiAudio, const std::string& bluetoothAddress) {
+                                              bool wifiAudio, const std::string& bluetoothAddress, bool hdVideo) {
     SdrIdentity identity;
     if (vehicleFile) {
         identity.loadVehicleFile(vehicleFile);
@@ -381,8 +393,8 @@ std::vector<uint8_t> buildCarServiceDiscovery(const uint8_t* base, size_t baseLe
     std::vector<uint8_t> sdr = buildServiceDiscovery(base, baseLen, identity);
     printf("[SDR] ServiceDiscovery identity: %s %s %s (BT channel: %s)\n", identity.carMake.c_str(),
            identity.carModel.c_str(), identity.carYear.c_str(), bluetoothAddress.empty() ? "none" : "added below");
-    tuneMainDisplay(sdr);
-    declareTouchscreen(sdr);
+    tuneMainDisplay(sdr, canvasFor(hdVideo));
+    declareTouchscreen(sdr, canvasFor(hdVideo));
     if (wifiAudio) {
         printf("[SDR] sound over Wi-Fi: media sink (channel %u) and guidance sink (channel %u) kept\n",
                channel::kMediaAudio, channel::kGuidanceAudio);

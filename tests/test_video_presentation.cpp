@@ -8,6 +8,7 @@
 #include "evo_video.hpp"
 
 static unsigned height = 0, opacityCommands = 0, decodeFailures = 0;
+static unsigned srcWidth = 0, srcHeight = 0, streamWidth = 0, streamHeight = 0, outWidth = 0, outHeight = 0;
 static uint32_t decoded = 0;                    // length of the last buffer handed to the decoder
 static bool visible = false, poolBusy = false;  // poolBusy: the decoder holds every buffer
 static float opacity = 1.f;
@@ -34,8 +35,10 @@ EvoIlm::EvoIlm() {}
 bool EvoIlm::validateTarget(uint32_t, uint32_t, uint32_t, uint32_t, bool) {
     return true;
 }
-bool EvoIlm::attachSurface(uint32_t, uint32_t, uint32_t, uint32_t h) {
+bool EvoIlm::attachSurface(uint32_t, uint32_t, uint32_t, uint32_t h, uint32_t srcW, uint32_t srcH) {
     height = h;
+    srcWidth = srcW;
+    srcHeight = srcH;
     opacity = 1.f;
     visible = false;
     return true;
@@ -58,10 +61,14 @@ xsv_handle xsv_open(int, uint32_t, const char*) {
     return reinterpret_cast<void*>(1);
 }
 void xsv_close(xsv_handle) {}
-int xsv_configure_stream(xsv_handle, uint32_t, uint32_t, float) {
+int xsv_configure_stream(xsv_handle, uint32_t w, uint32_t h, float) {
+    streamWidth = w;
+    streamHeight = h;
     return 0;
 }
-int xsv_set_output_dimension(xsv_handle, uint32_t, uint32_t) {
+int xsv_set_output_dimension(xsv_handle, uint32_t w, uint32_t h) {
+    outWidth = w;
+    outHeight = h;
     return 0;
 }
 int xsv_enable_frame_events(xsv_handle) {
@@ -106,6 +113,9 @@ int main() {
     evo::EvoVideo video;
     assert(!video.isReady());
     assert(video.init(cfg) && video.start() && video.isReady() && height == 480);
+    // 720p: decoded at 1280x720, its top 1280x480 on the panel unscaled.
+    assert(!cfg.hd() && streamWidth == 1280 && streamHeight == 720 && outWidth == 1280 && outHeight == 720);
+    assert(srcWidth == 1280 && srcHeight == 480);
     video.setVisible(true);
     assert(video.isVisible() && visible);
     assert(video.setOpacity(0.25f) && opacity == 0.25f);
@@ -155,8 +165,21 @@ int main() {
     assert(video.postVideoFrame(kIdr, sizeof(kIdr), 0) && configThenIdr());  // the new decoder gets SPS/PPS again
     assert(!video.takeStall());                                              // and starts unstuck
     video.stop();
+
+    // 1080p: decoded at 1920x1080, its top 1920x720 shrunk onto the 1280x480 panel.
+    const evo::EvoVideoConfig hd(true);
+    assert(hd.hd() && video.init(hd) && video.start() && video.isReady());
+    assert(streamWidth == 1920 && streamHeight == 1080 && outWidth == 1920 && outHeight == 1080);
+    assert(height == 480 && srcWidth == 1920 && srcHeight == 720);
+    video.stop();
+    // A part larger than the stream, or smaller than the panel, is refused before anything starts.
+    evo::EvoVideoConfig bad(true);
+    bad.shownHeight = 1081;
+    assert(!video.init(bad));
+    bad.shownHeight = 400;
+    assert(!video.init(bad));
     puts(
         "PASS video presentation: visibility, opacity cache, camera hide, SPS/PPS after a refused IDR, a new IDR asked "
-        "for after a lost "
-        "frame, a stuck decoder reported once, reconnect");
+        "for after a lost frame, a stuck decoder reported once, reconnect, 720p shown 1:1 and 1080p shrunk onto the "
+        "panel");
 }

@@ -96,6 +96,16 @@ int TouchTracker::lastContacts(aa::TouchContact* out, int max) const {
     return n;
 }
 
+aa::TouchEventOut toCanvas(const aa::TouchEventOut& panel, uint32_t shownWidth, uint32_t shownHeight) {
+    const int kPanelWidth = 1280, kPanelHeight = 480;
+    aa::TouchEventOut out = panel;
+    for (int i = 0; i < panel.n && i < aa::kTouchMaxContacts; ++i) {
+        out.p[i].x = panel.p[i].x * static_cast<int>(shownWidth) / kPanelWidth;
+        out.p[i].y = panel.p[i].y * static_cast<int>(shownHeight) / kPanelHeight;
+    }
+    return out;
+}
+
 void TouchTracker::fillActive(aa::TouchEventOut& e, int which) const {
     e.n = 0;
     e.index = 0;

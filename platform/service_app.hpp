@@ -108,7 +108,9 @@ public:
     evo::kombi::Arrows kombi;  // AA turn-by-turn -> HUD/cluster arrows, SOME/IP 0xB006 to the KOMBI
     aa::TcpServer server;
     aa::ApInfo ap;
-    EvoVideoConfig videoConfig;
+    EvoVideoConfig videoConfig;  // set by main(); falls back to 720p if the decoder refuses 1080p (under videoMu)
+    // The part of the phone's canvas on the panel for the current session: touches are scaled to it (toCanvas).
+    std::atomic<uint32_t> shownWidth, shownHeight;
     uint16_t port;
     bool videoEnabled;
 

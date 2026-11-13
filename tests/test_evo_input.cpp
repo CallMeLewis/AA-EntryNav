@@ -569,11 +569,27 @@ int main() {
         assert(d.feed(0xE5, 0x01, 0xC20, 0xC, menu, 7, ev, 8) == 1 && ev[0].keycode == aa::AAK_HOME && ev[0].down);
         assert(d.feed(0xE5, 0x03, 0xC10, 0xC, detent, 7, ev, 8) == 0);  // not on the CCS35up instance
     }
+    {  // Panel pixels on the phone's canvas: as they are at 720p, times 1.5 at 1080p, corners included.
+        aa::TouchEventOut panel;
+        memset(&panel, 0, sizeof(panel));
+        panel.n = 2;
+        panel.p[0].x = 1279;
+        panel.p[0].y = 479;
+        panel.p[1].x = 640;
+        panel.p[1].y = 0;
+        panel.action = 5;
+        panel.index = 1;
+        const aa::TouchEventOut same = evo::toCanvas(panel, 1280, 480);
+        CHECK(same.n == 2 && same.p[0].x == 1279 && same.p[0].y == 479 && same.p[1].x == 640 && same.p[1].y == 0);
+        const aa::TouchEventOut hd = evo::toCanvas(panel, 1920, 720);
+        CHECK(hd.n == 2 && hd.p[0].x == 1918 && hd.p[0].y == 718 && hd.p[1].x == 960 && hd.p[1].y == 0);
+        CHECK(hd.action == 5 && hd.index == 1 && hd.p[1].id == panel.p[1].id);
+    }
     puts(
         "PASS older BMW controller (C10/C20); input: IPv4/UDP of the copy, touch machine (press, drag, release, "
         "duplicate, fragmented frame, forced release, nothing before the picture), vMOST message -> controller "
         "decoder; keys as CarPlay has them (tap ignored, NAV/MEDIA/COM and steering wheel phone button -> AA apps, COM "
         "to iDrive during a call, BACK and a left tilt keep Android Auto up); console and steering wheel volume "
-        "buttons decoded; volume level (20.00.C08)");
+        "buttons decoded; volume level (20.00.C08); touches on the 720p and 1080p canvases");
     return 0;
 }

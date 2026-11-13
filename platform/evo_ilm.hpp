@@ -34,10 +34,12 @@ public:
     // Host tests: a stand-in for the CLI and another compositor configuration.
     EvoIlm(const std::string& ctl, const std::string& compositorConf);
 
-    // Attaches surfaceId to layerId hidden, with regions 0,0,w,h. The layer's list is kept and our surface goes above
-    // the others: first when the compositor flips the order, last otherwise. Refuses before any "set" command when the
-    // stacking direction cannot be established.
-    bool attachSurface(uint32_t surfaceId, uint32_t layerId, uint32_t w, uint32_t h);
+    // Attaches surfaceId to layerId hidden, drawn over 0,0,w,h of the layer: the surface's top-left srcW x srcH (w x h
+    // when 0), scaled by the compositor when larger. The layer's list is kept and our surface goes above the others:
+    // first when the compositor flips the order, last otherwise. Refuses before any "set" command when the stacking
+    // direction cannot be established.
+    bool attachSurface(uint32_t surfaceId, uint32_t layerId, uint32_t w, uint32_t h, uint32_t srcW = 0,
+                       uint32_t srcH = 0);
     // Reads genivi-flip-renderorder in the compositor configuration. topFirst=true: the first entry of a render order
     // is on top. False when the file is unreadable or ambiguous.
     bool renderOrderTopFirst(bool& topFirst);

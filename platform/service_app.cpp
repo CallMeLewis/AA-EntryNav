@@ -11,6 +11,7 @@
 #include "bluez_adapter.hpp"
 #include "evo_log.hpp"
 #include "evo_spp_snapshot.hpp"
+#include "evo_touch.hpp"
 #include "evo_trial_wireless.hpp"
 #include "service_contract.hpp"
 #include "tmp_file.hpp"
@@ -21,6 +22,8 @@ namespace evo {
 ServiceApp::ServiceApp(uint16_t p, bool v, volatile sig_atomic_t* quit)
     : knob(nullptr),
       server(p),
+      shownWidth(1280),
+      shownHeight(480),
       port(p),
       videoEnabled(v),
       stopping(false),
@@ -180,7 +183,8 @@ void ServiceApp::codec(const uint8_t* data, size_t len, void* user) {
 }
 
 void ServiceApp::touchEvent(const aa::TouchEventOut& ev, void* user) {
-    static_cast<ServiceApp*>(user)->session.postTouchEvent(ev);
+    ServiceApp* a = static_cast<ServiceApp*>(user);
+    a->session.postTouchEvent(toCanvas(ev, a->shownWidth, a->shownHeight));
 }
 
 // Volume key (knob or steering wheel). With the pill working, the level message that follows shows it.
@@ -498,8 +502,20 @@ bool ServiceApp::startSession(int fd, void* user, const std::string& carBluetoot
         pthread_mutex_lock(&a->videoMu);
         a->video.stop();
         videoOk = a->video.init(a->videoConfig) && a->video.start();
+        if (!videoOk && a->videoConfig.hd()) {
+            // The decoder or the buffers refused 1080p: 720p from now on, for this run of the service.
+            ELOG("ServiceApp", "the 1920x1080 picture did not start: 1280x720 from now on");
+            a->video.stop();
+            a->videoConfig = EvoVideoConfig(false);
+            videoOk = a->video.init(a->videoConfig) && a->video.start();
+        }
         pthread_mutex_unlock(&a->videoMu);
     }
+    // The phone is told the canvas the decoder took; touches follow it.
+    const bool hd = a->videoEnabled && a->videoConfig.hd();
+    a->shownWidth = hd ? a->videoConfig.shownWidth : a->videoConfig.displayWidth;
+    a->shownHeight = hd ? a->videoConfig.shownHeight : a->videoConfig.displayHeight;
+    a->session.setHdVideo(hd);
     pthread_mutex_lock(&a->mu);
     if (!videoOk) {
         close(fd);

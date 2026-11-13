@@ -11,7 +11,11 @@
 //   pc-headunit <host> <port> <seconds> web:<port>     a page served on that port shows the picture live in a
 //                                                      browser (WebCodecs) and sends the mouse back as touches, the
 //                                                      wheel as the knob, its buttons as keys. The phone is only
-//                                                      called once the page is open.
+//                                                      called once the page is open. The panel's picture is the
+//                                                      canvas's top rows shrunk to 1280x480 as the car does
+//                                                      (PC_VIDEO=720 for the 1:1 picture); its Filter button
+//                                                      switches bilinear and the browser's best, and Save picture
+//                                                      downloads the exact pixels.
 #include <arpa/inet.h>
 #include <math.h>
 #include <netdb.h>
@@ -95,12 +99,21 @@ const char kPage[] = R"HTML(<!doctype html>
   <button data-k="65537">Media</button><button data-k="65538">Nav</button><button data-k="65540">Phone</button>
   <button data-k="84">Assistant</button>
   <button data-r="-1">Knob ◀</button><button data-k="23">Knob press</button><button data-r="1">Knob ▶</button>
+  <button id="f">Filter</button><button id="p">Save picture</button>
   <span id="s">connecting…</span>
 </div>
 <div id="bar"><span id="g">Drive: W faster, S brake, A / D steer, Space stop. Still until you press one.</span></div>
 <script>
 const c = document.getElementById('c'), ctx = c.getContext('2d'), s = document.getElementById('s');
-let config = null, decoder = null, waitKey = true, shown = 0;
+let config = null, decoder = null, waitKey = true, shown = 0, smooth = 'low', mode = '';
+// One canvas pixel on one screen pixel, as on the car, whatever the PC's display scaling.
+const fit = () => { c.style.width = (1280 / devicePixelRatio) + 'px'; c.style.maxWidth = 'none'; };
+fit(); matchMedia('(resolution: ' + devicePixelRatio + 'dppx)').addEventListener('change', fit);
+// The 1080p picture is shrunk with bilinear filtering ('low', close to the car's compositor) or the browser's best.
+document.getElementById('f').onclick = () => { smooth = smooth === 'high' ? 'low' : 'high'; };
+// The panel's exact pixels as a PNG, named after the picture's size and filter.
+document.getElementById('p').onclick = () => { const a = document.createElement('a');
+  a.download = 'aa-' + mode.replace(/[^0-9a-z]+/gi, '-') + '.png'; a.href = c.toDataURL('image/png'); a.click(); };
 const ws = new WebSocket('ws://' + location.host + '/ws');
 ws.binaryType = 'arraybuffer';
 const send = t => { if (ws.readyState === 1) ws.send(t); };
@@ -120,7 +133,12 @@ function setup(u) {
   const codec = 'avc1.' + hex(u[sps.at + 1]) + hex(u[sps.at + 2]) + hex(u[sps.at + 3]);
   if (decoder) decoder.close();
   decoder = new VideoDecoder({
-    output: f => { ctx.drawImage(f, 0, 0, 1280, 480, 0, 0, 1280, 480); f.close(); s.textContent = 'live, ' + (++shown) + ' pictures'; },
+    // The canvas's top rows, as wide as it is and 3/8 of its width high, over the whole panel.
+    output: f => { const w = f.displayWidth, h = f.displayHeight;
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = smooth;
+      ctx.drawImage(f, 0, 0, w, w * 3 / 8, 0, 0, 1280, 480); f.close();
+      mode = w + 'x' + h + (w > 1280 ? ' shrunk, ' + smooth + ' filter' : ' 1:1');
+      s.textContent = 'live, ' + mode + ', ' + (++shown) + ' pictures'; },
     error: e => { s.textContent = 'decoder: ' + e.message; waitKey = true; }
   });
   decoder.configure({ codec, optimizeForLatency: true });
@@ -158,7 +176,7 @@ c.onpointermove = ev => { if (down) send('t 2 ' + at(ev)); };
 c.onpointerup = c.onpointercancel = ev => { if (down) { down = false; send('t 1 ' + at(ev)); } };
 c.addEventListener('wheel', ev => { ev.preventDefault(); send('r ' + (ev.deltaY > 0 ? 1 : -1)); }, { passive: false });
 const key = k => { send('k ' + k + ' 1'); send('k ' + k + ' 0'); };
-document.querySelectorAll('button').forEach(b => b.onclick = () => b.dataset.k ? key(b.dataset.k) : send('r ' + b.dataset.r));
+document.querySelectorAll('button:not(#f):not(#p)').forEach(b => b.onclick = () => b.dataset.k ? key(b.dataset.k) : send('r ' + b.dataset.r));
 const keys = { ArrowUp: 19, ArrowDown: 20, ArrowLeft: 21, ArrowRight: 22, Enter: 23, Escape: 4, Backspace: 4, h: 3 };
 const held = new Set();
 const drive = () => send('d ' + ((held.has('w') ? 1 : 0) - (held.has('s') ? 1 : 0)) + ' ' + ((held.has('d') ? 1 : 0) - (held.has('a') ? 1 : 0)));
@@ -263,6 +281,9 @@ void webCommand(const std::string& text) {
         touch.p[0].y = c < 0 ? 0 : c > 479 ? 479 : c;
         touch.action = a;
         touch.index = 0;
+        const aa::Canvas& canvas = aa::canvasFor(g_session->hdVideo());  // the page's pixels on the phone's canvas
+        touch.p[0].x = touch.p[0].x * static_cast<int>(canvas.width) / 1280;
+        touch.p[0].y = touch.p[0].y * static_cast<int>(canvas.shownHeight) / 480;
         g_session->postTouchEvent(touch);
         if (a != 2 && ++g_touches <= 5) {
             ELOG("PC", "touch %s at %d,%d", a == 0 ? "down" : "up", touch.p[0].x, touch.p[0].y);
@@ -637,6 +658,8 @@ int main(int argc, char** argv) {
         session.setVideoFrameCallback(onVideo);
         session.setAudioCallbacks(onAudio, evo::EvoAudio::onStream, &audio);
         session.setNavStatusCallback(onNav);
+        // PC_VIDEO=720: the 1280x720 picture shown 1:1, as with the car's video-720 file; else 1920x1080 shrunk.
+        session.setHdVideo(!(getenv("PC_VIDEO") && !strcmp(getenv("PC_VIDEO"), "720")));
         // A vehicle file (model=, year=, id=) as the service reads on the car, when one is given.
         if (getenv("PC_VEHICLE_FILE")) {
             session.setVehicleFile(getenv("PC_VEHICLE_FILE"));

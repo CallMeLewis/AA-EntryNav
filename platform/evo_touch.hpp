@@ -33,6 +33,9 @@ struct UdpView {
 };
 bool parseIpv4Udp(const uint8_t* p, size_t n, UdpView& out);
 bool isTouchPdu(const uint8_t* b, size_t n);
+// A touch in panel pixels (1280x480) moved to the phone's canvas, whose top shownWidth x shownHeight the panel shows
+// (evo_video.hpp): unchanged for the 720p canvas, times 1.5 for the 1080p one.
+aa::TouchEventOut toCanvas(const aa::TouchEventOut& panel, uint32_t shownWidth, uint32_t shownHeight);
 
 // Touch state machine, no I/O.
 class TouchTracker {

@@ -15,16 +15,18 @@ static bool xsvCommand(const char* name, int result) {
     return result >= 0;
 }
 
-EvoVideoConfig::EvoVideoConfig()
-    : width(1280),
-      height(720),
+EvoVideoConfig::EvoVideoConfig(bool hd)
+    : width(hd ? 1920 : 1280),
+      height(hd ? 1080 : 720),
+      shownWidth(hd ? 1920 : 1280),
+      shownHeight(hd ? 720 : 480),
       displayWidth(1280),
       displayHeight(480),
       fps(0),
       surfaceId(kAaSurfaceId),
       layerId(kAaLayerId),
       bufCount(8),
-      bufSize(1u << 20) {}
+      bufSize(hd ? 2u << 20 : 1u << 20) {}
 
 EvoVideo::EvoVideo()
     : h_(nullptr),
@@ -65,15 +67,17 @@ bool EvoVideo::init(const EvoVideoConfig& cfg) {
         return false;
     }
     if (!cfg.width || !cfg.height || cfg.width > 1920 || cfg.height > 1080 || !cfg.bufCount || cfg.bufCount > 16 ||
-        cfg.bufSize < 65536 || cfg.bufSize > (4u << 20) || cfg.displayWidth > cfg.width ||
-        cfg.displayHeight > cfg.height ||
+        cfg.bufSize < 65536 || cfg.bufSize > (4u << 20) || !cfg.shownWidth || !cfg.shownHeight ||
+        cfg.shownWidth > cfg.width || cfg.shownHeight > cfg.height || cfg.displayWidth > cfg.shownWidth ||
+        cfg.displayHeight > cfg.shownHeight ||
         !ilm_.validateTarget(cfg.surfaceId, cfg.layerId, cfg.displayWidth, cfg.displayHeight)) {
         ELOG("Video", "REFUSED: target not checked (inventory, free id, visible full-screen layer)");
         return false;
     }
     pool_.destroy();  // Also release a previous init() whose start() failed.
     cfg_ = cfg;
-    ELOG("Video", "init %ux%u surface 0x%x layer 0x%x (%u dma-bufs of %u B)", cfg_.width, cfg_.height, cfg_.surfaceId,
+    ELOG("Video", "init %ux%u, top %ux%u on the %ux%u panel, surface 0x%x layer 0x%x (%u dma-bufs of %u B)", cfg_.width,
+         cfg_.height, cfg_.shownWidth, cfg_.shownHeight, cfg_.displayWidth, cfg_.displayHeight, cfg_.surfaceId,
          cfg_.layerId, cfg_.bufCount, cfg_.bufSize);
     return pool_.init(cfg_.bufCount, cfg_.bufSize);
 }
@@ -125,8 +129,9 @@ bool EvoVideo::start() {
         stop();
         return false;
     }
-    // Attach our surface hidden, cropped to the panel's area.
-    if (!ilm_.attachSurface(cfg_.surfaceId, cfg_.layerId, cfg_.displayWidth, cfg_.displayHeight)) {
+    // Attach our surface hidden: the shown part of the picture over the whole panel.
+    if (!ilm_.attachSurface(cfg_.surfaceId, cfg_.layerId, cfg_.displayWidth, cfg_.displayHeight, cfg_.shownWidth,
+                            cfg_.shownHeight)) {
         stop();
         return false;
     }

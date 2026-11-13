@@ -26,6 +26,8 @@ constexpr char kKombiShown[] = "/var/local/data/AA/kombi-nav.shown";  // an arro
 constexpr char kPhoneGps[] = "/var/local/data/AA/gps-telephone";      // present: the phone keeps its own GPS
 constexpr char kVehicle[] = "/var/local/data/AA/vehicle";             // model=... and year=... told to the phone
 constexpr char kAudioWifi[] = "/var/local/data/AA/audio-wifi";        // present: sound over Wi-Fi (evo_audio.hpp)
+// present: the phone draws its 1280x720 picture, shown 1:1, instead of 1920x1080 shrunk onto the panel (evo_video.hpp)
+constexpr char kVideo720[] = "/var/local/data/AA/video-720";
 constexpr char kUsb[] = "/var/local/data/AA/usb";  // present: Android Auto also over a cable (usb_link.hpp)
 // present: no wireless Android Auto. The car's Bluetooth and Wi-Fi hotspot are left untouched and only the cable is
 // used, so it needs kUsb; without kUsb the supervisor starts nothing.
