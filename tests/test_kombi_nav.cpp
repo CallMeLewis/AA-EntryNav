@@ -34,19 +34,21 @@ void touch(const std::string& path) {
     fclose(f);
 }
 
-// A temporary folder for the off and marker files, and the arrows' settings for the fake KOMBI.
+// A temporary folder for the setting and marker files, and the arrows' settings for the fake KOMBI.
 struct Place {
     char dir[64];
-    std::string off, marker;
+    std::string off, marker, single;
     Place() {
         snprintf(dir, sizeof(dir), "/tmp/kombi-navXXXXXX");
         CHECK(mkdtemp(dir));
         off = std::string(dir) + "/kombi-off";
         marker = std::string(dir) + "/kombi-nav.shown";
+        single = std::string(dir) + "/kombi-single-maneuver";
     }
     ~Place() {
         unlink(off.c_str());
         unlink(marker.c_str());
+        unlink(single.c_str());
         rmdir(dir);
     }
     ArrowsConfig config(uint16_t port) const {
@@ -55,6 +57,7 @@ struct Place {
         c.clusterPort = port;
         c.offFile = off;
         c.markerFile = marker;
+        c.singleFile = single;
         c.guide.approachMiles = 0;
         return c;
     }
@@ -67,6 +70,51 @@ void tell(Arrows& arrows, const Step& step, int64_t metres, const char* text, in
     Arrows::onNavStatus(kNavStatus, &status[0], status.size(), &arrows);
     Arrows::onNavStatus(kNavState, &state[0], state.size(), &arrows);
     Arrows::onNavStatus(kNavPosition, &position[0], position.size(), &arrows);
+}
+
+// The next-manoeuvre file is read once, when Arrows is built: the graph and its log line follow that reading even when
+// the file appears or goes before start().
+void routeModeSelectedOnce() {
+    for (int single = 0; single < 2; ++single) {
+        FakeKombi k;
+        Place p;
+        if (single) {
+            touch(p.single);
+        }
+        Arrows arrows(p.config(k.port()));
+        if (single) {
+            CHECK(unlink(p.single.c_str()) == 0);
+        } else {
+            touch(p.single);
+        }
+
+        FILE* log = tmpfile();
+        CHECK(log);
+        fflush(stdout);
+        const int saved = dup(STDOUT_FILENO);
+        CHECK(saved >= 0 && dup2(fileno(log), STDOUT_FILENO) >= 0);
+        arrows.start();
+        fflush(stdout);
+        CHECK(dup2(saved, STDOUT_FILENO) >= 0);
+        close(saved);
+        rewind(log);
+        std::string lines;
+        char line[1024];
+        while (fgets(line, sizeof(line), log)) {
+            lines += line;
+        }
+        fclose(log);
+        CHECK(lines.find(single ? "route graph: next maneuver only (14 requests)"
+                                : "route graph: whole captured route") != std::string::npos);
+        CHECK(lines.find(single ? "route graph: whole captured route" : "route graph: next maneuver only") ==
+              std::string::npos);
+
+        const size_t count = single ? 14 : 97;
+        tell(arrows, Step(7, "TEST ST"), 800, "0.5", kUnitMilesTenths);
+        CHECK(k.waitFor(count) && k.count() == count);
+        arrows.stop();
+        CHECK(k.count() == count + 6 && !exists(p.marker));
+    }
 }
 
 void endToEnd() {
@@ -169,9 +217,12 @@ void offUntilNextSession() {
 }  // namespace
 
 int main() {
+    routeModeSelectedOnce();
     endToEnd();
     bmwNavigationWins();
     offUntilNextSession();
-    puts("PASS kombi nav: menu setting, session end, exit, marker of a killed run, BMW navigation, refusal");
+    puts(
+        "PASS kombi nav: route mode and log, menu setting, session end, exit, marker of a killed run, BMW navigation, "
+        "refusal");
     return 0;
 }

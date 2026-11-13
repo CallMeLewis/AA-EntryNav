@@ -53,8 +53,10 @@ public:
     static const int kTemplateBar = -1;
 
     // handle: the guidance instance. bar: the red bar's percentage in maneuver 0's distance; negative (kTemplateBar)
-    // keeps the template's.
-    explicit RouteGraph(uint32_t handle = 0xC8, int bar = 255);
+    // keeps the template's. singleManeuver: only the template's first 14 requests, the graph of the next manoeuvre,
+    // for a cluster that refuses the whole route (the kombi-single-maneuver file, kombi_nav.hpp). Without it, every
+    // request is the same as before.
+    explicit RouteGraph(uint32_t handle = 0xC8, int bar = 255, bool singleManeuver = false);
 
     // The whole route start, in the factory's order. With lanes, *section gets the lane row's section. False: the
     // template doesn't have the layout this code expects (nothing is to be sent).
@@ -80,6 +82,7 @@ private:
 
     uint32_t handle_;
     int bar_;
+    bool singleManeuver_;
     int carRequest_;  // the template's destination info holding the car's route position; -1 when there is none
     double carAt_;
 };

@@ -26,6 +26,10 @@ constexpr char kKombiShown[] = "/var/local/data/AA/kombi-nav.shown";  // an arro
 constexpr char kPhoneGps[] = "/var/local/data/AA/gps-telephone";      // present: the phone keeps its own GPS
 constexpr char kVehicle[] = "/var/local/data/AA/vehicle";             // model=... and year=... told to the phone
 constexpr char kAudioWifi[] = "/var/local/data/AA/audio-wifi";        // present: sound over Wi-Fi (evo_audio.hpp)
+// present as the service starts: the cluster gets a graph of the next manoeuvre only, the first 14 requests of the
+// captured route (kombi_graph.hpp). For a G01 with cluster software 146, which refuses the route's second road with
+// 0x26 and so shows no arrow.
+constexpr char kKombiSingleManeuver[] = "/var/local/data/AA/kombi-single-maneuver";
 // present: the phone draws its 1280x720 picture, shown 1:1, instead of 1920x1080 shrunk onto the panel (evo_video.hpp)
 constexpr char kVideo720[] = "/var/local/data/AA/video-720";
 constexpr char kUsb[] = "/var/local/data/AA/usb";  // present: Android Auto also over a cable (usb_link.hpp)
