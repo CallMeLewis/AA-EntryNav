@@ -60,3 +60,14 @@ Rule numbers are stable ids that other skills cite. A removed rule leaves a gap.
 31. **Prefer the plain word.** "utilize" and "leverage" become "use", "facilitate" becomes "help", "numerous" becomes "many", "in the event that" becomes "if". The fancier synonym is rarely clearer.
 32. **Mannered prose.** Metaphor or flourish where a literal phrase exists: aphorisms ("wire it or delete it"), rhetorical fragments for effect, personified code ("the plan holds it"), figurative verbs ("rides along", "stands on"), stock framing phrases. "A dial worth turning" becomes "a parameter worth varying". Say what you mean. Rule 26 covers the metaphor nouns.
 33. **Over-compression.** Dropped articles, verbless fragments, symbol-speak, and abbreviations that make the reader decode instead of read. "Parser rejects bad date → exit 2, no write" becomes "The parser rejects a bad date, exits with code 2, and writes nothing." Write whole sentences with their articles and verbs, and spell out arrows and abbreviations.
+
+### Rhythm and cadence
+
+34. **Monotonous clause length.** Mix short sentences with longer compound statements. Vary sentence starters so three adjacent sentences do not begin with the same article, gerund, or subject.
+35. **Predictable transitions.** Cut bridge words like "furthermore", "moreover", "conversely", and "consequently". Let adjacent ideas connect directly.
+36. **Balanced weight matching.** Stop pairing every positive statement with a negative caveat or a summarizing clause. State the point and end the sentence.
+
+### Structural framing
+
+37. **The tutorial voice.** Cut explanatory setup like "To understand how X works, consider Y" or "When building Z, keep A in mind." Start directly with the mechanism.
+38. **Synthetic emphasis.** Delete announcer adverbs like "Crucially," "Importantly," and "It bears mentioning that." Let the facts show why a point matters.
