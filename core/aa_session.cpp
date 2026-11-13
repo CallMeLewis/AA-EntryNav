@@ -67,6 +67,8 @@ AASession::AASession()
       thread_(0),
       vehicleFile_(nullptr),
       hdVideo_(false),
+      longestSilenceMs_(0),
+      lastReceivedMs_(0),
       setupUntilMs_(0),
       videoReady_(false),
       mediaMessages_(0),
@@ -233,6 +235,8 @@ bool AASession::start(int client_fd) {
     mediaMessages_ = 0;
     memset(mediaSessions_, 0, sizeof(mediaSessions_));
     audioMessages_[0] = audioMessages_[1] = 0;
+    lastReceivedMs_ = 0;  // the previous session's thread is joined
+    longestSilenceMs_.store(0);
     resetCounters();
     setRunning(true);
     if (pthread_create(&thread_, nullptr, &AASession::threadMain, this) != 0) {
@@ -359,6 +363,10 @@ bool AASession::receiveExactly(uint8_t* to, size_t size, size_t* received) {
             continue;
         }
         lastDataMs = locationClockMs();
+        if (lastReceivedMs_ && lastDataMs - lastReceivedMs_ > longestSilenceMs_.load()) {
+            longestSilenceMs_.store(static_cast<uint32_t>(lastDataMs - lastReceivedMs_));
+        }
+        lastReceivedMs_ = lastDataMs;
         const ssize_t n = recv(fd, to + got, size - got, 0);
         if (n < 0 && errno == EINTR) {
             continue;

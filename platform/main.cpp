@@ -343,6 +343,11 @@ int main(int argc, char** argv) {
     ELOG("Main", "Android Auto over a cable: %s",
          usbOn ? "on (a phone on USB is asked while nothing is connected)" : "off");
     bool failed = false;
+    // The phone's longest silence, every 10 s of a session, only while logs are kept: without the maintenance file the
+    // service's log goes to /dev/null (hmiapp/log_profile.hpp).
+    const bool logsKept = access(evo::contract::kMaintenance, F_OK) == 0;
+    bool paceRunning = false;
+    uint32_t paceMs = 0;
     const uint32_t trialStart = evo::monoMs();
     evo::TrialAdvertisementSchedule advertisement(service ? 60000 : 0);
     while (!quit) {
@@ -359,6 +364,22 @@ int main(int argc, char** argv) {
         knob.setOwned(owned);
         if (turn.focusMsg && turn.active) {
             app.session.postVideoFocus(turn.focusMsg == 1);
+        }
+        if (logsKept) {
+            // Wireless or cable: how long the phone went without sending anything. A silent phone is pinged after 2 s
+            // and answers at once, so several seconds here are a link that stalled, whatever the cause.
+            const uint32_t nowMs = evo::monoMs();
+            if (!turn.active) {
+                paceRunning = false;
+            } else if (!paceRunning) {
+                paceRunning = true;
+                paceMs = nowMs;
+                app.session.takeLongestSilenceMs();  // the start of the session is not a silence
+            } else if (nowMs - paceMs >= 10000) {
+                ELOG("Session", "in %u s: the phone's longest silence %u ms", (nowMs - paceMs + 500) / 1000,
+                     app.session.takeLongestSilenceMs());
+                paceMs = nowMs;
+            }
         }
         if (service) {
             // On the cable alone, nothing happens until a phone is plugged in: "waiting", not "connecting".

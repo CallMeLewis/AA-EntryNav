@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <atomic>
 #include <string>
 
 #include "aa_frame.hpp"
@@ -55,6 +56,9 @@ public:
     // itself there): the socket is shut down, the thread finishes, and the ended callback runs.
     void end() { interrupt(); }
     bool isActive() const { return running(); }
+    // The longest time the phone sent nothing since the previous call, in milliseconds, and starts over. Any thread.
+    // After 2 s of silence the head unit pings the phone, which answers at once: seconds here are a link that stalled.
+    uint32_t takeLongestSilenceMs() { return longestSilenceMs_.exchange(0); }
 
     // Set before start().
     void setDisconnectCallback(SessionEndedCallback cb, void* user_data = nullptr);
@@ -175,7 +179,9 @@ private:
     Callback<BluetoothPairedCallback> bluetoothPaired_;
 
     CarInbox inbox_;
+    std::atomic<uint32_t> longestSilenceMs_;
     // Session thread only.
+    uint64_t lastReceivedMs_;  // when the phone last sent anything, 0 before its first byte
     TlsClient tls_;
     MessageAssembler assembler_;
     uint64_t setupUntilMs_;       // the handshake must end by then (kSetupMs); 0 once it has
