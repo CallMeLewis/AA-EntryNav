@@ -384,7 +384,10 @@ int main(int argc, char** argv) {
         if (service) {
             // On the cable alone, nothing happens until a phone is plugged in: "waiting", not "connecting".
             const bool waiting = cableOnly && !app.usbPhone && !app.usbBusy;
-            control.writeState(turn.active ? "connected" : waiting ? "waiting" : "connecting", turn.onScreen ? 1 : 0);
+            const char* state = turn.active ? "connected" : waiting ? "waiting" : "connecting";
+            // overlay 1: on screen; 2: connected and aside, waiting for the iDrive app's "show"
+            // (hmiapp/service_state.hpp).
+            control.writeState(state, turn.onScreen ? 1 : (turn.asks ? 2 : 0));
         }
         if (failed) {
             break;

@@ -11,7 +11,8 @@ namespace app {
 struct ServiceState {
     char state[24];  // "idle", "connecting", "waiting" (cable only, unplugged), "running", "connected", ...
     int pid;         // > 0: the session process; -1: starting, or answering without a state file; 0: not running
-    int overlay;     // 1: Android Auto is on screen (knob and touch go to the phone)
+    int overlay;     // 1: Android Auto is on screen (knob and touch go to the phone); 2: connected, and waiting
+                     // aside for this app's "show" (the app asked for that with "await")
 
     ServiceState() : pid(0), overlay(0) { strcpy(state, "idle"); }
     ServiceState(const char* name, int processId, int onScreen) : pid(processId), overlay(onScreen) {
@@ -21,7 +22,9 @@ struct ServiceState {
 
     bool is(const char* name) const { return !strcmp(state, name); }
     // Android Auto is on screen in a running session.
-    bool onScreen() const { return pid > 0 && overlay; }
+    bool onScreen() const { return pid > 0 && overlay == 1; }
+    // A phone has connected and Android Auto waits aside until the app shows it.
+    bool asks() const { return pid > 0 && overlay == 2; }
 };
 
 }  // namespace app

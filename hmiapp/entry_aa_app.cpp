@@ -67,6 +67,11 @@ public:
             g_app->triggerEvent(event);
         }
     }
+    void ownPopup(bool open) override {
+        if (g_app) {
+            g_app->triggerEvent(kEvOwnPopup, bmw::Parcel(open));
+        }
+    }
     void send(const char* message) override { sendToService(message); }
     void log(const char* line) override { alog("%s", line); }
     ServiceState readService() override { return readServiceState(); }
@@ -185,7 +190,7 @@ void showAutostart(bmw::PluginApp* app) {
 
 bool guardedByOverlay(const char* what) {
     ServiceState d = readServiceState();
-    if (d.pid > 0 && d.overlay) {
+    if (d.onScreen()) {
         alog("%s ignored: Android Auto is on screen (stray knob input)", what);
         return true;
     }

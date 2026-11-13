@@ -32,6 +32,8 @@ ServiceApp::ServiceApp(uint16_t p, bool v, volatile sig_atomic_t* quit)
       ready(false),
       tcpPreparing(false),
       reverse(false),
+      awaitShow(false),
+      asking(false),
       pendingFocus(0),
       sppLinks(0),
       tcpLinks(0),
@@ -107,6 +109,7 @@ ServiceApp::Turn ServiceApp::turn(bool service) {
     t.failed = wirelessDone;
     t.active = session.isActive();
     t.onScreen = videoEnabled && t.active && focus && !reverse;  // what the iDrive app is told
+    t.asks = t.active && asking && !focus;
     const uint32_t nowMs = monoMs();
     const PeekTiming::Picture picture = peek.turn(nowMs, t.onScreen);
     t.shown = picture.shown;
@@ -277,16 +280,26 @@ void ServiceApp::appKey(const char* name, void* user) {
     ELOG("ServiceApp", "key %s: sent to Android Auto, which stays on screen; iDrive brought back under it", name);
 }
 
-// Commands from the iDrive app (service mode): show, hide, drivemode, popup, gear, call, daynight, quit.
+// Commands from the iDrive app (service mode): show, hide, await, drivemode, popup, gear, call, daynight, quit.
 void ServiceApp::command(const ControlCommand& c, void* user) {
     ServiceApp* a = static_cast<ServiceApp*>(user);
     pthread_mutex_lock(&a->mu);
     if (c.verb == "show") {
         a->focus = true;
+        a->asking = false;
         a->pendingFocus = 1;
     } else if (c.verb == "hide") {
         a->focus = false;
+        a->asking = false;
         a->pendingFocus = 2;
+    } else if (c.verb == "await") {
+        // iDrive performs no screen request of an app while one of its own windows is on top, and the knob acts on
+        // whatever iDrive shows under Android Auto. So the app first brings iDrive to its blank page, then says
+        // "show": until then a phone that connects is served, its picture kept aside.
+        if (!a->awaitShow) {
+            ELOG("ServiceApp", "a phone that connects now waits aside for the iDrive app's \"show\"");
+        }
+        a->awaitShow = true;
     } else if (c.verb == "drivemode") {
         // Sent by the iDrive app once iDrive's driving mode display covers Android Auto's state: never while iDrive's
         // setting to show driving mode changes is off.
@@ -335,6 +348,9 @@ void ServiceApp::videoFocus(bool projected, uint32_t reason, void* user) {
     ServiceApp* a = static_cast<ServiceApp*>(user);
     pthread_mutex_lock(&a->mu);
     a->focus = projected;
+    // The phone decided for itself: a session still aside is no longer waiting for the iDrive app. Left set, the
+    // phone's exit icon would make it wait again, and the app would bring Android Auto straight back.
+    a->asking = false;
     pthread_mutex_unlock(&a->mu);
     ELOG("ServiceApp", "video focus=%s reason=%u", projected ? "AA" : "BMW", reason);
 }
@@ -363,6 +379,7 @@ void ServiceApp::ended(void* user) {
     a->kombi.onSessionEnded();
     pthread_mutex_lock(&a->mu);
     a->focus = false;
+    a->asking = false;
     pthread_mutex_unlock(&a->mu);
     a->server.notifySessionEnded();
     ELOG("ServiceApp", "session ended");
@@ -528,8 +545,13 @@ bool ServiceApp::startSession(int fd, void* user, const std::string& carBluetoot
         pthread_mutex_unlock(&a->connectMu);
         return false;
     }
-    a->focus = true;
+    a->focus = !a->awaitShow;
+    a->asking = a->awaitShow;
+    const bool aside = a->asking;
     pthread_mutex_unlock(&a->mu);
+    if (aside) {
+        ELOG("ServiceApp", "Android Auto starts aside: the iDrive app shows it once iDrive is on its page");
+    }
     a->session.setBluetooth(carBluetooth, carBluetooth.empty() ? nullptr : bluetoothPaired, a);
     bool started = a->session.start(fd);
     if (!started) {

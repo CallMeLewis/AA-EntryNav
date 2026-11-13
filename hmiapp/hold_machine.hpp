@@ -6,10 +6,24 @@
 // the way native CarPlay holds its own. Event 52 asks for it, event 51 opens the app's menu, event 50 the iDrive main
 // menu (hmiapp/AAEntryNav.xml). What the machine does, case by case:
 // - Open row, entry button: "show" and event 52 at once, not at the next status poll.
-// - Android Auto comes up by itself (start automatically, phone reconnected): over our menu, event 52; during a call,
-//   event 52 over iDrive's call screen; over one of iDrive's own screens, where event 52 can be refused, our menu first
-//   (event 51), whose focus asks for event 52 at once. Up to 3 menu tries a second apart, then event 52 once, then
-//   Android Auto steps aside ("hide") rather than stay over a screen the knob also reaches.
+// - Android Auto comes up without waiting aside (Start while it runs, the phone asking for the screen, a service that
+//   missed "await"): over our menu, event 52; during a call, event 52 over iDrive's call screen; over one of iDrive's
+//   own screens, where event 52 can be refused, our menu first (event 51), whose focus asks for event 52 at once. After
+//   the first refused menu, our own popup (below) and event 52 under it; then up to 2 more menu tries a second apart,
+//   then event 52 once. If all of that is refused, Android Auto stays on screen without the hold: the touchscreen is
+//   the phone's, the knob also reaches the iDrive screen underneath, and our menu is asked for once a second until
+//   it opens (event 52 then).
+// - A phone connects: the service keeps Android Auto aside and says so (it was told "await" when it became
+//   reachable). Our menu is asked for (event 51); its focus sends "show" and event 52, so iDrive is on our pages
+//   before Android Auto shows.
+// - iDrive refuses: it performs no focus event of an app while one of its own popups is the topmost one
+//   (CFocusEvent::isCurrentlyAllowed in HmiMain3D: the event answers 215 and does nothing else, it is not even
+//   counted). Seen upstream on a car opened but not started: refused for as long as no key was pressed (64 s, until
+//   MENU). Nothing tells an app when that ends, and the answer itself is dropped before it reaches the app. So after
+//   one refusal the app opens its own empty popup (popupEvent 55, what RHMI gives an app to come to the front:
+//   iDrive lets an app's focus event through when the topmost popup is an app's), asks for the blank state under it
+//   a second later, closes it and sends "show". Should iDrive refuse even that, Android Auto is on screen without the
+//   hold, as above.
 // - BACK or tilt to our menu: event 52 at once (at most every 300 ms), and at each poll while the menu keeps the focus;
 //   at most 8 events 52 until the blank state shows again.
 // - Focus given back to the blank state: the hold worked, its tries start over (a focus lost and given back without
@@ -33,9 +47,10 @@
 // - Reverse gear: the camera wins. No event 50, 51 or 52 over it, whatever the service's state file still says, no
 //   popup peek, no "show", no hard key step aside, no app key hold. The Open row's 3 s wait starts again once reverse
 //   ends.
-// - Phone call: iDrive's call screen is not fought; when the call ends, event 52 within 10 s.
+// - Phone call: iDrive's call screen is not fought; when the call ends, event 52 within 10 s. A phone waiting aside
+//   waits through the call and the reverse gear too.
 // - Service (re)started, or phone connected: it is told the call and the gear again (started in reverse, Android Auto
-//   would come up over the camera).
+//   would come up over the camera). A (re)started service is also told "await".
 //
 // Pure: no BMW call, no file, no clock. Events and the time (mono_clock.hpp) come in; iDrive events, control messages
 // and log lines go out through HoldIo. Single-threaded (the app thread). tests/test_hold_machine.cpp.
@@ -55,6 +70,7 @@ const int kGearUnknown = -1000;  // no driving.gear value received yet
 class HoldIo {
 public:
     virtual void triggerEvent(unsigned event) = 0;  // a focusEvent of AAEntryNav.xml: 50, 51 or 52
+    virtual void ownPopup(bool open) = 0;           // the app's empty popup (popupEvent 55)
     virtual void send(const char* message) = 0;     // a control message to the service ("show", "hide", ...)
     virtual void log(const char* line) = 0;         // one line of the app's log
     // Read only when a decision needs them, at that moment: the service's state (reading it may ask its control port),
@@ -73,7 +89,7 @@ protected:
 class HoldMachine {
 public:
     static const int kMaxHoldTries = 8;      // events 52 until the blank state shows again
-    static const int kMenuRouteTries = 3;    // events 51 to reach it through our menu
+    static const int kMenuRouteTries = 3;    // events 51 to reach it through our menu (our popup after the first)
     static const int kDriveModeQuietS = 15;  // after a driving mode change, its display's focus loss is not fought
     static const int kAppKeyS = 2;           // an app key file this recent means NAV / MEDIA / COM was just pressed
     static const int kCallEndS = 10;         // a call that ended this recently takes iDrive back to the blank state
@@ -119,6 +135,10 @@ private:
     bool keepForAppKey(const char* why, long now);
     void backToBlank();
     void updatePopupPeek(bool covered, long now);
+    void closeOwnPopup();
+    void beginWait(long now);
+    void bringIdrive(const ServiceState& service, long now);
+    void askWithoutHold(long now);
     void say(const char* fmt, ...) __attribute__((format(printf, 2, 3)));
 
     HoldIo& io_;
@@ -140,10 +160,20 @@ private:
     long holdShownAt_;     // when showAndHold asked for the blank state before Android Auto confirmed
     int holdTries_;        // events 52 since the blank state last showed
     int menuRouteTries_;   // events 51 since the blank state last showed
+    bool popupTried_;      // our own popup was opened for it since the blank state last showed
     int unfocusedPolls_;   // polls with the blank state shown but unfocused
     long leftSeen_;        // first poll that saw iDrive away from the blank state (hard key), 0: none
     long menuHoldMs_;      // last event 52 fired by our menu's focus
     long screenChangeAt_;  // when the app last made iDrive change screen (expectScreenChange), 0: none
+
+    // Android Auto aside until iDrive opens our menu
+    bool waiting_;
+    bool unheld_;      // Android Auto is shown although iDrive refused our pages: they are still asked for
+    bool popupOpen_;   // our own popup is open, for the blank state to be asked for under it
+    bool underPopup_;  // the blank state was asked for under it: no popup peek until it gets the focus
+    long waitSince_;   // when the wait began
+    long askedAt_;     // last request fired for it, 0: none yet
+    int asks_;         // requests fired for it
 
     // The car
     bool inCall_;

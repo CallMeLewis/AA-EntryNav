@@ -13,6 +13,7 @@ const unsigned kHelpState = 12;       // "Help", child of the menu
 const unsigned kAaState = 13;         // inert blank state held while Android Auto is on screen (exclusivity)
 const unsigned kFlarePinState = 14;   // the speller asking the Flare Drive PIN (inputHmiState, masked PIN mode)
 const unsigned kFlarePageState = 15;  // the Flare Drive page: a text and the QR code
+const unsigned kOwnPopupState = 17;   // an empty popup of the app (popupHmiState), opened by kEvOwnPopup
 // State handler kinds, as bmw::PluginApp::addHandler(state, kind, ...) takes them.
 const unsigned kHandlerFocus = 1;
 const unsigned kHandlerVisible = 11;
@@ -23,6 +24,10 @@ const unsigned kEvOpenMenu = 51;       // -> state 10 (the app's menu)
 const unsigned kEvHoldAa = 52;         // -> state 13 (the blank state)
 const unsigned kEvOpenPin = 53;        // -> state 14
 const unsigned kEvOpenFlarePage = 54;  // -> state 15
+// popupEvent -> state 17, opened (true) or closed (false). iDrive performs an app's focus event when the topmost popup
+// is an app's (CFocusEvent::isCurrentlyAllowed), and a popup event is not subject to that test (CPopupEvent::perform):
+// 3 popups at a time for a local app, given back when they close.
+const unsigned kEvOwnPopup = 55;
 
 // ---- raActions -----------------------------------------------------------------------------------------------------
 const unsigned kActEntry = 2;  // entry button "Android Auto" (iDrive Media menu)

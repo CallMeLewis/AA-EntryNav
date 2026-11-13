@@ -131,6 +131,31 @@ int main() {
         app.pendingFocus = 0;
         onScreen(app, false);
     }
+    {  // "await": the next session starts aside, until "show"; "hide" and the phone's own focus request end the wait
+        evo::ControlCommand await, show, hide;
+        await.verb = "await";
+        show.verb = "show";
+        hide.verb = "hide";
+        await.hasArg = show.hasArg = hide.hasArg = false;
+        await.arg = show.arg = hide.arg = 0;
+        assert(!app.awaitShow && !app.asking);
+        evo::ServiceApp::command(await, &app);
+        assert(app.awaitShow && !app.asking && app.focus);  // nothing changes for a session already there
+        app.focus = false;                                  // as startSession leaves it for a phone that connects now
+        app.asking = true;
+        evo::ServiceApp::command(show, &app);
+        assert(app.focus && !app.asking && app.pendingFocus == 1 && app.awaitShow);
+        app.focus = false;
+        app.asking = true;
+        evo::ServiceApp::command(hide, &app);
+        assert(!app.focus && !app.asking && app.pendingFocus == 2);
+        app.asking = true;
+        evo::ServiceApp::videoFocus(false, 0, &app);  // the phone's exit icon: the session no longer waits
+        assert(!app.focus && !app.asking);
+        app.focus = true;
+        app.pendingFocus = 0;
+        app.awaitShow = false;  // the rest of this test: a service that shows by itself
+    }
     {  // quit from the iDrive app reaches the main loop's flag
         evo::ControlCommand quit;
         quit.verb = "quit";
@@ -172,6 +197,6 @@ int main() {
     pthread_mutex_unlock(&app.mu);
     puts(
         "PASS actual wireless loop: no handshake during TCP preparation, an active session or the cable's turn, "
-        "rearmed after each; app commands and volume through the peeks; a key leaving Android Auto removes the app "
-        "key file; PC socketpair only");
+        "rearmed after each; app commands, waiting aside for \"show\", and volume through the peeks; a key leaving "
+        "Android Auto removes the app key file; PC socketpair only");
 }
