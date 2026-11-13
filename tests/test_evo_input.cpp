@@ -569,6 +569,70 @@ int main() {
         assert(d.feed(0xE5, 0x01, 0xC20, 0xC, menu, 7, ev, 8) == 1 && ev[0].keycode == aa::AAK_HOME && ev[0].down);
         assert(d.feed(0xE5, 0x03, 0xC10, 0xC, detent, 7, ev, 8) == 0);  // not on the CCS35up instance
     }
+    {  // One controller protocol per car, the first one heard. When the older one is read: test_knob_fallback.cpp.
+        using aa::CcsProtocol;
+        CcsProtocol g20;  // answers on CCS35up: the older protocol's status is dropped from then on
+        CHECK(g20.accept(0x03, 0xC46) && g20.kind() == CcsProtocol::kCcs35up);
+        CHECK(!g20.accept(0x01, 0xC10) && !g20.accept(0x01, 0xC20) && g20.accept(0x03, 0xC4F));
+        CHECK(g20.accept(0x01, 0xC30));  // a function of neither protocol is not judged
+        CcsProtocol i3;                  // the older protocol first: CCS35up is dropped
+        CHECK(i3.accept(0x01, 0xC30) && i3.kind() == CcsProtocol::kUnknown);
+        CHECK(i3.accept(0x01, 0xC10) && i3.kind() == CcsProtocol::kOlder && !i3.accept(0x03, 0xC46));
+        CHECK(CcsProtocol::of(0x03, 0xC10) == CcsProtocol::kUnknown &&
+              CcsProtocol::of(0x01, 0xC46) == CcsProtocol::kUnknown);
+
+        // Through EvoKnob: the older controller's knob and BACK reach Android Auto, a later CCS35up message does not.
+        struct Got {
+            static void ev(const aa::CcsEvent& e, void* u) {
+                Got* g = static_cast<Got*>(u);
+                if (g->n < 8) {
+                    g->e[g->n++] = e;
+                }
+            }
+            aa::CcsEvent e[8];
+            int n;
+        } got;
+        memset(&got, 0, sizeof(got));
+        evo::EvoKnob old;
+        old.attachForTest(evo::INPUT_FORWARD, &Got::ev, &got);
+        old.setOwned(true);
+        evo::VmostMsgView ov;
+        memset(&ov, 0, sizeof(ov));
+        ov.addr = 0x0100;
+        ov.fblock = 0xE5;
+        ov.inst = 0x01;
+        ov.op = 0xC;
+        const uint8_t other[4] = {0x01, 0x1D, 0x06, 0x00};  // the i3's only E5 message before its older reads
+        ov.fkt = 0xC30;
+        ov.len = 4;
+        ov.data = other;
+        old.onMessage(ov);
+        CHECK(got.n == 0 && old.protocol() == CcsProtocol::kUnknown);
+        const uint8_t base[7] = {0x01, 0x1D, 0x21, 0x00, 0x10, 0x1E, 0x00};
+        const uint8_t detent[7] = {0x01, 0x1D, 0x22, 0x00, 0x11, 0x1E, 0x00};
+        ov.fkt = 0xC10;
+        ov.len = 7;
+        ov.data = base;
+        old.onMessage(ov);
+        ov.data = detent;
+        old.onMessage(ov);
+        CHECK(old.protocol() == CcsProtocol::kOlder && got.n == 1 && got.e[0].kind == 2 && got.e[0].delta == 1);
+        const uint8_t back[7] = {0x01, 0x1D, 0x23, 0x01, 0x00, 0x00, 0x02};
+        ov.fkt = 0xC20;
+        ov.data = back;
+        old.onMessage(ov);
+        CHECK(got.n == 2 && got.e[1].keycode == aa::AAK_BACK && got.e[1].down == 1);
+        const uint8_t turned[8] = {0x0C, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF};
+        const uint8_t turnedOn[8] = {0x0D, 0x80, 0x01, 0x00, 0x00, 0x00, 0x00, 0xFF};
+        ov.inst = 0x03;
+        ov.fkt = 0xC46;
+        ov.len = 8;
+        ov.data = turned;
+        old.onMessage(ov);
+        ov.data = turnedOn;
+        old.onMessage(ov);
+        CHECK(got.n == 2);  // the other protocol is dropped: one action, one event
+    }
     {  // Panel pixels on the phone's canvas: as they are at 720p, times 1.5 at 1080p, corners included.
         aa::TouchEventOut panel;
         memset(&panel, 0, sizeof(panel));
@@ -586,10 +650,10 @@ int main() {
         CHECK(hd.action == 5 && hd.index == 1 && hd.p[1].id == panel.p[1].id);
     }
     puts(
-        "PASS older BMW controller (C10/C20); input: IPv4/UDP of the copy, touch machine (press, drag, release, "
-        "duplicate, fragmented frame, forced release, nothing before the picture), vMOST message -> controller "
-        "decoder; keys as CarPlay has them (tap ignored, NAV/MEDIA/COM and steering wheel phone button -> AA apps, COM "
-        "to iDrive during a call, BACK and a left tilt keep Android Auto up); console and steering wheel volume "
-        "buttons decoded; volume level (20.00.C08); touches on the 720p and 1080p canvases");
+        "PASS older BMW controller (C10/C20), one controller protocol per car; input: IPv4/UDP of the copy, touch "
+        "machine (press, drag, release, duplicate, fragmented frame, forced release, nothing before the picture), "
+        "vMOST message -> controller decoder; keys as CarPlay has them (tap ignored, NAV/MEDIA/COM and steering wheel "
+        "phone button -> AA apps, COM to iDrive during a call, BACK and a left tilt keep Android Auto up); console and "
+        "steering wheel volume buttons decoded; volume level (20.00.C08); touches on the 720p and 1080p canvases");
     return 0;
 }

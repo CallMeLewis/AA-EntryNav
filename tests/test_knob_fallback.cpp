@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The iDrive controller on a car that speaks the older CCS protocol: the reads that open vmostd's filter for it go out
-// only when the CCS35up reads brought no controller message, and once. Also the picture path's statistics.
+// only when the CCS35up reads brought no CCS35up status, and once. Also the picture path's statistics.
 
 // Uses tests/fake_vmostclient.c in place of the HU's libvmostclient.so.1 (no car).
 #include <stdio.h>
@@ -79,11 +79,32 @@ int main(int argc, char** argv) {
         return 2;
     }
     // When the older protocol's reads are due.
-    CHECK(!evo::ccsFallbackDue(false, 0, 1000, 1000 + evo::kCcsFallbackMs - 1));  // still waiting for an answer
-    CHECK(evo::ccsFallbackDue(false, 0, 1000, 1000 + evo::kCcsFallbackMs));
-    CHECK(!evo::ccsFallbackDue(false, 1, 1000, 60000));                      // the controller answered: never
-    CHECK(!evo::ccsFallbackDue(true, 0, 1000, 60000));                       // sent once only
-    CHECK(evo::ccsFallbackDue(false, 0, 0xFFFFFF00u, evo::kCcsFallbackMs));  // the clock wrapped in between
+    using aa::CcsProtocol;
+    const uint32_t silence = CcsProtocol::kSilenceMs;
+    {
+        CcsProtocol p;
+        CHECK(!p.olderDue(60000));  // the CCS35up reads have not gone out
+        p.ccs35upAsked(1000);
+        CHECK(!p.olderDue(1000 + silence - 1));  // still waiting for an answer
+        CHECK(p.olderDue(1000 + silence));
+        CHECK(!p.olderDue(60000));  // once only
+    }
+    {
+        CcsProtocol p;  // the controller answered on CCS35up: never
+        p.ccs35upAsked(1000);
+        CHECK(p.accept(0x03, 0xC47) && !p.olderDue(60000));
+    }
+    {
+        CcsProtocol p;  // any other E5 message is no answer: the i3 sent E5.01 C30 all along
+        p.ccs35upAsked(1000);
+        CHECK(p.accept(0x01, 0xC30) && p.accept(0x05, 0xC47) && p.kind() == CcsProtocol::kUnknown);
+        CHECK(p.olderDue(1000 + silence));
+    }
+    {
+        CcsProtocol p;  // the clock wrapped in between
+        p.ccs35upAsked(0xFFFFFF00u);
+        CHECK(!p.olderDue(0xFFFFFF00u + silence - 1) && p.olderDue(silence));
+    }
 
     char dir[] = "/tmp/entry-knob-test-XXXXXX";
     CHECK(mkdtemp(dir));
@@ -101,7 +122,7 @@ int main(int argc, char** argv) {
     const char* const kNew[] = {"send addr=ffff e5.03.c46 op=1 len=0", "send addr=ffff e5.03.c47 op=1 len=0",
                                 "send addr=ffff e5.03.c4f op=1 len=0"};
     const char* const kOld[] = {"send addr=ffff e5.01.c10 op=1 len=0", "send addr=ffff e5.01.c20 op=1 len=0"};
-    const unsigned wait = evo::kCcsFallbackMs + 700;
+    const unsigned wait = silence + 700;
 
     // A CCS35up controller answers: nothing more than before is sent, however long the service runs.
     std::string sent = run("35up", log.c_str(), wait);
@@ -114,7 +135,7 @@ int main(int argc, char** argv) {
     CHECK(count(sent, "\nregister e5.") == 3);  // instances 01, 03 and 05, as before
 
     // No answer and it has not been long enough: nothing yet.
-    sent = run(nullptr, log.c_str(), evo::kCcsFallbackMs / 3);
+    sent = run(nullptr, log.c_str(), silence / 3);
     CHECK(count(sent, "e5.03.") == 3 && count(sent, "e5.01.") == 0);
 
     // No answer at all: the older protocol's two reads, once each, and only reads.
@@ -138,6 +159,11 @@ int main(int argc, char** argv) {
     // Everything registered was deregistered.
     CHECK(count(sent, "\nregister ") == count(sent, "\nderegister "));
 
+    // The i3: its controller speaks the older protocol, and E5.01 C30 comes as soon as the steering wheel phone button
+    // is read. That message is no CCS35up answer: the older reads still go out, and its detent reaches Android Auto.
+    sent = run("i3", log.c_str(), wait);
+    CHECK(count(sent, kOld[0]) == 1 && count(sent, kOld[1]) == 1 && g_turns == 1);
+
     // The picture path's statistics: counts, the longest gap (also across two stretches), and when a line is due.
     evo::VideoStats v;
     CHECK(!v.due(60000));  // no frame: no line
@@ -157,7 +183,8 @@ int main(int argc, char** argv) {
     unlink(sock.c_str());
     rmdir(dir);
     puts(
-        "PASS controller: older CCS reads (E5.01 C10/C20) only without any answer to the CCS35up reads, once, reads "
-        "only; older controller's detent reaches Android Auto; picture statistics");
+        "PASS controller: older CCS reads (E5.01 C10/C20) only without any CCS35up status after its reads, other E5 "
+        "messages (the i3's C30) left aside, once, reads only; older controller's detent reaches Android Auto; "
+        "picture statistics");
     return 0;
 }

@@ -124,12 +124,12 @@ EvoKnob::EvoKnob()
       voiceSent_(false),
       voiceSinceMs_(0),
       volumeSteps_(0),
+      otherProtocolLogged_(false),
       messages_(0),
       e5_(0),
       events_(0),
       sent_(0),
-      rawLogged_(0),
-      ccsFallbackSent_(false) {
+      rawLogged_(0) {
     nHeld_ = 0;
     memset(held_, 0, sizeof(held_));
     memset(pushPrev_, 0, sizeof(pushPrev_));
@@ -358,6 +358,20 @@ void EvoKnob::onMessage(const VmostMsgView& m) {
         ELOG("Knob", "raw addr=0x%04x E5.%02x fkt=0x%03x op=0x%x len=%u: %s", m.addr, m.inst, m.fkt, (unsigned)m.op,
              m.len, hex);
     }
+    if (m.op == 0xC) {  // one controller protocol per car: the first one heard (aa::CcsProtocol)
+        const bool chosen = protocol_.kind() != aa::CcsProtocol::kUnknown;
+        if (!protocol_.accept(m.inst, m.fkt)) {
+            if (!otherProtocolLogged_) {
+                otherProtocolLogged_ = true;
+                ELOG("Knob", "E5.%02x function 0x%03x dropped: this car's controller protocol is %s", m.inst, m.fkt,
+                     aa::CcsProtocol::name(protocol_.kind()));
+            }
+            return;
+        }
+        if (!chosen && protocol_.kind() != aa::CcsProtocol::kUnknown) {
+            ELOG("Knob", "controller protocol: %s", aa::CcsProtocol::name(protocol_.kind()));
+        }
+    }
     const uint8_t* data = m.data;
     uint8_t keys[8];
     if (m.inst == 0x03 && (m.fkt == 0xC47 || m.fkt == 0xC4F) && m.op == 0xC && m.data && m.len <= sizeof(keys)) {
@@ -442,7 +456,9 @@ void EvoKnob::run() {
         ELOG("Knob", "read (Get) E5.03 function 0x%03x: %s (%d); it opens vmostd's filter for that function",
              kCcs35upFunctions[i], rc == 0 ? "sent" : "refused", rc);
     }
-    const uint32_t readsSentMs = monoMs();
+    if (nRegistered_) {
+        protocol_.ccs35upAsked(monoMs());
+    }
     int fd = -1;
     if (!nRegistered_ || vmost_.fileDescriptorGet(&fd) != 0 || fd < 0) {
         ELOG("Knob", "no usable registration: controller not read");
@@ -514,10 +530,9 @@ void EvoKnob::run() {
                 releaseHeldKeys("picture gone");  // within 100 ms of the picture leaving
             }
             onTick(monoMs());
-            if (ccsFallbackDue(ccsFallbackSent_, e5_, readsSentMs, monoMs())) {
-                ccsFallbackSent_ = true;
-                ELOG("Knob", "no controller message %u ms after the CCS35up reads: trying the older CCS protocol",
-                     kCcsFallbackMs);
+            if (protocol_.olderDue(monoMs())) {
+                ELOG("Knob", "no CCS35up status %d ms after its reads: trying the older CCS protocol",
+                     static_cast<int>(aa::CcsProtocol::kSilenceMs));
                 for (size_t i = 0; i < sizeof(kCcsFallbackFunctions) / sizeof(kCcsFallbackFunctions[0]); ++i) {
                     VmostMsgOut m;
                     buildVmostGet(m, kControllerFblock, kCcsFallbackInstance, kCcsFallbackFunctions[i], dummy);

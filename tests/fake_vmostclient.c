@@ -103,15 +103,25 @@ int vmostMostMsgSend(void* msg) {
         uint8_t one = 1;
         enqueue(0xA0, 1, 0xC11, 0xD, m->data, 2);
         enqueue(0xA0, 1, 0xC10, 0xC, &one, 1);
+    } else if (m->fblock == 0x15 && m->inst == 2 && m->fkt == 0x400 && m->op == 1) {
+        /* The steering wheel phone button's read. On an i3 it also let E5.01 C30 through: vmostd's filter bit for
+         * 15.xx.400 and E5.xx.C30 is the same, 0x15. $FAKE_CCS=i3 sends that message. */
+        const char* kind = getenv("FAKE_CCS");
+        if (kind && !strcmp(kind, "i3")) {
+            static const uint8_t other[4] = {0x01, 0x1D, 0x06, 0x00};
+            enqueue(0xE5, 1, 0xC30, 0xC, other, 4);
+        }
     } else if (m->fblock == 0xE5 && m->op == 1) {
         /* The iDrive controller (tests/test_knob_fallback.cpp). $FAKE_CCS=35up: a CCS35up controller, which answers
          * the read of its rotary state. $FAKE_CCS=old: the older protocol, which only answers on E5.01: its position,
-         * then one detent clockwise. Unset: no controller answers. */
+         * then one detent clockwise. $FAKE_CCS=i3: the same older controller, plus the E5.01 C30 message above.
+         * Unset: no controller answers. */
         const char* kind = getenv("FAKE_CCS");
+        const int old = kind && (!strcmp(kind, "old") || !strcmp(kind, "i3"));
         if (kind && !strcmp(kind, "35up") && m->inst == 3 && m->fkt == 0xC46) {
             static const uint8_t state[8] = {0};
             enqueue(0xE5, 3, 0xC46, 0xC, state, 8);
-        } else if (kind && !strcmp(kind, "old") && m->inst == 1 && m->fkt == 0xC10) {
+        } else if (old && m->inst == 1 && m->fkt == 0xC10) {
             static const uint8_t base[7] = {0x01, 0x1D, 0x21, 0x00, 0x10, 0x1E, 0x00};
             static const uint8_t detent[7] = {0x01, 0x1D, 0x22, 0x00, 0x11, 0x1E, 0x00};
             enqueue(0xE5, 1, 0xC10, 0xC, base, 7);

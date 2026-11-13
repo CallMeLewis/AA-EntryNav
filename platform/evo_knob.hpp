@@ -15,11 +15,16 @@
 //
 // A controller that speaks the older CCS protocol (instance 01, functions C10/C20: platform/evo_ccs.hpp) never answers
 // those reads, and its messages stay behind the filter: on a car with iDrive software 202306092158 the volume knob
-// came through and the controller not at all. So when no E5 message at all has arrived kCcsFallbackMs after the reads,
-// the same plain read is sent once for C10 and C20 on E5.01. A car whose controller answered gets nothing more.
+// came through and the controller not at all. So when no CCS35up status message (C46, C47, C4F) has arrived
+// aa::CcsProtocol::kSilenceMs after the reads, the same plain read is sent once for C10 and C20 on E5.01. A car whose
+// controller answered on CCS35up gets nothing more. Other E5 messages do not count: an i3 sent E5.01 C30 all along,
+// let through by our E5.01 copy and by the filter bit the steering wheel phone button's read sets (0x15 + 0x00 and
+// 0xE5 + 0x30 both give bit 0x15), and that once kept the older reads from ever going out.
 // At the same moment a copy of the other controller instances known on BMW head units (kCcsFallbackShadows, the
 // instances NBT-AAD listens to: https://github.com/Sq00ky/Supra-iDrive6-Android-Auto) is asked for: only instances 03
 // and 01 are decoded, but a message from another one is logged raw, which tells where that car's controller is.
+// The first protocol heard is kept and the other one's status messages are dropped (aa::CcsProtocol), so a car that
+// answers both never counts one turn or key twice.
 #ifndef AA_ENTRYNAV_PLATFORM_EVO_KNOB_HPP
 #define AA_ENTRYNAV_PLATFORM_EVO_KNOB_HPP
 
@@ -50,17 +55,11 @@ bool isBackKey(uint32_t keycode);
 void normalizePushButtons(const uint8_t* in, size_t n, uint8_t* prev, uint8_t* out);
 
 // The older CCS protocol's front controller: the reads that open vmostd's filter for it, sent only when the CCS35up
-// reads brought no E5 message within kCcsFallbackMs (a CCS35up controller answers a read at once).
-const uint8_t kCcsFallbackInstance = 0x01;
+// reads brought no CCS35up status within aa::CcsProtocol::kSilenceMs (aa::CcsProtocol::olderDue).
+const uint8_t kCcsFallbackInstance = aa::CcsDecoder::kCcsInstance;
 const uint16_t kCcsFallbackFunctions[] = {0xC10, 0xC20};  // RotaryEncoder, PushButton
-const uint32_t kCcsFallbackMs = 1500;
 // Further controller instances copied (never written to) from then on, for the log.
 const uint8_t kCcsFallbackShadows[] = {0x02, 0x10, 0x12, 0x14};
-// True when the older protocol's reads are due: none sent yet, no E5 message so far, and the wait is over.
-// Times are monotonic milliseconds (evo::monoMs), compared with wrap-around.
-inline bool ccsFallbackDue(bool alreadySent, unsigned e5Messages, uint32_t readsSentMs, uint32_t nowMs) {
-    return !alreadySent && e5Messages == 0 && nowMs - readsSentMs >= kCcsFallbackMs;
-}
 
 // Steering wheel telephone button, ControlElementsMFL 0x15.02 (libhmil6services CPxyControlElementsMFL::init:
 // 0x400 TelephoneButton, 0x401 AudioVolumeButton, 0x511 SearchSwitch1, 0x512 PTTButton1, 0x513 SpecialFunction).
@@ -146,6 +145,8 @@ public:
             releaseHeldKeys("picture gone");
         }
     }
+    // The controller protocol kept so far (knob thread; PC tests read it once the messages are in).
+    aa::CcsProtocol::Kind protocol() const { return protocol_.kind(); }
 
 private:
     static void* threadMain(void* self);
@@ -182,6 +183,8 @@ private:
     uint8_t pushPrev_[8];
     unsigned volumeSteps_;
     aa::CcsDecoder decoder_;
+    aa::CcsProtocol protocol_;  // which controller protocol this car speaks, and when to read the older one
+    bool otherProtocolLogged_;  // the other protocol's first dropped message was logged
     void forwardKey(uint32_t keycode, const char* what);
     // Keys whose press reached Android Auto: their release always follows, even once the picture is gone (camera,
     // popup, driving mode, menu), or the phone would keep them down. Knob thread only.
@@ -190,7 +193,6 @@ private:
     uint32_t held_[8];
     int nHeld_;
     unsigned messages_, e5_, events_, sent_, rawLogged_;
-    bool ccsFallbackSent_;  // the older protocol's reads went out (ccsFallbackDue)
 };
 
 }  // namespace evo
