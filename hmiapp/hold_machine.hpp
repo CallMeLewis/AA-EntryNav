@@ -58,7 +58,8 @@ public:
     virtual void send(const char* message) = 0;     // a control message to the service ("show", "hide", ...)
     virtual void log(const char* line) = 0;         // one line of the app's log
     // Read only when a decision needs them, at that moment: the service's state (reading it may ask its control port),
-    // and the app key file the service writes when NAV / MEDIA / COM opened an Android Auto app.
+    // and the app key file the service writes when NAV / MEDIA / COM opened an Android Auto app, or BACK / a left tilt
+    // went to it, and removes when a key leaves Android Auto.
     virtual ServiceState readService() = 0;
     virtual bool appKeyAge(long* ageS) = 0;  // false: no app key file; else its age in seconds
     virtual void removeAppKey() = 0;

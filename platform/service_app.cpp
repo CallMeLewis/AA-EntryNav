@@ -238,6 +238,9 @@ void ServiceApp::hardKey(const char* name, void* user) {
     if (was) {
         a->focus = false;
         a->pendingFocus = 2;
+        // A BACK or left tilt just before wrote the app key file. Left in place, the iDrive app would take iDrive
+        // leaving its blank state for this key as that BACK, and bring it back under Android Auto.
+        unlink(contract::kAppKeyFile);
     }
     pthread_mutex_unlock(&a->mu);
     if (was) {

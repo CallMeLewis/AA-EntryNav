@@ -112,7 +112,9 @@ void HoldMachine::requestShow() {
 // NAV / MEDIA / COM / steering wheel phone opened an Android Auto app, or BACK / a left tilt went to Android Auto
 // (service file, written within the last 2 s): iDrive switched to its own navigation / media / phone screen, or went
 // BACK to the screen it showed before the blank state, underneath Android Auto. Put it back on our blank state at once,
-// so the knob does not act on that hidden screen and the change is not taken for a hard key.
+// so the knob does not act on that hidden screen and the change is not taken for a hard key. A key that leaves Android
+// Auto (MENU, MAP, OPTION, COM during a call) has the service remove the file first, so a BACK just before it does not
+// keep Android Auto up.
 bool HoldMachine::appKeyRecent() {
     long age = 0;
     // The file's age comes from its date, which the car's clock sets: a negative age is a clock set back since, not a

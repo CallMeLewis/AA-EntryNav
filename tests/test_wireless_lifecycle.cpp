@@ -13,6 +13,7 @@
 #include "alps_spp.hpp"
 #include "evo_log.hpp"
 #include "service_app.hpp"
+#include "service_contract.hpp"
 #include "wireless_setup.hpp"
 
 static std::atomic<int> starts(0), waits(0);
@@ -119,10 +120,13 @@ int main() {
     }
     {  // Hard keys iDrive acts on: the picture steps aside, the phone is told NATIVE
         onScreen(app, true);
+        evo::ServiceApp::appKey("BACK", &app);  // BACK just before: the iDrive app would keep Android Auto up
+        assert(access(evo::contract::kAppKeyFile, F_OK) == 0);
         evo::ServiceApp::hardKey("NAV", &app);  // an Android Auto app: not this callback's business
-        assert(app.focus && !app.pendingFocus);
+        assert(app.focus && !app.pendingFocus && access(evo::contract::kAppKeyFile, F_OK) == 0);
         evo::ServiceApp::hardKey("MENU", &app);
         assert(!app.focus && app.pendingFocus == 2);
+        assert(access(evo::contract::kAppKeyFile, F_OK) != 0);  // MENU leaves: the file BACK wrote is gone
         app.focus = true;
         app.pendingFocus = 0;
         onScreen(app, false);
@@ -168,5 +172,6 @@ int main() {
     pthread_mutex_unlock(&app.mu);
     puts(
         "PASS actual wireless loop: no handshake during TCP preparation, an active session or the cable's turn, "
-        "rearmed after each; app commands and volume through the peeks; PC socketpair only");
+        "rearmed after each; app commands and volume through the peeks; a key leaving Android Auto removes the app "
+        "key file; PC socketpair only");
 }
