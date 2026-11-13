@@ -251,8 +251,9 @@ void ServiceApp::knobEvent(const aa::CcsEvent& ev, void* user) {
     }
 }
 
-// NAV / MEDIA / COM / steering wheel phone opened an Android Auto app (evo_knob.cpp): Android Auto stays on screen.
-// iDrive also switched screens underneath; the iDrive app sees this file and puts iDrive back on its blank state.
+// NAV / MEDIA / COM / steering wheel phone opened an Android Auto app, or BACK / a left tilt went to Android Auto
+// (evo_knob.cpp): Android Auto stays on screen. iDrive may also have switched screens underneath; the iDrive app sees
+// this file and puts iDrive back on its blank state.
 void ServiceApp::appKey(const char* name, void* user) {
     (void)user;
     const std::string tmp = std::string(contract::kAppKeyFile) + ".tmp";
@@ -266,8 +267,7 @@ void ServiceApp::appKey(const char* name, void* user) {
             rename(tmp.c_str(), contract::kAppKeyFile);
         }
     }
-    ELOG("ServiceApp", "key %s: opened in Android Auto (as with CarPlay), iDrive brought back under Android Auto",
-         name);
+    ELOG("ServiceApp", "key %s: sent to Android Auto, which stays on screen; iDrive brought back under it", name);
 }
 
 // Commands from the iDrive app (service mode): show, hide, drivemode, popup, gear, call, daynight, quit.

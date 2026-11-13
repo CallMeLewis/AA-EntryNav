@@ -583,7 +583,7 @@ void appKeys() {
         c.now += 1;
         c.blankLeft();
         CHECK_OUT(c, "app key removed, event 52");
-        CHECK(c.logged("key opened an Android Auto app, try 1"));
+        CHECK(c.logged("key went to Android Auto, try 1"));
         c.blankShown();
         c.polls(3);
         CHECK_OUT(c, "");
@@ -597,7 +597,7 @@ void appKeys() {
         c.io.appKeyAt = c.now + 1;
         c.poll();
         CHECK_OUT(c, "app key removed, event 52");
-        CHECK(c.logged("key opened an Android Auto app (poll)"));
+        CHECK(c.logged("key went to Android Auto (poll)"));
     }
     {  // a key file older than 2 s is a hard key
         Car c;

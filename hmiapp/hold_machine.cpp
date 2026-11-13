@@ -108,10 +108,11 @@ void HoldMachine::requestShow() {
     prevOverlay_ = false;  // the coming overlay is new: hold iDrive on the blank state
 }
 
-// ---- NAV / MEDIA / COM keys -----------------------------------------------------------------------------------------
-// NAV / MEDIA / COM / steering wheel phone opened an Android Auto app (service file, written within the last 2 s):
-// iDrive switched to its own navigation / media / phone screen underneath Android Auto; put it back on our blank
-// state at once, so the knob does not act on that hidden screen.
+// ---- Keys that went to Android Auto ---------------------------------------------------------------------------------
+// NAV / MEDIA / COM / steering wheel phone opened an Android Auto app, or BACK / a left tilt went to Android Auto
+// (service file, written within the last 2 s): iDrive switched to its own navigation / media / phone screen, or went
+// BACK to the screen it showed before the blank state, underneath Android Auto. Put it back on our blank state at once,
+// so the knob does not act on that hidden screen and the change is not taken for a hard key.
 bool HoldMachine::appKeyRecent() {
     long age = 0;
     // The file's age comes from its date, which the car's clock sets: a negative age is a clock set back since, not a
@@ -197,7 +198,7 @@ void HoldMachine::aaVisible(bool visible, long now) {
         backAsked_ = false;
     }
     say("hold: state %u visible -> %d", kAaState, static_cast<int>(visible));
-    if (!visible && keepForAppKey("key opened an Android Auto app", now)) {
+    if (!visible && keepForAppKey("key went to Android Auto", now)) {
         return;
     }
     if (visible) {
@@ -386,7 +387,7 @@ void HoldMachine::poll(const ServiceState& service, long now) {
     }
     // A hard key (MENU / MEDIA / NAV / COM / MAP / OPTION) took iDrive elsewhere, the way MENU leaves native CarPlay:
     // Android Auto steps aside; the Android Auto entry brings it back. Confirmed on a second poll.
-    if (keepForAppKey("key opened an Android Auto app (poll)", now)) {
+    if (keepForAppKey("key went to Android Auto (poll)", now)) {
         return;
     }
     if (!leftSeen_ || now - leftSeen_ > 3) {

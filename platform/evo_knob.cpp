@@ -86,6 +86,10 @@ bool isAppKey(uint32_t k) {
     return k == aa::AAK_TEL || k == aa::AAK_NAVIGATION || k == aa::AAK_MEDIA;
 }
 
+bool isBackKey(uint32_t k) {
+    return k == aa::AAK_BACK || k == aa::AAK_DPAD_LEFT;
+}
+
 static void vmostCallback(void* msg, void* user) {
     VmostMsgView v;
     if (user && parseVmostMsg(msg, v)) {
@@ -139,7 +143,9 @@ EvoKnob::EvoKnob()
 //                      too (it gets every key): the service keeps Android Auto up and the iDrive app brings iDrive
 //                      back at once.
 //   MENU / MAP         iDrive (Android Auto steps aside). OPTION: the Android Auto menu of the iDrive app.
-//   BACK               Android Auto's back.
+//   BACK               Android Auto's back. iDrive takes it, and a left tilt, as its own BACK too: when it reached
+//                      the blank state straight from one of its own screens, it goes back to that screen. Both are
+//                      handled like NAV / MEDIA / COM, so Android Auto stays up and the iDrive app brings iDrive back.
 void configureHardKeys(aa::CcsDecoder& d) {
     static const char* const local[] = {"MENU", "OPTIONS", "MAP"};
     for (size_t i = 0; i < sizeof(local) / sizeof(local[0]); ++i) {
@@ -382,7 +388,8 @@ void EvoKnob::onMessage(const VmostMsgView& m) {
             }
             continue;
         }
-        if (ev[i].kind == 1 && isAppKey(ev[i].keycode) && ev[i].down && send && appKeyCb_) {
+        if (ev[i].kind == 1 && (isAppKey(ev[i].keycode) || isBackKey(ev[i].keycode)) && ev[i].down && send &&
+            appKeyCb_) {
             appKeyCb_(what, appKeyUser_);
         }
         // A press goes to Android Auto only while it owns the screen; a release goes wherever its press went.

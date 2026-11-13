@@ -39,6 +39,8 @@ namespace evo {
 void configureHardKeys(aa::CcsDecoder& d);
 // Android Auto keys that open one of its apps (AAK_TEL / AAK_NAVIGATION / AAK_MEDIA).
 bool isAppKey(uint32_t keycode);
+// Android Auto keys that iDrive also takes as its BACK (AAK_BACK, and AAK_DPAD_LEFT from a left tilt).
+bool isBackKey(uint32_t keycode);
 
 // CCS35up PushButtonsState (C47/C4F), one byte per key, as HmiMain3D reads it (CDevCCS35up::pushbuttonsToKeycodeAction
 // and getButtonActivity): 0 released, 1 pressed, 2/3 long press, 4 finger resting on the touch-sensitive key (iDrive:
@@ -112,8 +114,9 @@ public:
         keyCb_ = cb;
         keyUser_ = user;
     }
-    // A key sent to Android Auto to open one of its apps (NAV, MEDIA, COM, steering wheel phone), on key-down: iDrive
-    // switches screens too (it gets every key), so the caller keeps Android Auto up and brings iDrive back.
+    // A key sent to Android Auto that also makes iDrive change screen (it gets every key), on key-down: NAV, MEDIA,
+    // COM and the steering wheel phone open one of Android Auto's apps; BACK and a left tilt are iDrive's BACK too.
+    // The caller keeps Android Auto up and brings iDrive back.
     void setAppKeyCallback(HardKeyCallback cb, void* user) {
         appKeyCb_ = cb;
         appKeyUser_ = user;

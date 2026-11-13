@@ -21,8 +21,9 @@
 //   event 52 every two polls without focus.
 // - Hard key (MENU, MEDIA, NAV, COM, MAP, OPTION): iDrive left the blank state. Confirmed on a second poll within 3 s,
 //   Android Auto steps aside ("hide"), the way MENU leaves native CarPlay; the Android Auto entry brings it back.
-// - NAV, MEDIA or COM opened an Android Auto app (the service wrote its app key file within the last 2 s): iDrive
-//   switched to its own screen underneath, event 52 at once so the knob does not act on that hidden screen. The same
+// - NAV, MEDIA or COM opened an Android Auto app, or BACK or a left tilt went to Android Auto (the service wrote its
+//   app key file within the last 2 s): iDrive switched to its own screen underneath, or went back to the screen it
+//   showed before the blank state, event 52 at once so the knob does not act on that hidden screen. The same
 //   for 2 s after the app itself makes iDrive change screen (expectScreenChange: the Bluetooth audio switch).
 // - Android Auto steps aside by itself (exit icon, signal lost) over the blank state: event 50 (iDrive main menu), or
 //   event 51 when OPTION opened iDrive's option panel over it. Nothing in reverse or after a hard key.

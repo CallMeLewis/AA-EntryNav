@@ -192,6 +192,8 @@ int main() {
         CHECK(hk.slotKey(aa::CcsDecoder::slotByName("BACK")) == aa::AAK_BACK);
         CHECK(evo::isAppKey(aa::AAK_TEL) && evo::isAppKey(aa::AAK_NAVIGATION) && evo::isAppKey(aa::AAK_MEDIA) &&
               !evo::isAppKey(aa::AAK_BACK) && !evo::isAppKey(0) && !evo::isAppKey(aa::AAK_CALL));
+        CHECK(evo::isBackKey(aa::AAK_BACK) && evo::isBackKey(aa::AAK_DPAD_LEFT) && !evo::isBackKey(aa::AAK_DPAD_UP) &&
+              !evo::isBackKey(aa::AAK_DPAD_RIGHT) && !evo::isBackKey(aa::AAK_MEDIA) && !evo::isBackKey(0));
         setenv("EVO_KEY_COM", "0", 1);  // the environment is never read
         aa::CcsDecoder ov;
         evo::configureHardKeys(ov);
@@ -288,6 +290,41 @@ int main() {
         CHECK(rec.n == 4 && rec.e[3].keycode == aa::AAK_TEL && rec.e[3].down == 0);
         kk.setPhoneToIdrive(false);
         rec.n = 3;  // the recorder keeps 16 events
+        {  // BACK and a left tilt are iDrive's BACK too: they go to Android Auto, and the app key callback runs
+            Rec rb;
+            memset(&rb, 0, sizeof(rb));
+            evo::EvoKnob kb;
+            kb.attachForTest(evo::INPUT_FORWARD, &Rec::ev, &rb);
+            kb.setOwned(true);
+            kb.setAppKeyCallback(&Rec::app, &rb);
+            evo::VmostMsgView m = pv;  // PushButtonsState, instance 3
+            uint8_t none[7] = {0}, kBack[7] = {0, 1, 0, 0, 0, 0, 0};
+            m.data = none;
+            kb.onMessage(m);
+            m.data = kBack;
+            kb.onMessage(m);
+            CHECK(rb.n == 1 && rb.e[0].keycode == aa::AAK_BACK && rb.e[0].down == 1 && rb.apps == 1 &&
+                  !strcmp(rb.appKey, "BACK"));
+            m.data = none;
+            kb.onMessage(m);
+            CHECK(rb.n == 2 && rb.apps == 1);  // its release: no callback
+            m.fkt = 0xC46;                     // RotaryEncoderState: [4] the tilt on a 12-step clock
+            m.len = 8;
+            uint8_t centred[8] = {1, 0, 0, 0, 0, 0, 0, 0xff}, left[8] = {2, 0, 0, 0, 10, 0, 0, 0xff},
+                    up[8] = {3, 0, 0, 0, 1, 0, 0, 0xff}, right[8] = {4, 0, 0, 0, 4, 0, 0, 0xff};
+            m.data = centred;
+            kb.onMessage(m);
+            m.data = left;
+            kb.onMessage(m);
+            CHECK(rb.n == 3 && rb.e[2].keycode == aa::AAK_DPAD_LEFT && rb.apps == 2 && !strcmp(rb.appKey, "TILT_LEFT"));
+            m.data = centred;
+            kb.onMessage(m);
+            m.data = up;
+            kb.onMessage(m);
+            m.data = right;
+            kb.onMessage(m);
+            CHECK(rb.n == 7 && rb.apps == 2);  // up and right go to Android Auto alone
+        }
         // A press that reached Android Auto gets its release, once, even if the picture left meanwhile.
         {
             const int beforeHold = rec.n, appsBefore = rec.apps;
@@ -536,6 +573,7 @@ int main() {
         "PASS older BMW controller (C10/C20); input: IPv4/UDP of the copy, touch machine (press, drag, release, "
         "duplicate, fragmented frame, forced release, nothing before the picture), vMOST message -> controller "
         "decoder; keys as CarPlay has them (tap ignored, NAV/MEDIA/COM and steering wheel phone button -> AA apps, COM "
-        "to iDrive during a call); console and steering wheel volume buttons decoded; volume level (20.00.C08)");
+        "to iDrive during a call, BACK and a left tilt keep Android Auto up); console and steering wheel volume "
+        "buttons decoded; volume level (20.00.C08)");
     return 0;
 }
