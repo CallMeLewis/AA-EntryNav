@@ -24,6 +24,12 @@ namespace {
 // has the screen. Measured on the clock (tests/test_session_silence): car input wakes the thread about 10 times a
 // second. 5 s, so that a short Wi-Fi gap does not end the session.
 const uint64_t kSilenceMs = 5000;
+// From the version request to the end of the TLS handshake. Over a cable or Wi-Fi it takes well under a second, and
+// the phone asks the driver nothing before it. Seen on the car on 13 November 2026: a phone answered the version
+// request with a frame header that announced 5001 bytes, then sent only a few dozen bytes in 14 s. The silence limit
+// did not fire, and the session sat on a black screen until the cable was pulled. Ended at this limit, a session on
+// the cable is started again: the phone is reset and asked again.
+const uint64_t kSetupMs = 10000;
 const unsigned kFramesLoggedFirst = 40;  // per channel, then one frame in kFramesLoggedEvery
 const unsigned kFramesLoggedEvery = 3000;
 const unsigned kKeysLogged = 200;  // evo_knob logs every key anyway
@@ -52,6 +58,7 @@ AASession::AASession()
       running_(false),
       thread_(0),
       vehicleFile_(nullptr),
+      setupUntilMs_(0),
       videoReady_(false),
       mediaMessages_(0),
       microphoneChunks_(0) {
@@ -249,6 +256,7 @@ void* AASession::threadMain(void* self) {
 void AASession::run() {
     printf("[AASession] Protocol thread active on fd %d.\n", socket_);
     printf("[AASession] Sending VersionRequest (v%u.%u)...\n", kVersionMajor, kVersionMinor);
+    setupUntilMs_ = locationClockMs() + kSetupMs;
     if (!sendPlain(channel::kControl, message::versionRequest())) {
         printf("[AASession] Error: Failed to send VersionRequest.\n");
         finish();
@@ -283,11 +291,19 @@ void AASession::finish() {
 
 // ---- the wire -----------------------------------------------------------------------------------------------------
 
-bool AASession::receiveExactly(uint8_t* to, size_t size) {
+bool AASession::receiveExactly(uint8_t* to, size_t size, size_t* received) {
     size_t got = 0;
     uint64_t lastDataMs = locationClockMs();
     const int wakeFd = inbox_.wakeFd();
+    if (received) {
+        *received = 0;
+    }
     while (got < size && running()) {
+        if (setupUntilMs_ != 0 && locationClockMs() >= setupUntilMs_) {
+            printf("[AASession] The phone did not finish the handshake within %u s: ending the session.\n",
+                   static_cast<unsigned>(kSetupMs / 1000));
+            return false;
+        }
         const int fd = socket_;
         if (fd < 0) {
             return false;
@@ -333,6 +349,9 @@ bool AASession::receiveExactly(uint8_t* to, size_t size) {
             return false;
         }
         got += static_cast<size_t>(n);
+        if (received) {
+            *received = got;
+        }
     }
     return got == size;
 }
@@ -408,8 +427,14 @@ AASession::Received AASession::receive(uint8_t& channel, Message& message) {
         return kNothing;
     }
     std::vector<uint8_t> payload(header.length);
-    if (!receiveExactly(&payload[0], payload.size())) {
-        printf("[AASession] Failed to read payload bytes (%u bytes).\n", header.length);
+    size_t got = 0;
+    if (!receiveExactly(&payload[0], payload.size(), &got)) {
+        // What did come shows whether it was a real frame cut short or a stream read from the wrong place.
+        printf("[AASession] Failed to read payload bytes (%u of %u bytes):", static_cast<unsigned>(got), header.length);
+        for (size_t i = 0; i < got && i < 48; ++i) {
+            printf(" %02X", payload[i]);
+        }
+        printf(got > 48 ? " ...\n" : "\n");
         return kLost;
     }
     g_trail.stage = kTrailDecrypt;
