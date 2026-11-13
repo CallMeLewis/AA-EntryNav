@@ -17,6 +17,7 @@
 
 #include "aa_session.hpp"
 #include "alps_spp.hpp"
+#include "aside_wait.hpp"
 #include "evo_audio.hpp"
 #include "evo_control.hpp"
 #include "evo_knob.hpp"
@@ -124,6 +125,8 @@ public:
     bool reverse;      // service: reverse gear from the iDrive app hides the picture (camera)
     bool awaitShow;    // service: the iDrive app asked ("await") that a phone that connects waits aside for its "show"
     bool asking;       // service: such a session, not shown yet
+    bool inCall;       // service: a call, from the iDrive app (the app keeps a phone aside through it)
+    AsideWait aside;   // service: how long such a session has waited, under mu
     int pendingFocus;  // service: 1 tell the phone FOCUSED, 2 NATIVE (sent from the main loop)
     PeekTiming peek;   // under mu
     EvoPill pill;

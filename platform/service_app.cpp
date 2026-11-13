@@ -34,6 +34,7 @@ ServiceApp::ServiceApp(uint16_t p, bool v, volatile sig_atomic_t* quit)
       reverse(false),
       awaitShow(false),
       asking(false),
+      inCall(false),
       pendingFocus(0),
       sppLinks(0),
       tcpLinks(0),
@@ -108,9 +109,18 @@ ServiceApp::Turn ServiceApp::turn(bool service) {
     pthread_mutex_lock(&mu);
     t.failed = wirelessDone;
     t.active = session.isActive();
+    const uint32_t nowMs = monoMs();
+    // A phone aside that the iDrive app never shows (app gone, its "show" lost): shown without it, and later phones no
+    // longer wait for an app that may not be there. The app says "await" again when it starts.
+    const bool gaveUp = t.active && asking && !focus && aside.expired(nowMs, reverse || inCall);
+    if (gaveUp) {
+        focus = true;
+        asking = false;
+        awaitShow = false;
+        pendingFocus = 1;
+    }
     t.onScreen = videoEnabled && t.active && focus && !reverse;  // what the iDrive app is told
     t.asks = t.active && asking && !focus;
-    const uint32_t nowMs = monoMs();
     const PeekTiming::Picture picture = peek.turn(nowMs, t.onScreen);
     t.shown = picture.shown;
     if (!t.shown) {
@@ -120,6 +130,12 @@ ServiceApp::Turn ServiceApp::turn(bool service) {
     pendingFocus = 0;
     t.idleForAdvert = !tcpPreparing && !t.active && (service || (!sppLinks && !tcpLinks));
     pthread_mutex_unlock(&mu);
+    if (gaveUp) {
+        ELOG("ServiceApp",
+             "no \"show\" from the iDrive app after %u s aside: Android Auto comes up by itself, and "
+             "phones no longer wait aside until the app says \"await\" again",
+             kAsideWaitMs / 1000);
+    }
     t.pictureUp = false;
     t.pictureStarted = false;
     if (videoEnabled) {
@@ -320,6 +336,7 @@ void ServiceApp::command(const ControlCommand& c, void* user) {
         }
         a->reverse = r;
     } else if (c.verb == "call") {  // iDrive app (CDS communication.callStatus): phone keys go to iDrive's call screen
+        a->inCall = c.arg != 0;
         if (a->knob) {
             a->knob->setPhoneToIdrive(c.arg != 0);
         }
@@ -547,6 +564,7 @@ bool ServiceApp::startSession(int fd, void* user, const std::string& carBluetoot
     }
     a->focus = !a->awaitShow;
     a->asking = a->awaitShow;
+    a->aside.begin(monoMs());
     const bool aside = a->asking;
     pthread_mutex_unlock(&a->mu);
     if (aside) {
