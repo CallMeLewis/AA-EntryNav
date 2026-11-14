@@ -5,9 +5,11 @@
 #include <errno.h>
 #include <time.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <vector>
 
 #include "aa_protocol.hpp"
@@ -23,6 +25,10 @@ const unsigned kLatencyUs = 100000;       // libasound's buffer
 const uint32_t kDrainAfterMs = 60;        // nothing to play this long: what was written plays to its end
 const uint32_t kCloseAfterMs = 5000;      // then the PCM is given back
 const uint32_t kRetryOpenAfterMs = 2000;  // a PCM that did not open is not tried again before this
+const uint32_t kMusicRecentMs = 3000;     // the phone's music counts as playing this long after its last sound
+const uint32_t kPromptMaxMs = 15000;      // a prompt waiting for its route keeps this much, the oldest goes
+const uint32_t kPromptPrebufferMs = 60;   // as the mix does for speech
+const uint32_t kPromptFlushMs = 80;
 
 // The formats of the description sent to the phone (core/include/dhu_sdp.h, as core/sdr_builder.cpp leaves it):
 // channel 9 has one configuration, channel 8 two.
@@ -64,6 +70,17 @@ int percentOr(const std::string& text, int keep) {
     }
     return value <= 100 ? value : keep;
 }
+
+// A route number in hex, 0 to ffff. False, and `route` untouched, otherwise.
+bool hexRoute(const std::string& text, uint16_t& route) {
+    char* end = nullptr;
+    const unsigned long value = strtoul(text.c_str(), &end, 16);
+    if (text.empty() || !end || *end || value > 0xffff) {
+        return false;
+    }
+    route = static_cast<uint16_t>(value);
+    return true;
+}
 }  // namespace
 
 bool validPcmName(const std::string& name) {
@@ -87,7 +104,7 @@ bool loadAudioSettings(const char* path, AudioSettings& settings) {
         return false;
     }
     char text[96];
-    bool routeSet = false;
+    bool routeSet = false, promptRouteSet = false;
     while (fgets(text, sizeof(text), file)) {
         std::string line(text);
         while (!line.empty() && (line[line.size() - 1] == '\n' || line[line.size() - 1] == '\r')) {
@@ -100,12 +117,11 @@ bool loadAudioSettings(const char* path, AudioSettings& settings) {
         } else if (line.compare(0, 5, "duck=") == 0) {
             settings.duckPercent = percentOr(line.substr(5), settings.duckPercent);
         } else if (line.compare(0, 6, "route=") == 0) {
-            char* end = nullptr;
-            const unsigned long route = strtoul(line.c_str() + 6, &end, 16);
-            if (end && end != line.c_str() + 6 && !*end && route <= 0xffff) {
-                settings.route = static_cast<uint16_t>(route);
-                routeSet = true;
-            }
+            routeSet = hexRoute(line.substr(6), settings.route) || routeSet;
+        } else if (line.compare(0, 11, "prompt-pcm=") == 0 && validPcmName(line.substr(11))) {
+            settings.promptPcm = line.substr(11);
+        } else if (line.compare(0, 13, "prompt-route=") == 0) {
+            promptRouteSet = hexRoute(line.substr(13), settings.promptRoute) || promptRouteSet;
         }
     }
     fclose(file);
@@ -113,23 +129,108 @@ bool loadAudioSettings(const char* path, AudioSettings& settings) {
     if (!routeSet && settings.pcm != "entertainment") {
         settings.route = 0;
     }
+    // CarPlay's prompt route goes with its media route: a sound set up another way keeps its prompts in the mix.
+    if (!promptRouteSet && (settings.pcm != "entertainment" || settings.route != 0x315)) {
+        settings.promptRoute = 0;
+    }
     return true;
 }
 
-EvoAudio::EvoAudio() : thread_(0), started_(false), quit_(false), routeAsked_(false) {
+// The prompt route's answers come on the request's own thread, which can outlive the EvoAudio: they go through this,
+// which stop() empties.
+struct EvoAudio::RouteAnswers {
+    pthread_mutex_t mu;
+    EvoAudio* owner;
+    explicit RouteAnswers(EvoAudio* o) : owner(o) { pthread_mutex_init(&mu, nullptr); }
+    ~RouteAnswers() { pthread_mutex_destroy(&mu); }
+};
+
+namespace {
+struct RouteTicket {
+    std::shared_ptr<void> keep;  // the RouteAnswers, alive until the answer is handled
+    void* answers;
+    uint32_t ask;
+};
+}  // namespace
+
+EvoAudio::EvoAudio()
+    : thread_(0),
+      started_(false),
+      quit_(false),
+      routeAsked_(false),
+      promptThread_(0),
+      promptThreadRunning_(false),
+      promptHead_(0),
+      promptRate_(0),
+      promptAlt_(false),
+      promptEnded_(false),
+      promptPlaying_(false),
+      promptPushMs_(0),
+      musicOpen_(false),
+      musicSoundMs_(0),
+      answers_(std::make_shared<RouteAnswers>(this)) {
     pthread_mutex_init(&mu_, nullptr);
     // Timed waits on the monotonic clock: the car's wall clock jumps when its GPS sets it.
     pthread_condattr_t attr;
     pthread_condattr_init(&attr);
     pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
     pthread_cond_init(&cv_, &attr);
+    pthread_cond_init(&promptCv_, &attr);
     pthread_condattr_destroy(&attr);
 }
 
 EvoAudio::~EvoAudio() {
     stop();
+    pthread_mutex_lock(&answers_->mu);
+    answers_->owner = nullptr;
+    pthread_mutex_unlock(&answers_->mu);
+    pthread_cond_destroy(&promptCv_);
     pthread_cond_destroy(&cv_);
     pthread_mutex_destroy(&mu_);
+}
+
+namespace {
+void onPromptRoute(bool granted, void* user) {
+    RouteTicket* t = static_cast<RouteTicket*>(user);
+    EvoAudio::forwardRouteAnswer(t->answers, t->ask, granted);
+    delete t;
+}
+}  // namespace
+
+void EvoAudio::forwardRouteAnswer(void* answers, uint32_t ask, bool granted) {
+    RouteAnswers* a = static_cast<RouteAnswers*>(answers);
+    pthread_mutex_lock(&a->mu);
+    if (a->owner) {
+        a->owner->promptRouteAnswered(ask, granted);
+    }
+    pthread_mutex_unlock(&a->mu);
+}
+
+void EvoAudio::askPromptRoute(bool build, uint32_t ask, bool wait) {
+    if (!build) {
+        ELOG(kTag, "prompt route 0x%x given back", settings_.promptRoute);
+        requestAudioRoute(false, settings_.promptRoute, wait);
+        return;
+    }
+    ELOG(kTag, "prompt: asking the car's audio manager for route 0x%x", settings_.promptRoute);
+    RouteTicket* t = new RouteTicket;
+    t->keep = answers_;
+    t->answers = answers_.get();
+    t->ask = ask;
+    requestAudioRoute(true, settings_.promptRoute, wait, onPromptRoute, t);
+}
+
+void EvoAudio::promptRouteAnswered(uint32_t ask, bool granted) {
+    pthread_mutex_lock(&mu_);
+    const bool current = ask == path_.ask();
+    path_.answered(ask, granted, monoMs());
+    const bool backoff = path_.backingOff();
+    pthread_cond_signal(&promptCv_);
+    pthread_mutex_unlock(&mu_);
+    if (!granted && current && backoff) {
+        ELOG(kTag, "the car refused prompt route 0x%x: prompts go into the mix for %u s", settings_.promptRoute,
+             PromptPath::kBackoffMs / 1000);
+    }
 }
 
 bool EvoAudio::start(const AudioSettings& settings) {
@@ -148,8 +249,20 @@ bool EvoAudio::start(const AudioSettings& settings) {
         return false;
     }
     started_ = true;
+    // Prompts take their own path only with their PCM and their thread; else they stay in the mix, as before.
+    promptThreadRunning_ =
+        settings_.promptRoute && promptOut_.load() && pthread_create(&promptThread_, nullptr, promptStub, this) == 0;
+    pthread_mutex_lock(&mu_);
+    path_ = PromptPath(promptThreadRunning_);
+    pthread_mutex_unlock(&mu_);
     ELOG(kTag, "ready: PCM '%s', gain %d %%, media at %d %% under speech, route %s", settings_.pcm.c_str(),
          settings_.gainPercent, settings_.duckPercent, settings_.route ? "asked at the first sound" : "none");
+    if (promptThreadRunning_) {
+        ELOG(kTag, "prompts without the phone's music: PCM '%s' under route 0x%x, the car's sound lowered",
+             settings_.promptPcm.c_str(), settings_.promptRoute);
+    } else {
+        ELOG(kTag, "prompts: always in the mix%s", settings_.promptRoute ? " (their own path could not start)" : "");
+    }
     return true;
 }
 
@@ -160,9 +273,21 @@ void EvoAudio::stop() {
     pthread_mutex_lock(&mu_);
     quit_ = true;
     pthread_cond_signal(&cv_);
+    pthread_cond_signal(&promptCv_);
     pthread_mutex_unlock(&mu_);
     pthread_join(thread_, nullptr);
+    if (promptThreadRunning_) {
+        pthread_join(promptThread_, nullptr);
+        promptThreadRunning_ = false;
+    }
     started_ = false;
+    pthread_mutex_lock(&mu_);
+    const PromptPath::Action prompt = path_.stop();
+    promptAlt_ = false;
+    pthread_mutex_unlock(&mu_);
+    if (prompt == PromptPath::kRemove) {
+        askPromptRoute(false, 0, true);
+    }
     releaseRoute(true);
 }
 
@@ -174,6 +299,39 @@ void EvoAudio::releaseRoute(bool wait) {
     if (asked) {
         requestAudioRoute(false, settings_.route, wait);
     }
+}
+
+bool EvoAudio::musicPlaying(uint32_t nowMs) const {
+    return musicOpen_ || (musicSoundMs_ && nowMs - musicSoundMs_ < kMusicRecentMs);
+}
+
+// Under mu_. A prompt starts at `rate`, mono: its own path when the phone's music isn't playing on the car.
+void EvoAudio::startPrompt(unsigned rate, uint32_t nowMs) {
+    promptEnded_ = false;
+    if (promptAlt_ && path_.inPrompt()) {
+        return;  // the last one has not played out: this one follows it the same way
+    }
+    PromptPath::Action action = PromptPath::kNothing;
+    const bool music = musicPlaying(nowMs);
+    promptAlt_ = path_.start(music, nowMs, action);
+    prompt_.clear();
+    promptHead_ = 0;
+    promptRate_ = rate;
+    promptPlaying_ = false;
+    const uint32_t ask = path_.ask();
+    pthread_mutex_unlock(&mu_);
+    if (promptAlt_) {
+        ELOG(kTag, "prompt on PCM '%s'%s", settings_.promptPcm.c_str(),
+             action == PromptPath::kBuild ? ", its route asked for" : ", route kept from the last one");
+    } else if (path_.backingOff()) {
+        ELOG(kTag, "prompt in the mix: the car refused its own route");
+    } else if (music && promptThreadRunning_) {
+        ELOG(kTag, "prompt in the mix: the phone's music plays");
+    }
+    if (action == PromptPath::kBuild) {
+        askPromptRoute(true, ask);
+    }
+    pthread_mutex_lock(&mu_);
 }
 
 void EvoAudio::stream(uint8_t channel, bool started, uint32_t config) {
@@ -188,20 +346,35 @@ void EvoAudio::stream(uint8_t channel, bool started, uint32_t config) {
                 return;
             }
         }
-        pthread_mutex_lock(&mu_);
-        mixer_.configure(s, rate, channels);
-        pthread_mutex_unlock(&mu_);
         if (known) {
             ELOG(kTag, "%s starts: %u Hz, %u channel(s)", s == AudioMixer::kMedia ? "media" : "speech", rate, channels);
         }
+        pthread_mutex_lock(&mu_);
+        mixer_.configure(s, rate, channels);  // a prompt that goes its own way can still come back to the mix
+        if (s == AudioMixer::kMedia) {
+            musicOpen_ = known;
+        } else if (known && channels == 1) {
+            startPrompt(rate, monoMs());
+        } else {
+            promptAlt_ = false;
+        }
+        pthread_mutex_unlock(&mu_);
         return;
     }
     if (!streamOf(channel, s)) {
         return;
     }
     pthread_mutex_lock(&mu_);
-    mixer_.end(s);
-    pthread_cond_signal(&cv_);
+    if (s == AudioMixer::kMedia) {
+        musicOpen_ = false;
+    }
+    if (s == AudioMixer::kSpeech && promptAlt_) {
+        promptEnded_ = true;
+        pthread_cond_signal(&promptCv_);
+    } else {
+        mixer_.end(s);
+        pthread_cond_signal(&cv_);
+    }
     pthread_mutex_unlock(&mu_);
     ELOG(kTag, "%s stops", s == AudioMixer::kMedia ? "media" : "speech");
 }
@@ -214,10 +387,24 @@ void EvoAudio::data(uint8_t channel, const uint8_t* pcm, size_t len) {
     // The phone's bytes are little-endian samples at any address: copied into place first.
     std::vector<int16_t> samples(len / 2);
     memcpy(&samples[0], pcm, samples.size() * 2);
+    const uint32_t now = monoMs();
     pthread_mutex_lock(&mu_);
     if (started_ && !quit_) {
-        mixer_.push(s, &samples[0], samples.size(), monoMs());
-        pthread_cond_signal(&cv_);
+        if (s == AudioMixer::kSpeech && promptAlt_) {
+            prompt_.insert(prompt_.end(), samples.begin(), samples.end());
+            promptPushMs_ = now;
+            const size_t keep = static_cast<size_t>(promptRate_) * kPromptMaxMs / 1000;
+            if (prompt_.size() - promptHead_ > keep) {
+                promptHead_ = prompt_.size() - keep;  // waiting too long for its route: the oldest goes
+            }
+            pthread_cond_signal(&promptCv_);
+        } else {
+            if (s == AudioMixer::kMedia) {
+                musicSoundMs_ = now ? now : 1;
+            }
+            mixer_.push(s, &samples[0], samples.size(), now);
+            pthread_cond_signal(&cv_);
+        }
     }
     pthread_mutex_unlock(&mu_);
 }
@@ -225,8 +412,20 @@ void EvoAudio::data(uint8_t channel, const uint8_t* pcm, size_t len) {
 void EvoAudio::sessionEnded() {
     pthread_mutex_lock(&mu_);
     mixer_.clear();
+    prompt_.clear();
+    promptHead_ = 0;
+    promptAlt_ = false;
+    promptEnded_ = false;
+    promptPlaying_ = false;
+    musicOpen_ = false;
+    musicSoundMs_ = 0;
+    const PromptPath::Action prompt = path_.stop();
+    pthread_cond_signal(&promptCv_);
     pthread_mutex_unlock(&mu_);
     logStats("session ended");
+    if (prompt == PromptPath::kRemove) {
+        askPromptRoute(false, 0);
+    }
     releaseRoute(false);
 }
 
@@ -255,16 +454,147 @@ void* EvoAudio::threadStub(void* arg) {
 // The PCM's buffer filled with silence. An empty buffer takes the first sound all at once, without waiting: the queues
 // run dry at once and the stream stops and starts. Full, the PCM plays, and every write after it waits for the car's
 // own sound clock, which is what paces the mix.
-bool EvoAudio::prime() {
+bool EvoAudio::prime(AlsaOut& out, unsigned channels) {
     const int16_t silence[kPeriodFrames * kMixChannels] = {0};
-    for (size_t left = out_.bufferFrames(); left;) {
-        const size_t frames = left < kPeriodFrames ? left : kPeriodFrames;
-        if (!out_.write(silence, frames)) {
+    const size_t perWrite = kPeriodFrames * kMixChannels / channels;
+    for (size_t left = out.bufferFrames(); left;) {
+        const size_t frames = left < perWrite ? left : perWrite;
+        if (!out.write(silence, frames)) {
             return false;
         }
         left -= frames;
     }
     return true;
+}
+
+void* EvoAudio::promptStub(void* arg) {
+    static_cast<EvoAudio*>(arg)->promptLoop();
+    return nullptr;
+}
+
+// The prompts that go their own way: held until the car answers for their route, then written to their PCM, which
+// is opened at the prompt's own rate, mono. The route is given back kHoldMs after the last one.
+void EvoAudio::promptLoop() {
+    std::vector<int16_t> chunk;
+    bool toDrain = false, primed = false;
+    unsigned openRate = 0;
+    uint32_t refusedAt = 0;
+    bool refused = false;
+    for (;;) {
+        pthread_mutex_lock(&mu_);
+        if (quit_) {
+            pthread_mutex_unlock(&mu_);
+            break;
+        }
+        const uint32_t now = monoMs();
+        const PromptPath::Action action = path_.tick(now);
+        const PromptPath::Play play = promptAlt_ ? path_.play(now) : PromptPath::kWait;
+        bool fellBack = false, finished = false, waited = false;
+        const unsigned rate = promptRate_;
+        chunk.clear();
+        if (play == PromptPath::kFallBack) {
+            // The car refused the route: what came goes into the mix, and the rest of the prompt follows it there.
+            if (prompt_.size() > promptHead_) {
+                mixer_.push(AudioMixer::kSpeech, &prompt_[promptHead_], prompt_.size() - promptHead_, now);
+            }
+            if (promptEnded_) {
+                mixer_.end(AudioMixer::kSpeech);
+            }
+            prompt_.clear();
+            promptHead_ = 0;
+            promptAlt_ = false;
+            promptPlaying_ = false;
+            path_.done(now);
+            pthread_cond_signal(&cv_);
+            fellBack = true;
+        } else if (play == PromptPath::kPlay) {
+            const size_t have = prompt_.size() - promptHead_;
+            const size_t prebuffer = static_cast<size_t>(rate) * kPromptPrebufferMs / 1000;
+            promptPlaying_ = promptPlaying_ ||
+                             (have && (have >= prebuffer || promptEnded_ || now - promptPushMs_ >= kPromptFlushMs));
+            if (promptPlaying_ && have) {
+                const size_t take = std::min(have, static_cast<size_t>(rate) / 100);  // 10 ms
+                chunk.assign(prompt_.begin() + static_cast<std::ptrdiff_t>(promptHead_),
+                             prompt_.begin() + static_cast<std::ptrdiff_t>(promptHead_ + take));
+                for (size_t i = 0; i < chunk.size(); ++i) {  // the gain the mix applies (no sum here: no clipping)
+                    chunk[i] = static_cast<int16_t>(chunk[i] * settings_.gainPercent / 100);
+                }
+                promptHead_ += take;
+                if (promptHead_ * 2 >= prompt_.size()) {
+                    prompt_.erase(prompt_.begin(), prompt_.begin() + static_cast<std::ptrdiff_t>(promptHead_));
+                    promptHead_ = 0;
+                }
+            } else if (!have && promptEnded_) {
+                promptAlt_ = false;
+                promptPlaying_ = false;
+                path_.done(now);
+                finished = true;
+            }
+        }
+        const bool idle = !promptAlt_ && !path_.routeOn() && !path_.routeAsked();
+        if (chunk.empty() && !finished && !fellBack && action == PromptPath::kNothing) {
+            // Waiting for sound, for the route, or for the route's hold to end.
+            const long waitMs = promptAlt_ ? 10 : idle ? 1000 : 50;
+            struct timespec until;
+            clock_gettime(CLOCK_MONOTONIC, &until);
+            until.tv_nsec += (waitMs % 1000) * 1000000L;
+            until.tv_sec += waitMs / 1000 + until.tv_nsec / 1000000000L;
+            until.tv_nsec %= 1000000000L;
+            pthread_cond_timedwait(&promptCv_, &mu_, &until);
+            waited = true;
+        }
+        pthread_mutex_unlock(&mu_);
+        if (fellBack) {
+            ELOG(kTag, "prompt sent back to the mix");
+        }
+        if (action == PromptPath::kRemove) {
+            askPromptRoute(false, 0);
+        }
+        if (!chunk.empty()) {
+            if (promptOut_.isOpen() && openRate != rate) {
+                promptOut_.close();
+            }
+            if (!promptOut_.isOpen()) {
+                if (refused && now - refusedAt < kRetryOpenAfterMs) {
+                    continue;  // lost, as in the mix: the queue must not wait behind a PCM that does not open
+                }
+                if (!promptOut_.open(settings_.promptPcm.c_str(), rate, 1, kLatencyUs)) {
+                    if (!refused) {
+                        ELOG(kTag, "cannot open PCM '%s' (%s): prompts lost, tried again every %u ms",
+                             settings_.promptPcm.c_str(), promptOut_.lastError().c_str(), kRetryOpenAfterMs);
+                    }
+                    refused = true;
+                    refusedAt = now;
+                    continue;
+                }
+                refused = false;
+                primed = false;
+                openRate = rate;
+                ELOG(kTag, "PCM '%s' open: %u Hz mono", settings_.promptPcm.c_str(), rate);
+            }
+            const bool written = (primed || prime(promptOut_, 1)) && promptOut_.write(&chunk[0], chunk.size());
+            primed = true;
+            if (!written) {
+                ELOG(kTag, "PCM '%s' lost (%s): closed", settings_.promptPcm.c_str(), promptOut_.lastError().c_str());
+                promptOut_.close();
+                toDrain = false;
+                continue;
+            }
+            toDrain = true;
+        }
+        if (finished && toDrain) {
+            promptOut_.drain();  // plays to its end
+            toDrain = false;
+            primed = false;
+        }
+        if (waited && idle && promptOut_.isOpen() && !toDrain) {
+            promptOut_.close();  // the route is given back: the PCM too
+        }
+    }
+    if (toDrain) {
+        promptOut_.drain();
+    }
+    promptOut_.close();
 }
 
 AudioMixer::Stats EvoAudio::stats() {
@@ -348,7 +678,7 @@ void EvoAudio::loop() {
         bool written = true;
         if (!primed) {
             underruns = out_.underruns();
-            written = prime();
+            written = prime(out_, kMixChannels);
             primed = true;
         }
         if (!written || !out_.write(period, kPeriodFrames)) {

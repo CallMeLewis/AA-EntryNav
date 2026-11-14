@@ -1,6 +1,7 @@
 // Copyright (c) 2026 CallMeLewis
 // Sound over Wi-Fi (platform/evo_audio.cpp, platform/evo_alsa_out.cpp): the settings file, and the playback thread
 // against tests/fake_asound.c in place of the HU's libasound.so.2. No car, no sound card.
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -108,6 +109,25 @@ void settingsFile() {
     writeAll(pathOf("settings"), "");
     CHECK(evo::loadAudioSettings(pathOf("settings").c_str(), s) && s.pcm == "entertainment" && s.gainPercent == 100);
     CHECK(s.route == 0x315);  // an empty file (Flare Drive's switch): CarPlay's media route to "entertainment"
+    CHECK(s.promptPcm == "carplay_alt" && s.promptRoute == 0x31A);  // and its prompt route, to its own PCM
+    {
+        // The prompt route goes with CarPlay's media route; it can be set, or set to 0 (prompts in the mix).
+        evo::AudioSettings p;
+        writeAll(pathOf("settings"), "pcm=default\n");
+        CHECK(evo::loadAudioSettings(pathOf("settings").c_str(), p) && p.promptRoute == 0);
+        evo::AudioSettings q;
+        writeAll(pathOf("settings"), "route=0\n");
+        CHECK(evo::loadAudioSettings(pathOf("settings").c_str(), q) && q.promptRoute == 0);
+        evo::AudioSettings r;
+        writeAll(pathOf("settings"), "prompt-route=0\n");
+        CHECK(evo::loadAudioSettings(pathOf("settings").c_str(), r) && r.route == 0x315 && r.promptRoute == 0);
+        evo::AudioSettings t;
+        writeAll(pathOf("settings"), "pcm=default\nprompt-pcm=tts\nprompt-route=332\nprompt-pcm=bad name\n");
+        CHECK(evo::loadAudioSettings(pathOf("settings").c_str(), t) && t.promptPcm == "tts" && t.promptRoute == 0x332);
+        evo::AudioSettings u;
+        writeAll(pathOf("settings"), "prompt-route=x\nprompt-route=\n");
+        CHECK(evo::loadAudioSettings(pathOf("settings").c_str(), u) && u.promptRoute == 0x31A);
+    }
     {
         evo::AudioSettings other;
         writeAll(pathOf("settings"), "pcm=default\n");
@@ -290,6 +310,151 @@ void realTime() {
     unsetenv("FAKE_ASOUND_PACE");
 }
 
+// The prompt route's requests, as the helper would get them; a build's answer is given by the test.
+struct RouteCall {
+    bool build;
+    uint16_t route;
+    evo::RouteDone done;
+    void* user;
+};
+std::vector<RouteCall> g_routes;  // the prompt thread adds to it too: under g_routesMu
+pthread_mutex_t g_routesMu = PTHREAD_MUTEX_INITIALIZER;
+void recordRoute(bool build, uint16_t route, evo::RouteDone done, void* user) {
+    RouteCall c = {build, route, done, user};
+    pthread_mutex_lock(&g_routesMu);
+    g_routes.push_back(c);
+    pthread_mutex_unlock(&g_routesMu);
+}
+void clearRoutes() {
+    pthread_mutex_lock(&g_routesMu);
+    g_routes.clear();
+    pthread_mutex_unlock(&g_routesMu);
+}
+size_t routeCalls(bool build) {
+    size_t n = 0;
+    pthread_mutex_lock(&g_routesMu);
+    for (size_t i = 0; i < g_routes.size(); ++i) {
+        n += g_routes[i].build == build && g_routes[i].route == 0x31A;
+    }
+    pthread_mutex_unlock(&g_routesMu);
+    return n;
+}
+// Answers the last build of the prompt route.
+void answerBuild(bool granted) {
+    evo::RouteDone done = nullptr;
+    void* user = nullptr;
+    pthread_mutex_lock(&g_routesMu);
+    for (size_t i = g_routes.size(); i-- > 0;) {
+        if (g_routes[i].build && g_routes[i].done) {
+            done = g_routes[i].done;
+            user = g_routes[i].user;
+            g_routes[i].done = nullptr;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&g_routesMu);
+    if (done) {
+        done(granted, user);
+    }
+}
+bool waitForRoutes(bool build, size_t n) {
+    for (int i = 0; i < 400 && routeCalls(build) < n; ++i) {
+        usleep(5000);
+    }
+    return routeCalls(build) >= n;
+}
+
+// Without the phone's music, a prompt plays on its own PCM, mono at its own rate, once the car answers for its route;
+// the route is given back after the hold. With the music, it stays in the mix. Refused, it falls back to the mix.
+void prompts() {
+    evo::setAudioRouteRequesterForTest(recordRoute);
+    evo::AudioSettings s;
+    s.pcm = "entertainment";
+    s.route = 0;  // the music's route is not asked for here
+    s.promptPcm = "alt";
+    s.gainPercent = 50;
+    {
+        forget();
+        clearRoutes();
+        evo::EvoAudio audio;
+        CHECK(audio.start(s));
+        audio.stream(aa::channel::kGuidanceAudio, true, 0);  // 16 kHz mono
+        CHECK(routeCalls(true) == 1);
+        send(audio, aa::channel::kGuidanceAudio, std::vector<int16_t>(1600, 4000));  // 100 ms
+        audio.stream(aa::channel::kGuidanceAudio, false, 0);
+        usleep(150000);
+        CHECK(played().empty());  // waits for the car's answer
+        answerBuild(true);
+        CHECK(waitFor("drain"));
+        const std::string log = calls();
+        CHECK(log.find("open alt stream=0 mode=0\n"
+                       "params format=2 access=3 channels=1 rate=16000 resample=1 latency=100000\n") == 0);
+        CHECK(log.find("open entertainment") == std::string::npos);  // the music's PCM and route left alone
+        const std::vector<int16_t> out = played();
+        CHECK(out.size() == 1600 + 1600 && countOf(out, 0) == 1600 && countOf(out, 2000) == 1600);
+        CHECK(routeCalls(false) == 0);
+        CHECK(waitForRoutes(false, 1));  // given back after the hold
+        CHECK(waitFor("close"));
+        // A refusal: the prompt goes to the mix, and so does the next one, without asking again.
+        forget();
+        audio.stream(aa::channel::kGuidanceAudio, true, 0);
+        CHECK(routeCalls(true) == 2);
+        send(audio, aa::channel::kGuidanceAudio, std::vector<int16_t>(1600, 4000));
+        audio.stream(aa::channel::kGuidanceAudio, false, 0);
+        answerBuild(false);
+        CHECK(waitFor("open entertainment"));
+        CHECK(waitFor("drain"));
+        CHECK(countOf(played(), 2000) == 4800 * 2);  // in the mix: 48 kHz on both sides
+        audio.stream(aa::channel::kGuidanceAudio, true, 0);
+        CHECK(routeCalls(true) == 2);
+        audio.stream(aa::channel::kGuidanceAudio, false, 0);
+        audio.stop();
+    }
+    {
+        // The phone's music plays: the prompt stays in the mix, no route asked for.
+        forget();
+        clearRoutes();
+        evo::EvoAudio audio;
+        CHECK(audio.start(s));
+        audio.stream(aa::channel::kMediaAudio, true, 0);
+        send(audio, aa::channel::kMediaAudio, std::vector<int16_t>(9600, 1000));
+        audio.stream(aa::channel::kGuidanceAudio, true, 0);
+        send(audio, aa::channel::kGuidanceAudio, std::vector<int16_t>(1600, 4000));
+        audio.stream(aa::channel::kGuidanceAudio, false, 0);
+        CHECK(routeCalls(true) + routeCalls(false) == 0);
+        CHECK(waitFor("open entertainment"));
+        audio.stop();
+        CHECK(calls().find("open alt") == std::string::npos);
+    }
+    {
+        // The session ends while the route is asked for: it is given back.
+        clearRoutes();
+        evo::EvoAudio audio;
+        CHECK(audio.start(s));
+        audio.stream(aa::channel::kGuidanceAudio, true, 0);
+        audio.sessionEnded();
+        CHECK(routeCalls(true) == 1 && routeCalls(false) == 1);
+        answerBuild(true);  // late: changes nothing
+        audio.stop();
+        CHECK(routeCalls(false) == 1);
+    }
+    {
+        // Switched off in the settings: every prompt in the mix, as before.
+        forget();
+        clearRoutes();
+        evo::AudioSettings mixed = s;
+        mixed.promptRoute = 0;
+        evo::EvoAudio audio;
+        CHECK(audio.start(mixed));
+        audio.stream(aa::channel::kGuidanceAudio, true, 0);
+        send(audio, aa::channel::kGuidanceAudio, std::vector<int16_t>(1600, 4000));
+        audio.stream(aa::channel::kGuidanceAudio, false, 0);
+        CHECK(waitFor("open entertainment") && routeCalls(true) + routeCalls(false) == 0);
+        audio.stop();
+    }
+    evo::setAudioRouteRequesterForTest(nullptr);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -310,6 +475,7 @@ int main(int argc, char** argv) {
     listing();
     mediaAndSpeech();
     realTime();
+    prompts();
     troubles();
     forget();
     unlink(pathOf("settings").c_str());
@@ -321,6 +487,6 @@ int main(int argc, char** argv) {
     puts(
         "PASS sound over Wi-Fi: settings file, PCM list, media and speech played through a stand-in libasound, "
         "unknown format silent, session end, sound in real time without a gap, PCM that does not open, underrun, no "
-        "library");
+        "library, prompts on their own PCM and route (granted, refused, with the music, at the session's end)");
     return 0;
 }

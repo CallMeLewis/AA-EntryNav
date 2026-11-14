@@ -126,9 +126,18 @@ ours, iDrive shows no Bluetooth audio selected, and the volume knob sets the lev
 | `route=…` | The route asked of the car's audio manager, in hex, or `0` for none | `315` with `entertainment`, else none |
 | `gain=…` | Overall level, 0 to 100 % | 100 |
 | `duck=…` | How much music is left during an announcement, 0 to 100 % | 30 |
+| `prompt-pcm=…` | The output for announcements while Android Auto's music isn't playing | `carplay_alt` |
+| `prompt-route=…` | Their route, in hex, or `0` to keep every announcement in the music's mix | `31a` with the defaults above, else `0` |
 
 The service log shows the request: `asking the car's audio manager for route 0x315`, then `route 0x315 connected to the
 speakers by the car's audio manager`, or why not. The output may refuse to open until the car has switched the route.
+
+An announcement while Android Auto's music isn't playing, over the radio for example, doesn't take the music route,
+which would stop the radio. It plays on its own output under route `0x31a`, as CarPlay plays Maps over the radio, so
+the car lowers the radio for it instead. The route is asked for as the announcement starts, and the sound waits for the
+car's answer, 3 s at most. It's given back a second after the last announcement. If the car refuses the route, the
+announcements go into the music's mix for a minute. The log shows `prompt on PCM 'carplay_alt'`, the route's request
+and answer, and `prompt route 0x31a given back`. Tested on PC only.
 
 `evo-sound` lists the outputs and plays a test tone, without asking for a route. Build it with `make dev-tools` and copy
 it to `/tmp`. It isn't installed.

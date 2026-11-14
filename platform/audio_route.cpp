@@ -57,10 +57,28 @@ std::string selfPath() {
 struct Request {
     bool build;
     uint16_t route;
+    RouteDone done;
+    void* user;
+    bool queued;      // waits its turn; the service's last release, as it stops, does not
+    unsigned ticket;  // its place in line
 };
+
+RouteRequester g_requester = nullptr;
+
+// One request at a time, in the order made: a ticket each, served in turn.
+pthread_mutex_t g_lineMu = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t g_lineCv = PTHREAD_COND_INITIALIZER;
+unsigned g_nextTicket = 0, g_serving = 0;
 
 void* runRequest(void* arg) {
     Request* r = static_cast<Request*>(arg);
+    if (r->queued) {
+        pthread_mutex_lock(&g_lineMu);
+        while (g_serving != r->ticket) {
+            pthread_cond_wait(&g_lineCv, &g_lineMu);
+        }
+        pthread_mutex_unlock(&g_lineMu);
+    }
     char route[8];
     snprintf(route, sizeof(route), "%x", r->route);
     const std::string self = selfPath();
@@ -86,6 +104,15 @@ void* runRequest(void* arg) {
     if (!ok && (self.empty() || report.timedOut || report.spawnError || report.signal)) {
         ELOG(kTag, "route 0x%x %s: the helper did not finish (exit %d%s)", r->route, r->build ? "build" : "release",
              report.exitCode, report.timedOut ? ", timed out" : "");
+    }
+    if (r->queued) {
+        pthread_mutex_lock(&g_lineMu);
+        ++g_serving;
+        pthread_cond_broadcast(&g_lineCv);
+        pthread_mutex_unlock(&g_lineMu);
+    }
+    if (r->done) {
+        r->done(ok && report.exitCode == 0, r->user);
     }
     delete r;
     return nullptr;
@@ -166,20 +193,45 @@ int audioRouteMain(const char* verb, const char* routeText, unsigned waitMs) {
     return 1;
 }
 
-void requestAudioRoute(bool build, uint16_t route, bool wait) {
+void setAudioRouteRequesterForTest(RouteRequester requester) {
+    g_requester = requester;
+}
+
+void requestAudioRoute(bool build, uint16_t route, bool wait, RouteDone done, void* user) {
+    if (g_requester) {
+        g_requester(build, route, done, user);
+        return;
+    }
     Request* r = new Request;
     r->build = build;
     r->route = route;
+    r->done = done;
+    r->user = user;
+    r->queued = !wait;
+    r->ticket = 0;
     if (wait) {
         runRequest(r);
         return;
     }
+    pthread_mutex_lock(&g_lineMu);
+    r->ticket = g_nextTicket++;
+    pthread_mutex_unlock(&g_lineMu);
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
     pthread_t t;
     if (pthread_create(&t, &attr, runRequest, r) != 0) {
         ELOG(kTag, "route 0x%x: no thread to ask for it", route);
+        pthread_mutex_lock(&g_lineMu);  // its turn is given up, or the line would stop here
+        while (g_serving != r->ticket) {
+            pthread_cond_wait(&g_lineCv, &g_lineMu);
+        }
+        ++g_serving;
+        pthread_cond_broadcast(&g_lineCv);
+        pthread_mutex_unlock(&g_lineMu);
+        if (done) {
+            done(false, user);
+        }
         delete r;
     }
     pthread_attr_destroy(&attr);

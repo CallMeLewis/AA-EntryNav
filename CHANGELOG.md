@@ -14,6 +14,12 @@ Each version links to the commit its archive was built from.
 - **Right-hand drive and diesel cars can say so.** A `side=right` line in the `vehicle` file tells Android Auto the
   driver sits on the right, and `fuel=diesel` tells Maps the car takes diesel. Unverified.
 
+### Changed
+
+- **Navigation announcements over Wi-Fi lower the radio instead of stopping it.** With sound over Wi-Fi on and Android
+  Auto's music not playing, an announcement plays the way CarPlay's Maps does, on its own channel, so the car turns the
+  radio down for it and back up after. Before, the first announcement took the radio's place. Unverified.
+
 ### Fixed
 
 - **A frozen picture now ends the session.** When the encrypted stream from the phone broke, Android Auto froze on its
