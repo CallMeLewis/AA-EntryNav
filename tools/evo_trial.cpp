@@ -159,41 +159,58 @@ bool recover(const Baseline& b, evo::SppSnapshotReader& reader) {
         return false;
     }
     if (now.uuidPayload == aa || now.transportUuidPayload == aa) {
-        if (!now.idle()) {
-            // An unconfirmed partial registration does not establish ownership of a live connection.
-            if (now.uuidPayload != aa) {
-                ELOG("Supervisor",
-                     "restore: SPP busy without a confirmed Android Auto registration: nothing disconnected");
-                return false;
-            }
-            if (!bt.requestSppDisconnect()) {
-                ELOG("Supervisor", "restore: Android Auto SPP disconnect request refused");
-                return false;
-            }
-            uint32_t begin = evo::monoMs();
-            bool idle = false;
-            do {
-                usleep(100000);
-                if (reader.read(b.instance, now) && now.idle()) {
-                    idle = true;
-                    break;
+        // For as long as Android Auto is registered on the slot, a phone looking for it connects again within about
+        // 70 ms of a disconnection. On 14 November 2026 a phone did that each time: checked every 100 ms, the slot was
+        // never seen free, three restores in a row failed and each later start was refused. So the slot is checked
+        // every 10 ms, the original UUID goes back as soon as it is free, and the disconnection is tried again if the
+        // phone was quicker.
+        const unsigned kTries = 5;
+        int result = -1;
+        for (unsigned attempt = 1; attempt <= kTries && result != 0; ++attempt) {
+            if (!now.idle()) {
+                // An unconfirmed partial registration does not establish ownership of a live connection.
+                if (now.uuidPayload != aa) {
+                    ELOG("Supervisor",
+                         "restore: SPP busy without a confirmed Android Auto registration: nothing disconnected");
+                    return false;
                 }
-            } while (evo::monoMs() - begin < 5000);
-            if (!idle) {
-                ELOG("Supervisor", "restore: disconnection of our SPP not confirmed");
+                if (!bt.requestSppDisconnect()) {
+                    ELOG("Supervisor", "restore: Android Auto SPP disconnect request refused");
+                    return false;
+                }
+                const uint32_t begin = evo::monoMs();
+                bool idle = false;
+                do {
+                    usleep(10000);
+                    if (reader.read(b.instance, now) && now.idle()) {
+                        idle = true;
+                        break;
+                    }
+                } while (evo::monoMs() - begin < 2000);
+                if (!idle) {
+                    ELOG("Supervisor", "restore: SPP %u not seen free after disconnection %u of %u", b.instance,
+                         attempt, kTries);
+                    continue;
+                }
+            }
+            if ((now.uuidPayload != aa && now.uuidPayload != b.uuid) ||
+                (now.transportUuidPayload != aa && now.transportUuidPayload != b.uuid)) {
+                ELOG("Supervisor", "restore: UUID changed during the disconnection: journal kept");
                 return false;
             }
+            // Pump fd may have seen data before DisconnectInd; close only our local bridge.
+            bt.closeLink();
+            result = bt.registerUuidPayload(b.uuid, 3000);
+            if (result != 0) {
+                ELOG("Supervisor", "restore: UUID restore not confirmed (result=%d), try %u of %u", result, attempt,
+                     kTries);
+                if (!recoverySnapshot(reader, b.instance, now, true)) {
+                    return false;
+                }
+            }
         }
-        if ((now.uuidPayload != aa && now.uuidPayload != b.uuid) ||
-            (now.transportUuidPayload != aa && now.transportUuidPayload != b.uuid)) {
-            ELOG("Supervisor", "restore: UUID changed during the disconnection: journal kept");
-            return false;
-        }
-        // Pump fd may have seen data before DisconnectInd; close only our local bridge.
-        bt.closeLink();
-        int result = bt.registerUuidPayload(b.uuid, 3000);
         if (result != 0) {
-            ELOG("Supervisor", "restore: UUID restore not confirmed (result=%d)", result);
+            ELOG("Supervisor", "restore: disconnection of our SPP not confirmed");
             return false;
         }
     }

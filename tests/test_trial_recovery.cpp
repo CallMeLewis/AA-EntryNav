@@ -17,6 +17,7 @@ unsigned configuration = 0, uuidWrites = 0, configWrites = 0, disconnects = 0;
 unsigned transientReads = 0, readerOpens = 0, readerCloses = 0;
 bool failUuid = false, failConfig = false, videoGone = true, liveLink = false, failRead = false;
 bool flipKnown = true;
+unsigned reconnects = 0;  // the phone connects to the slot again this many times, before the slot is seen free
 }  // namespace
 namespace evo {
 unsigned hotspotRequests = 0;
@@ -38,6 +39,12 @@ bool SppSnapshotReader::read(unsigned instance, SppSlotSnapshot& out, bool allow
     if (instance != testSlot) {
         out = spare;
         return spareReadable;
+    }
+    if (reconnects && !simulated.connected && simulated.uuidPayload == aaPayload()) {
+        --reconnects;
+        simulated.connected = true;
+        simulated.state = 2;
+        simulated.transportState = 1;
     }
     out = simulated;
     if (transientReads) {
@@ -247,6 +254,18 @@ static void recoveryCases(const std::vector<uint8_t>& original) {
     simulated.connected = false;
     assert(recover(b, reader));
     assert(simulated.uuidPayload == original && simulated.transportUuidPayload == original);
+
+    // A phone that connects again right after each disconnection, while Android Auto is still registered: the slot is
+    // disconnected again until it is caught free, then the original UUID goes back.
+    assert(save(b));
+    simulated.uuidPayload = simulated.transportUuidPayload = aaPayload();
+    simulated.connected = true;
+    simulated.state = 2;
+    simulated.transportState = 1;
+    reconnects = 2;
+    const unsigned disconnectsBeforeRace = disconnects;
+    assert(recover(b, reader) && reconnects == 0 && disconnects == disconnectsBeforeRace + 3);
+    assert(simulated.uuidPayload == original && access(journal, F_OK) != 0);
     assert(chdir(cwd) == 0 && rmdir(dir) == 0);
 }
 // The whole cycle on slot 5, with slot 0 holding BMW Apps and My BMW connected to it. A read of slot 5's interface

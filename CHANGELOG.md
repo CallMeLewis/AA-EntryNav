@@ -9,6 +9,16 @@ Each version links to the commit its archive was built from.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Android Auto reconnects after a quick ignition cycle.** When your phone's Bluetooth came back during a session,
+  the car sent it the Wi-Fi details again. The phone then dropped its session to start a new one, and the car turned
+  the new one away, so iDrive stayed on Connecting. The car now ends the old session and takes the new one. Unverified.
+- **Android Auto starts again after it stops while your phone is reconnecting.** On stopping, Android Auto hands its
+  Bluetooth slot back to the car. A phone trying to reconnect got there first every time, so the handover never
+  finished and Android Auto refused to start until the head unit restarted. It now waits for the slot to come free and
+  tries again. Unverified.
+
 ## [0.1.5-test.5] - 2026-11-14 · Unverified
 
 <!-- Flare Drive:
