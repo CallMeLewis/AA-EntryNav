@@ -1,6 +1,7 @@
 # Notice
 
-AA-EntryNav holds code from earlier projects, and that code is under their licence.
+AA-EntryNav is under the PolyForm Noncommercial License 1.0.0 ([LICENSE.md](LICENSE.md)). It holds code from earlier
+projects under the same licence.
 
 ## Code from earlier projects
 
@@ -36,5 +37,5 @@ A few files hold data neither project wrote. They keep their own terms whatever 
 
 ## Release archives
 
-Flare Drive expects a `LICENSE.md` in each release archive. `tools/package_release.py` puts this notice there, so the
-licence's URL and the required notices go with every copy of a build.
+Flare Drive expects a `LICENSE.md` in each release archive. `tools/package_release.py` copies the repository's
+`LICENSE.md` there, so the licence and every required notice go with each copy of a build.

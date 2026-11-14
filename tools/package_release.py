@@ -20,20 +20,6 @@ from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = "opt/hmi/data/ro/Plugins/AAEntryNav"
-UPSTREAM_NOTICE = """\
-# Licence
-
-AA-EntryNav started from entry-aad (https://github.com/Jiraiya43/entry-aad) by Jiraiya43, a port of
-Supra-iDrive6-Android-Auto (https://github.com/Sq00ky/Supra-iDrive6-Android-Auto) by Sq00ky, which began as NBT-AAD
-by nanaisu. The code taken from them is under the PolyForm Noncommercial License 1.0.0:
-https://polyformproject.org/licenses/noncommercial/1.0.0
-
-> Required Notice: Copyright (c) 2026 nanaisu - NBT-AAD (https://github.com/Sq00ky/Supra-iDrive6-Android-Auto)
->
-> Required Notice: Copyright (c) 2026 Jiraiya43 - entry-aad
-
-No warranty: installing this modifies the head unit and may affect its warranty.
-"""
 PLUGIN_FILES = (
     "libAAEntryNav.so",
     "AAEntryNav.manifest",
@@ -103,9 +89,8 @@ def release_files(version: str) -> dict:
     files["opt/aa/VERSION"] = f"{version}\n".encode()
     files["setup.sh"] = files["opt/aa/setup.sh"]
     files["MD5SUMS"] = "".join(f"{md5(data).hexdigest()}  {name}\n" for name, data in sorted(files.items())).encode()
-    # Flare Drive's ReleasePackage expects LICENSE.md. It carries the licence and notices of the code taken from
-    # earlier projects, which go with every copy of a build while any of it is left.
-    files["LICENSE.md"] = UPSTREAM_NOTICE.encode()
+    # Flare Drive's ReleasePackage expects LICENSE.md: the licence and its required notices go with every copy.
+    files["LICENSE.md"] = (ROOT / "LICENSE.md").read_bytes()
     # Flare Drive expects INSTALLATION.md too: the installation guide.
     files["INSTALLATION.md"] = (ROOT / "docs/INSTALLATION.md").read_bytes()
     return files

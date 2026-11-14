@@ -89,10 +89,11 @@ says what a change needs.
 ## Credits and licence
 
 AA-EntryNav started from [entry-aad](https://github.com/Jiraiya43/entry-aad) by Jiraiya43, a port of
-[Supra-iDrive6-Android-Auto](https://github.com/Sq00ky/Supra-iDrive6-Android-Auto) by Sq00ky. Files marked
-`SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0` hold code from those projects and are under the
-[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0). Its required notices
-are in [NOTICE.md](NOTICE.md). AA-EntryNav comes with no warranty.
+[Supra-iDrive6-Android-Auto](https://github.com/Sq00ky/Supra-iDrive6-Android-Auto) by Sq00ky. [NOTICE.md](NOTICE.md)
+says which files hold their code.
+
+AA-EntryNav is under the [PolyForm Noncommercial License 1.0.0](LICENSE.md): you can use, change and share it for any
+noncommercial purpose, but not sell it. AA-EntryNav comes with no warranty.
 
 AA-EntryNav is an independent project. It is not made or endorsed by BMW or Google. BMW and iDrive are trademarks of
 BMW AG. Android and Android Auto are trademarks of Google LLC.
