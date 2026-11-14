@@ -9,6 +9,16 @@ Each version links to the commit its archive was built from.
 
 ## [Unreleased]
 
+## [0.1.5-test.5] - 2026-11-14 · Unverified
+
+<!-- Flare Drive:
+A smoother wireless picture, without a slower response to touch. Wireless Android Auto also no longer drops when the
+car connects to the My BMW app.
+-->
+
+Two fixes for wireless Android Auto, to try before 0.1.5: a smoother picture, and no more drops when the car connects
+to My BMW. Only the service changes. This version is unverified.
+
 ### Fixed
 
 - **A smoother wireless picture.** Over Wi-Fi the phone's frames often arrive in pairs, and the screen showed only the
@@ -250,7 +260,7 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 - **Changing the car's clock no longer upsets Android Auto's timing.** When GPS corrected the clock while driving, a
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
-[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.5-test.4...HEAD
+[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.5-test.5...HEAD
 [0.1.5-test.4]: https://github.com/CallMeLewis/AA-EntryNav/tree/9ffd01a68f190c4d024332e91474af6f195378dc
 [0.1.5-test.3]: https://github.com/CallMeLewis/AA-EntryNav/tree/1e5dd83343c90c716cc8d24d1b0396bac86ced87
 [0.1.5-test.2]: https://github.com/CallMeLewis/AA-EntryNav/tree/aea35095080027157d7f2f218fd21e341f48cf71
