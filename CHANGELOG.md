@@ -9,6 +9,18 @@ Each version links to the commit its archive was built from.
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-11-14 · Unverified
+
+<!-- Flare Drive:
+Android Auto's music can now come over Wi-Fi and play on the car's speakers, with the volume knob, like CarPlay's. The
+wireless picture is smoother, the cable gets a sharper one, and Bluetooth pairs and reconnects normally with the cable
+in. It also waits for iDrive before it shows and stays connected when your phone goes quiet.
+-->
+
+Music over Wi-Fi on the car's speakers, a smoother wireless picture, a sharper one over the cable, and fixes for
+Bluetooth, My BMW and the wait for iDrive. This sums up every 0.1.5 test build. The service, the supervisor, the iDrive
+app and the installer change. This version is unverified.
+
 ### Added
 
 - **Music over Wi-Fi plays on the car's speakers.** With sound over Wi-Fi switched on in Flare Drive, Android Auto's
@@ -368,7 +380,7 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 - **Changing the car's clock no longer upsets Android Auto's timing.** When GPS corrected the clock while driving, a
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
-[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.5-test.7...HEAD
+[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.5...HEAD
 [0.1.5-test.7]: https://github.com/CallMeLewis/AA-EntryNav/tree/ebed937651e3926b79259f89796567fa83e0ff89
 [0.1.5-test.6]: https://github.com/CallMeLewis/AA-EntryNav/tree/28ea2fa85eec44b439ace26c9bff01fdd0d26ab5
 [0.1.5-test.5]: https://github.com/CallMeLewis/AA-EntryNav/tree/44dd960247e64cc8729d9613e594f2f29c092f1a
