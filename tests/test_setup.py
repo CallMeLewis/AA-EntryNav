@@ -550,11 +550,12 @@ def foreign_folder(name):
     return lambda unit: unit.write(f"{name}/something", "not ours\n")
 
 
-def case_other_software_accepted_on_request(unit):
+def case_any_software_installs(unit):
     unit.write("etc/version", "202203011200\n")
     unit.unpack("2.0.0")
-    expect(unit.run("check", "--other-software"), 0, "not tried yet: accepted")
-    expect(unit.run("install", "--other-software"), 0, "Installed and checked")
+    expect(unit.run("check"), 0, "iDrive software 202203011200")
+    expect(unit.run("check", "--other-software"), 0, "Every check passed")  # older Flare Drive versions pass it
+    expect(unit.run("install"), 0, "Installed and checked")
 
 
 def case_wrapped_df_line(unit):
@@ -784,7 +785,7 @@ CASES = {
     "update while iDrive holds the app": case_update_while_idrive_holds_the_app,
     "uninstall in two steps": case_uninstall_in_two_steps,
     "uninstall keeps a Plugins folder it did not make": case_uninstall_keeps_a_plugins_folder_it_did_not_make,
-    "other software, accepted on request": case_other_software_accepted_on_request,
+    "any iDrive software installs": case_any_software_installs,
     "df with a wrapped line": case_wrapped_df_line,
     "remount rw refused": case_mount_rw_refused,
     "remount ro refused": case_mount_ro_refused,
@@ -801,7 +802,6 @@ CASES = {
     "refused: missing function": refusal(
         write("test/ld-output", "symbol lookup: undefined symbol: _ZN3bmw4Foo (./x)\n"), "missing on this car"
     ),
-    "refused: other software": refusal(write("etc/version", "202203011200\n"), "not tried yet"),
     "refused: system already writable": refusal(
         write("proc/mounts", MOUNTS.replace("ext4 ro,", "ext4 rw,")), "writable right now"
     ),

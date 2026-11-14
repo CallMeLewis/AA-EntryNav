@@ -2,11 +2,15 @@
 # Copyright (c) 2026 CallMeLewis
 # Checks, installs, updates and removes AA-EntryNav on the head unit, with the car's BusyBox 1.21 (docs/INSTALLATION.md).
 #
-#   sh setup.sh check [--other-software]    every check of the installation; writes nothing
-#   sh setup.sh install [--other-software]  the same checks, then the installation, if and only if they all pass
+#   sh setup.sh check                       every check of the installation; writes nothing
+#   sh setup.sh install                     the same checks, then the installation, if and only if they all pass
 #   sh setup.sh status                      what is installed and in what state; writes nothing
 #   sh setup.sh tidy                        deletes what an earlier operation had to leave until a restart
 #   sh setup.sh uninstall [--purge]         removes the two folders; --purge also deletes settings and logs
+#
+# Any iDrive software version is accepted: what decides is whether this car has what AA-EntryNav needs (the libraries
+# and the compatibility rehearsal). --other-software, which older Flare Drive versions pass, is accepted and does
+# nothing.
 #
 # check and install run from the unpacked release archive, in /tmp. The installation puts this script in
 # /opt/aa/setup.sh, from where status, tidy and uninstall work without the archive.
@@ -44,8 +48,6 @@ RECORD=$DATA/install-record
 MARK=.installed-by-aa-entrynav
 LOG=/tmp/aa-entrynav-setup.log
 SELF_COPY=/tmp/aa-entrynav-setup.sh
-# /etc/version of the cars this release was tried on (docs/COMPATIBILITY.md).
-TRIED_SOFTWARE="202111011321 202306092158"
 MARGIN_KB=16384
 LIBS=/usr/local/lib:/opt/hmi/lib:/usr/lib:/lib
 LOADER=/lib/ld-linux-armhf.so.3
@@ -85,8 +87,8 @@ stop() {
 usage() {
     cat <<'EOF'
 Usage:
-  sh setup.sh check [--other-software]    every check of the installation; writes nothing
-  sh setup.sh install [--other-software]  the checks, then the installation if they all pass
+  sh setup.sh check                       every check of the installation; writes nothing
+  sh setup.sh install                     the checks, then the installation if they all pass
   sh setup.sh status                      what is installed; writes nothing
   sh setup.sh tidy                        deletes what an earlier operation left until a restart
   sh setup.sh uninstall [--purge]         removes Android Auto; --purge also deletes settings and logs
@@ -463,21 +465,9 @@ check_archive() {
     check_version
 }
 
+# For the report only: any version installs if the checks below pass.
 check_software() {
-    software=$(head -n 1 /etc/version 2>/dev/null)
-    case " $TRIED_SOFTWARE " in
-        *" $software "*)
-            ok "iDrive software $software, the one tried"
-            return
-            ;;
-    esac
-    if [ -n "$OTHER_SOFTWARE" ]; then
-        warn "iDrive software '$software' not tried yet: accepted by --other-software"
-    else
-        stop "iDrive software '$software' not tried yet. The last two checks (libraries, rehearsal) were not run:" \
-            "run 'sh setup.sh check --other-software' for them, and install only if nothing else stops" \
-            "(docs/COMPATIBILITY.md; please send a compatibility report)"
-    fi
+    info "iDrive software $(head -n 1 /etc/version 2>/dev/null)"
 }
 
 check_space() {
@@ -828,7 +818,7 @@ do_check() {
     fi
     say "Every check passed ($WARNS warning(s)). Nothing was written."
     say "Before installing: car parked, ignition on and engine off, ideally with a battery charger connected."
-    say "To install: sh setup.sh install${OTHER_SOFTWARE:+ --other-software}"
+    say "To install: sh setup.sh install"
     return 0
 }
 
@@ -991,11 +981,10 @@ command=$1
 if [ $# -gt 0 ]; then
     shift
 fi
-OTHER_SOFTWARE=
 PURGE=
 for arg in "$@"; do
     case $command:$arg in
-        check:--other-software | install:--other-software) OTHER_SOFTWARE=1 ;;
+        check:--other-software | install:--other-software) ;; # older Flare Drive versions pass it: no effect
         uninstall:--purge) PURGE=1 ;;
         *)
             usage

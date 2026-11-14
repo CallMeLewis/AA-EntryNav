@@ -88,8 +88,8 @@ FEED_URL = f"https://updates.darkzone.dev/{FEED}"
 WRANGLER = "wrangler@4.146.0"  # the version the Flare apps pin
 REPO = "CallMeLewis/AA-EntryNav"
 ZONE_ID = "b2b2305591d3edbf29a4ffb14bc274a0"  # darkzone.dev, which serves updates.darkzone.dev
-# Firmware this project's releases are tried on (tools/setup.sh TRIED_SOFTWARE). The index may narrow, never widen,
-# what Flare Drive allows; the trial firmware still installs only releases Flare Drive itself has reviewed.
+# Only for Flare Drive versions that still limit installing to two firmware: they install on 202306092158 only when the
+# index lists it. Releases install on any firmware; later Flare Drive versions ignore this list.
 FIRMWARE = ["202111011321", "202306092158"]
 # Flare Drive's version code for new releases: 20 is the first that lets the signed index approve a release for the
 # trial firmware (19 still needed each release's SHA-256 built in, so it would list a new release and then refuse it).
