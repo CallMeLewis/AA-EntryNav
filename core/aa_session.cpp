@@ -251,6 +251,17 @@ bool AASession::start(int client_fd) {
     return true;
 }
 
+bool AASession::sayGoodbye(uint32_t waitMs) {
+    if (!running()) {
+        return true;
+    }
+    inbox_.postGoodbye();  // only the session thread may use TLS: it sends the request
+    for (uint32_t waited = 0; waited < waitMs && running(); waited += 10) {
+        usleep(10000);
+    }
+    return !running();
+}
+
 void AASession::stop() {
     MutexLock lifecycle(lifecycleLock_);
     setRunning(false);
@@ -550,6 +561,14 @@ AASession::Received AASession::receive(uint8_t& channel, Message& message) {
 void AASession::sendCarInput() {
     CarBatch batch;
     inbox_.take(batch);
+    if (batch.goodbye) {
+        const bool tls = tls_.established();
+        const bool sent = tls && sendSealed(channel::kControl, message::byeByeRequest(message::kByeByeQuit));
+        printf("[AASession] ByeByeRequest (quit) -> phone: %s\n", sent  ? "sent"
+                                                                  : tls ? "SEND FAILED"
+                                                                        : "not sent, no TLS yet");
+        return;
+    }
     if (!sendLocation()) {
         printf("[AASession] location -> phone: SEND FAILED\n");
     }

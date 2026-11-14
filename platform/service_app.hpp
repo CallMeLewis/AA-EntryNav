@@ -56,6 +56,10 @@ public:
     // ---- main loop ----
     void markReady();    // callbacks may now start a projection
     void requestStop();  // the wireless loop and new connections stop
+    // Before requestStop(), which takes the cable's link away: a phone whose session runs on the cable is asked to end
+    // it, and given up to waitMs. Left alone it stays in accessory mode, streaming into a link nobody reads. A phone
+    // on Wi-Fi is not asked: it reconnects by itself, and told to quit it might not.
+    void endCableSession(uint32_t waitMs);
     // Session, focus and peeks into what shows: the video layer, its opacity, the pill. Holds videoMu while
     // LayerManagerControl runs. service: started by the iDrive app (evo-trial --service).
     Turn turn(bool service);

@@ -39,6 +39,9 @@ void onSignal(int) {
 // This car's fixed values, observed working on the car. There are no runtime settings.
 const uint16_t kAaPort = 50000;  // TCP port told to the phone during the Bluetooth handshake
 const unsigned kTrialMaxSeconds = 180;
+// How long a phone on the cable is given to end its session as the service stops: the iDrive app sends SIGTERM
+// 3 s after "quit" (hmiapp/service_link.cpp).
+const uint32_t kCableGoodbyeMs = 500;
 
 // Unsigned number from a command-line argument (decimal or 0x hex), at most max.
 bool parseNumber(const char* s, unsigned long max, unsigned long& out) {
@@ -407,6 +410,9 @@ int main(int argc, char** argv) {
             }
         }
         usleep(100000);
+    }
+    if (usbOn) {
+        app.endCableSession(kCableGoodbyeMs);
     }
     app.requestStop();
     if (!cableOnly) {

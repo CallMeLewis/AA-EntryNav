@@ -34,7 +34,8 @@ CarInbox::CarInbox()
       night_(-1),
       nightStarted_(false),
       nightChanged_(false),
-      microphoneOpen_(false) {
+      microphoneOpen_(false),
+      goodbye_(false) {
     pthread_mutex_init(&mutex_, nullptr);
     // Not optional, unlike touch: keys, the microphone and the video focus all reach the session through it.
     if (pipe(wake_) == 0) {
@@ -121,6 +122,14 @@ void CarInbox::postRotary(uint32_t keycode, int delta) {
     }
 }
 
+void CarInbox::postGoodbye() {
+    {
+        MutexLock lock(mutex_);
+        goodbye_ = true;
+    }
+    wake();
+}
+
 void CarInbox::postFocus(bool projected) {
     if (wake_[1] < 0) {
         printf("[AASession] video focus %s not sent (no wake pipe)\n", projected ? "PROJECTED" : "NATIVE");
@@ -190,6 +199,8 @@ void CarInbox::take(CarBatch& batch) {
     batch.nightChanged = nightChanged_ && nightStarted_;
     nightChanged_ = false;
     batch.microphone.swap(microphone_);
+    batch.goodbye = goodbye_;
+    goodbye_ = false;
 }
 
 std::vector<std::vector<uint8_t>> CarInbox::takeLocation(uint64_t nowMs) {
@@ -251,6 +262,7 @@ void CarInbox::reset() {
     location_.reset();
     microphoneOpen_ = false;
     microphone_.clear();
+    goodbye_ = false;
 }
 
 }  // namespace aa

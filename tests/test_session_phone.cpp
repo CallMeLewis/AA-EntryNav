@@ -436,6 +436,12 @@ public:
         while (!lost_ && receive(channel, flags, message) > 0) {
         }
     }
+    // One frame from the head unit, recorded.
+    void readOne() {
+        uint8_t channel = 0, flags = 0;
+        Bytes message;
+        receive(channel, flags, message);
+    }
     void setQuiet(bool quiet) { quiet_ = quiet; }
     // The phone says nothing of its own for ms milliseconds and counts the head unit's encrypted pings. When asked to,
     // it answers each with the same timestamp. Stops early when the head unit closes.
@@ -905,6 +911,20 @@ void brokenStream(std::vector<std::string>& log) {
     ended(link, log);
 }
 
+// The car leaves (sayGoodbye): the phone is asked to quit, and its ByeByeResponse ends the session.
+void goodbye(std::vector<std::string>& log) {
+    Link link;
+    Phone phone(link.phoneFd, log);
+    phone.handshake();
+    phone.discover();
+    log.push_back("-- the car leaves");
+    log.push_back(format("ended before the phone answered=%d", link.session.sayGoodbye(0) ? 1 : 0));
+    phone.readOne();
+    phone.send(0, kSealed, bytes({0x00, 0x10}));
+    phone.untilClosed();
+    ended(link, log);
+}
+
 // Without TLS: what still works, an overflowing reassembly, a frame cut short.
 void plainEdges(std::vector<std::string>& log) {
     {
@@ -1065,15 +1085,41 @@ std::string quietPhone() {
     return std::string();
 }
 
+// sayGoodbye gives a phone that never answers the time it was given, no more, and leaves its session running; with
+// no session it returns at once. On the clock, so kept out of the golden. An empty verdict means it passed.
+std::string unansweredGoodbye() {
+    {
+        aa::AASession idle;
+        const long long since = monotonicMs();
+        if (!idle.sayGoodbye(2000) || monotonicMs() - since > 100) {
+            return "no session: sayGoodbye did not return at once";
+        }
+    }
+    std::vector<std::string> log;
+    Link link;
+    Phone phone(link.phoneFd, log);
+    phone.handshake();
+    phone.discover();
+    const long long since = monotonicMs();
+    const bool ended = link.session.sayGoodbye(300);
+    const long long waited = monotonicMs() - since;
+    if (ended || !link.session.isActive() || waited < 290 || waited > 1000) {
+        return format("silent phone: ended=%d after %lld ms", ended ? 1 : 0, waited);
+    }
+    link.session.stop();
+    return std::string();
+}
+
 struct Scenario {
     const char* name;
     void (*run)(std::vector<std::string>&);
 };
 
 const Scenario kScenarios[] = {
-    {"full session", fullSession},   {"fragment edges", fragmentEdges}, {"plain edges", plainEdges},
-    {"cut headers", cutHeaders},     {"lifecycle", lifecycle},          {"sound over Wi-Fi", wifiAudio},
-    {"broken stream", brokenStream},
+    {"full session", fullSession},   {"fragment edges", fragmentEdges},
+    {"plain edges", plainEdges},     {"cut headers", cutHeaders},
+    {"lifecycle", lifecycle},        {"sound over Wi-Fi", wifiAudio},
+    {"broken stream", brokenStream}, {"goodbye", goodbye},
 };
 
 void timedOut(int) {
@@ -1143,6 +1189,7 @@ int main(int argc, char** argv) {
         }
     }
     const std::string quiet = writing ? std::string() : quietPhone();
+    const std::string bye = writing ? std::string() : unansweredGoodbye();
     takeEvents();
     fflush(stdout);
     dup2(console, 1);
@@ -1182,6 +1229,13 @@ int main(int argc, char** argv) {
         printf("FAIL session, quiet phone: %s\n", quiet.c_str());
         return 1;
     }
+    if (!bye.empty()) {
+        printf("FAIL session, goodbye: %s\n", bye.c_str());
+        return 1;
+    }
+    puts(
+        "PASS session, goodbye: a phone that does not answer keeps its session past the wait, no session returns at "
+        "once");
     puts("PASS session, quiet phone: answered pings keep it, unanswered ones end it within the silence limit");
     return 0;
 }

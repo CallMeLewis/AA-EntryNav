@@ -131,6 +131,12 @@ Message byeByeResponse() {
     return withId(msg::kByeByeResponse);
 }
 
+Message byeByeRequest(uint32_t reason) {
+    Message m = withId(msg::kByeByeRequest);
+    pb::appendUint(m, 1, reason);
+    return m;
+}
+
 Message setupResponse() {
     Message m = statusOnly(msg::kSetupResponse, kMediaStatusOk);
     pb::appendUint(m, kSetupMaxUnackedField, kMaxUnacked);

@@ -36,6 +36,9 @@ Message pingRequest(uint64_t timestampUs);
 Message audioFocusResponse(uint32_t state);
 Message navigationFocusResponse();
 Message byeByeResponse();
+// The head unit ends the session: {1 reason}, 1 being "quit", as phones send it.
+const uint32_t kByeByeQuit = 1;
+Message byeByeRequest(uint32_t reason);
 
 // Audio, video and microphone channels.
 Message setupResponse();

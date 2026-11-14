@@ -76,6 +76,17 @@ void ServiceApp::requestStop() {
     usbStop = true;
 }
 
+void ServiceApp::endCableSession(uint32_t waitMs) {
+    pthread_mutex_lock(&mu);
+    stopping = true;  // no new session, and the cable thread asks no other phone, while this one says goodbye
+    pthread_mutex_unlock(&mu);
+    if (!usbBusy || !session.isActive()) {
+        return;
+    }
+    const bool ended = session.sayGoodbye(waitMs);
+    ELOG("Usb", "service stopping: %s", ended ? "the phone ended its cable session" : "no answer to our ByeByeRequest");
+}
+
 bool ServiceApp::stopRequested() {
     pthread_mutex_lock(&mu);
     bool v = stopping;
@@ -566,7 +577,7 @@ void* ServiceApp::usb(void* user) {
         }
         // Only while nothing is connected or being prepared: a phone on Wi-Fi keeps its session.
         bool present = carried;
-        if (!carried && !a->projectionBusy() && link.phoneWaiting(&present)) {
+        if (!carried && !a->projectionBusy() && !a->stopRequested() && link.phoneWaiting(&present)) {
             a->usbPhone = true;
             a->usbBusy = true;  // the wireless side does not send this phone onto the Wi-Fi meanwhile
             const int socket = link.connect(a->usbStop);

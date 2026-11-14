@@ -52,6 +52,9 @@ public:
     // itself there): the socket is shut down, the thread finishes, and the ended callback runs.
     void end() { interrupt(); }
     bool isActive() const { return running(); }
+    // The car is leaving: the session thread asks the phone to end the session (ByeByeRequest, quit), and the phone's
+    // ByeByeResponse ends it. Waits up to waitMs. True when no session runs any more. Any thread but the session's.
+    bool sayGoodbye(uint32_t waitMs);
     // The longest time the phone sent nothing since the previous call, in milliseconds, and starts over. Any thread.
     // After 2 s of silence the head unit pings the phone, which answers at once: seconds here are a link that stalled.
     uint32_t takeLongestSilenceMs() { return longestSilenceMs_.exchange(0); }

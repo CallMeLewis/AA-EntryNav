@@ -31,6 +31,7 @@ struct CarBatch {
     FocusRequest focus;
     bool nightChanged;  // the phone started night mode and the car changed since the last event
     std::vector<std::vector<uint8_t>> microphone;
+    bool goodbye;  // the car is leaving: the phone is asked to end the session, and the rest no longer matters
 };
 
 // One lock guards everything; a pipe wakes the session thread, which waits on it next to the phone's socket. Car
@@ -52,6 +53,7 @@ public:
     void postNight(bool night);  // kept across sessions
     void postLocation(const CarLocation& location);
     void postMicrophone(const uint8_t* pcm, size_t size);
+    void postGoodbye();
 
     // Session thread.
     int wakeFd() const { return wake_[0]; }
@@ -87,6 +89,7 @@ private:
     LocationFeed location_;
     bool microphoneOpen_;
     std::vector<std::vector<uint8_t>> microphone_;
+    bool goodbye_;
 };
 
 }  // namespace aa

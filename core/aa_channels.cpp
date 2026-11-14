@@ -122,6 +122,9 @@ bool AASession::onControl(uint16_t id, const Message& message) {
         case msg::kByeByeRequest:
             onByeBye(message);
             return false;
+        case msg::kByeByeResponse:  // to ours (sayGoodbye): the phone has ended the session
+            printf("[AASession] >>> ByeByeResponse: the phone ended the session we asked it to end\n");
+            return false;
         case msg::kPingRequest:
             onPing(message);
             break;
