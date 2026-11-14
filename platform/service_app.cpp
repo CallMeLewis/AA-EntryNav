@@ -671,23 +671,18 @@ void* ServiceApp::usb(void* user) {
             const int socket = link.connect(a->usbStop);
             if (socket >= 0) {
                 carried = true;
-                // A phone on a cable may not know the car's Bluetooth: it is told the address, and pairs if needed.
-                BluezAdapter adapter;
-                if (readBluezAdapter(adapter)) {
-                    ELOG("Bluetooth", "car %s (%s): %s", adapter.address.c_str(), adapter.path.c_str(),
-                         adapter.pairable ? "takes pairings now"
-                                          : "takes no pairing now; one the phone starts may need the iDrive's "
-                                            "new device screen");
-                    pthread_mutex_lock(&a->mu);
-                    a->bluetoothAdapter = adapter.path;
-                    pthread_mutex_unlock(&a->mu);
-                } else {
-                    ELOG("Bluetooth", "the car's Bluetooth stack did not answer: the phone is not told about it");
-                }
+                // The phone is not told the car's Bluetooth address, as on Wi-Fi. Told it, Android Auto takes the
+                // phone's Bluetooth over: it hides the phone's own pairing dialog and waits for the car to send the
+                // code iDrive shows, which this service cannot read, and after a drop the phone's reconnection stayed
+                // "connecting" for good (reference car, 14 November 2026). Left out, the phone pairs through iDrive's
+                // new device screen with its own dialog and reconnects by itself, as without the cable.
+                ELOG("Bluetooth",
+                     "the phone is not told the car's Bluetooth address: pairing and reconnection stay "
+                     "with the phone and iDrive");
                 // Owns the socket from here, as with Wi-Fi. A session that could not start (the video above all) is
                 // not retried at once: each try resets the phone and asks it again, every second or so for as long as
                 // the failure lasts.
-                if (!startSession(socket, a, adapter.address, true)) {
+                if (!startSession(socket, a, std::string(), true)) {
                     ELOG("Usb", "the session did not start: the cable is tried again in %u s",
                          kCableRetryAfterFailureMs / 1000);
                     for (unsigned waited = 0; waited < kCableRetryAfterFailureMs && !a->usbStop; waited += 50) {

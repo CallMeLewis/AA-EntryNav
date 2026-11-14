@@ -9,6 +9,21 @@ Each version links to the commit its archive was built from.
 
 ## [Unreleased]
 
+### Added
+
+- **Music over Wi-Fi plays on the car's speakers.** With sound over Wi-Fi switched on in Flare Drive, Android Auto's
+  music and announcements come over Wi-Fi instead of Bluetooth, and the car plays them as it plays CarPlay's: Android
+  Auto asks the car for CarPlay's music route before it plays, and the volume knob sets the level. Before, the switch
+  left you with no sound. Bluetooth no longer streams music while it's on, which may also help the wireless picture.
+  Calls stay on Bluetooth. Unverified.
+
+### Fixed
+
+- **Bluetooth pairs and reconnects with a phone on the cable.** Android Auto told the phone the car's Bluetooth
+  address, which made the phone hide its own pairing code and wait for one from the car that never came, and stopped
+  it reconnecting after its Bluetooth dropped. The phone now pairs through iDrive's new device screen with its own code,
+  and reconnects by itself, as it does without the cable. Unverified.
+
 ## [0.1.5-test.6] - 2026-11-14 · Unverified
 
 <!-- Flare Drive:
