@@ -81,6 +81,8 @@ public:
     static void navStatus(uint16_t msgId, const uint8_t* body, size_t len, void* user);
     static void ended(void* user);
     static void connected(int fd, void* user);  // a phone on Wi-Fi: startSession(fd, user, "")
+    // A phone on Wi-Fi connected again while its session runs there: that session ends and this one starts.
+    static bool replaced(int fd, void* user);
     // Prepares the video and starts the session on this socket, which it owns. carBluetooth: the car's address, told
     // to a phone on a cable so that it pairs with the car (aa::AASession::setBluetooth); empty on Wi-Fi. cable: the
     // socket comes from the cable, and is refused if a session started meanwhile (a phone on Wi-Fi keeps its session).

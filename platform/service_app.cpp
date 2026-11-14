@@ -413,6 +413,31 @@ void ServiceApp::connected(int fd, void* user) {
     startSession(fd, user, std::string());
 }
 
+// Seen on the car on 14 November 2026: after its Bluetooth dropped and came back, the phone took the Wi-Fi handshake
+// again, opened a new TCP connection and left the old one. Turned away, it was left with neither, and iDrive stayed on
+// Connecting until Android Auto was stopped. The phone's new connection wins: the old session ends (its ended() runs)
+// and the new one starts. Only while a session runs over the Wi-Fi: never during a start or on the cable.
+bool ServiceApp::replaced(int fd, void* user) {
+    ServiceApp* a = static_cast<ServiceApp*>(user);
+    if (!a->wifiSessionRunning()) {
+        return false;
+    }
+    ELOG("ServiceApp",
+         "the phone connected again while its session runs: that session ends, the new connection "
+         "takes over");
+    a->session.end();
+    const unsigned kEndWaitMs = 3000;
+    for (unsigned waited = 0; a->session.isActive() && waited < kEndWaitMs; waited += 20) {
+        usleep(20000);
+    }
+    if (a->session.isActive()) {
+        ELOG("ServiceApp", "the old session did not end within %u ms: the new connection is turned away", kEndWaitMs);
+        return false;
+    }
+    startSession(fd, user, std::string());
+    return true;
+}
+
 namespace {
 // One question to the car's Bluetooth stack, asked on a thread of its own: a private D-Bus connection registers with
 // libdbus's default timeout of about 25 s, which the session thread must not wait out (no ping answered meanwhile).

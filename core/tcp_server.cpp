@@ -55,6 +55,7 @@ sockaddr_in anyAddress(uint16_t port) {
 TcpServer::TcpServer(uint16_t port)
     : port_(port),
       callback_(nullptr),
+      replace_(nullptr),
       user_(nullptr),
       thread_(0),
       running_(false),
@@ -237,13 +238,16 @@ void TcpServer::run() {
         inet_ntop(AF_INET, &peer.sin_addr, from, sizeof(from));
         printf("[TcpServer] Incoming Android Auto connection from %s:%u (fd: %d)!\n", from, ntohs(peer.sin_port),
                phone);
-        if (busy_) {
-            printf("[TcpServer] session already active, refusing %s\n", from);
+        if (!fromHotspot(peer.sin_addr.s_addr)) {
+            printf("[TcpServer] refusing %s (not on the Android Auto Wi-Fi)\n", from);
             close(phone);
             continue;
         }
-        if (!fromHotspot(peer.sin_addr.s_addr)) {
-            printf("[TcpServer] refusing %s (not on the Android Auto Wi-Fi)\n", from);
+        if (busy_) {
+            if (replace_ && replace_(phone, user_)) {
+                continue;  // handed over: the running session gave way to it
+            }
+            printf("[TcpServer] session already active, refusing %s\n", from);
             close(phone);
             continue;
         }

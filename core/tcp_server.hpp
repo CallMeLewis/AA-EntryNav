@@ -13,9 +13,12 @@ namespace aa {
 
 // The accepted socket, handed over: the callback owns it from then on. Called on the listener's thread.
 using ClientConnectedCallback = void (*)(int, void*);
+// A phone on the hotspot connected while a session runs: true when the callback took the socket (it owns it then),
+// false to have it turned away. Called on the listener's thread, with the connection callback's user data.
+using ClientReplacedCallback = bool (*)(int, void*);
 
-// One phone at a time: a connection is turned away until the session it was handed to has ended. A listening socket
-// that keeps failing (the car's Wi-Fi switched off under it) is made again.
+// One phone at a time: a connection is turned away until the session it was handed to has ended, unless the replace
+// callback takes it. A listening socket that keeps failing (the car's Wi-Fi switched off under it) is made again.
 class TcpServer {
 public:
     explicit TcpServer(uint16_t port);
@@ -26,6 +29,7 @@ public:
 
     // Set before start().
     void setConnectionCallback(ClientConnectedCallback callback, void* user_data = nullptr);
+    void setReplaceCallback(ClientReplacedCallback callback) { replace_ = callback; }
     // The car's hotspot address: listened on when it is up, and the /24 a phone must come from. Empty: every
     // interface, anyone.
     void setHotspotAddress(const std::string& ip) { hotspot_ = ip; }
@@ -43,6 +47,7 @@ private:
     uint16_t port_;
     std::string hotspot_;
     ClientConnectedCallback callback_;
+    ClientReplacedCallback replace_;
     void* user_;
     pthread_t thread_;
     std::atomic<bool> running_;

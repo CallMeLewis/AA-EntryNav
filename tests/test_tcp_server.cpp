@@ -56,6 +56,17 @@ bool turnedAway(int fd) {
     return closed;
 }
 
+std::atomic<bool> g_takeOver(false);  // what the replace callback answers
+std::atomic<int> g_replaced(-1);      // the socket it took
+
+bool onReplace(int fd, void*) {
+    if (!g_takeOver) {
+        return false;
+    }
+    g_replaced = fd;
+    return true;
+}
+
 bool handedOver(int calls) {
     for (int i = 0; i < 300 && g_calls < calls; ++i) {
         usleep(10000);
@@ -121,6 +132,27 @@ int main() {
         CHECK(silent.start());
         CHECK(turnedAway(dial(static_cast<uint16_t>(port + 3))) && g_calls == 3);
     }
-    puts("PASS phone listener: one session at a time, hotspot /24 only, socket options, start and stop twice");
+    {
+        // During a session, the replace callback decides: turned away when it declines, its own when it takes it.
+        aa::TcpServer server(static_cast<uint16_t>(port + 4));
+        server.setHotspotAddress("127.0.0.1");
+        server.setConnectionCallback(onPhone, nullptr);
+        server.setReplaceCallback(onReplace);
+        CHECK(server.start());
+        server.markSessionActive();
+        CHECK(turnedAway(dial(static_cast<uint16_t>(port + 4))) && g_replaced == -1);
+        g_takeOver = true;
+        const int phone = dial(static_cast<uint16_t>(port + 4));
+        CHECK(phone >= 0);
+        for (int i = 0; i < 300 && g_replaced < 0; ++i) {
+            usleep(10000);
+        }
+        CHECK(g_replaced >= 0 && g_calls == 3);  // taken by the replace callback, not the connection callback
+        close(phone);
+        close(g_replaced);
+    }
+    puts(
+        "PASS phone listener: one session at a time unless the replace callback takes the new one, hotspot /24 only, "
+        "socket options, start and stop twice");
     return 0;
 }

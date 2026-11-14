@@ -235,6 +235,7 @@ int main(int argc, char** argv) {
              static_cast<unsigned>(kAaPort), wifiAudio ? "Wi-Fi, played by this service" : "the BMW Bluetooth source");
     }
     app.server.setConnectionCallback(evo::ServiceApp::connected, &app);
+    app.server.setReplaceCallback(evo::ServiceApp::replaced);
     app.session.setDisconnectCallback(evo::ServiceApp::ended, &app);
     app.session.setVideoFrameCallback(evo::ServiceApp::frame, &app);
     app.session.setCodecConfigCallback(evo::ServiceApp::codec, &app);
