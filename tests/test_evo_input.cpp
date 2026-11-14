@@ -469,6 +469,14 @@ int main() {
         CHECK(!evo::decodeVolumeLevel(lv, level));  // above max
         lv.data = flat;
         CHECK(!evo::decodeVolumeLevel(lv, level));  // no range
+        uint8_t prompt[5] = {0x02, 0x00, 10, 0, 40}, phone[5] = {0x03, 0x00, 20, 0, 40},
+                gong[5] = {0x06, 0x00, 5, 0, 40};
+        lv.data = prompt;
+        CHECK(!evo::decodeVolumeLevel(lv, level));  // a navigation prompt's volume, not the music's
+        lv.data = phone;
+        CHECK(!evo::decodeVolumeLevel(lv, level));
+        lv.data = gong;
+        CHECK(!evo::decodeVolumeLevel(lv, level));
         lv.data = ok;
         lv.len = 4;
         CHECK(!evo::decodeVolumeLevel(lv, level));  // cut short
@@ -499,6 +507,10 @@ int main() {
         lv.op = 0xF;
         lk.onMessage(lv);
         CHECK(sink.n == 1);
+        lv.op = 0xC;
+        lv.data = prompt;
+        lk.onMessage(lv);
+        CHECK(sink.n == 1);  // a navigation prompt's volume shows no pill
     }
     // Volume buttons (HmiMain3D CDevVolumeControl): CECenterStack 15.0C.C01 [AudioVolume, Steps],
     // ControlElementsMFL 15.02.401 [UWord, AudioVolume, Steps]; AudioVolume 1/2 = a step, 0/3 = nothing.

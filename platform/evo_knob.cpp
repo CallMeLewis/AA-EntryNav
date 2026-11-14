@@ -18,7 +18,8 @@ static const uint8_t kControllerFblock = 0xE5;
 static const uint8_t kInstances[] = {0x01, 0x03, 0x05};  // NavStartup 01, HmiMain3D 03 and 05 (seen on the car)
 
 bool decodeVolumeLevel(const VmostMsgView& m, VolumeLevel& out) {
-    if (m.fblock != kAudioMasterFblock || m.fkt != kVolumeLevelFkt || m.op != 0xC || !m.data || m.len < 5) {
+    if (m.fblock != kAudioMasterFblock || m.fkt != kVolumeLevelFkt || m.op != 0xC || !m.data || m.len < 5 ||
+        m.data[0] != kEntertainmentVolume) {
         return false;
     }
     const unsigned value = m.data[2], min = m.data[3], max = m.data[4];
@@ -288,7 +289,13 @@ void EvoKnob::onMessage(const VmostMsgView& m) {
                 levelCb_(level, levelUser_);
             }
         } else if (levels_ < 50 && m.fkt == kVolumeLevelFkt) {
-            ELOG("Knob", "volume level message not recognised: operation 0x%x, %u byte(s)", m.op, m.len);
+            ++levels_;
+            if (m.op == 0xC && m.data && m.len >= 5 && m.data[0] != kEntertainmentVolume) {
+                ELOG("Knob", "volume level of volume %u: %u (%u to %u), not the music's: no pill", m.data[0], m.data[2],
+                     m.data[3], m.data[4]);
+            } else {
+                ELOG("Knob", "volume level message not recognised: operation 0x%x, %u byte(s)", m.op, m.len);
+            }
         }
         return;
     }

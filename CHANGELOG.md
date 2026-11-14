@@ -31,6 +31,8 @@ Each version links to the commit its archive was built from.
   can come before its own distance. The cluster now waits up to 3 s for that distance, so a turn that is still far off
   stays hidden. Unverified.
 - **Roundabout exit numbers in the cluster from phones that send only the older turn message.** Unverified.
+- **The volume bar over Android Auto shows only the music volume.** A navigation prompt, a call or a chime could make
+  it pop up with that sound's own level. Unverified.
 
 ## [0.1.5] - 2026-11-14 · Unverified
 

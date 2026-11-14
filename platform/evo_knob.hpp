@@ -87,9 +87,12 @@ int decodeVolumeButton(const VmostMsgView& m, unsigned* steps);
 // Volume level, read where HmiMain3D's own volume bar reads it: CHmiVolumeIndicatorService watches CPxyAudioMaster
 // instance 0, whose init binds fkt 0xC08 (libhmil6services). Array property, record 0: Status = PosX, PosY, value,
 // min, max, one byte each (e.g. 01 00 LEVEL 00 MAX). Our copy needs vmostd's filter opened by one Get, as for E5:
-// nothing is ever set on the AudioMaster.
+// nothing is ever set on the AudioMaster. PosX is which volume: 1 entertainment, 2 navigation prompts, 3 telephone,
+// 6 gong (upstream, Sq00ky #166, from NBT Evo). Only the entertainment volume is decoded: the car reports the prompt's
+// own level when a navigation prompt starts, and the pill would show it as the music's.
 const uint8_t kAudioMasterFblock = 0x20, kAudioMasterInstance = 0x00;
 const uint16_t kVolumeLevelFkt = 0xC08;
+const uint8_t kEntertainmentVolume = 0x01;
 struct VolumeLevel {
     unsigned value, min, max;
 };
