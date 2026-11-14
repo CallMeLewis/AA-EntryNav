@@ -1,12 +1,12 @@
-# Independent GPS wire schema
+# aasdk's location schema
 
-`LocationData.proto` is an unmodified copy from opencardev/aasdk commit
-`f9cf21e2fd3bfb8a43e61601c84d9b1b96389ff0`; source URL and SHA256 are in `sources.json`.
-aasdk is distributed under the GNU General Public License v3.0, and this file stays under that licence, not under the
-licence of this repository.
-This fixture is used only by PC tests, never compiled into or shipped with the HU software.
+`LocationData.proto` is aasdk's file, copied without changes from opencardev/aasdk at commit
+`f9cf21e2fd3bfb8a43e61601c84d9b1b96389ff0`. `sources.json` records its URL and SHA-256. aasdk is under the GNU General
+Public License v3.0, and so is this file. The licence of this repository doesn't cover it.
 
-`test_gps_wire_oracle.py` compiles it using Google's protoc, generates expected E7 messages
-from literal geographic fixtures, and compares them with the actual host/ARM C++ encoder.
-An encoder that sends E6 values fails this comparison by a factor of 10. The native BMW reader
-stores coordinates internally in E6; they are converted to E7 at the AA wire boundary.
+Only a PC test reads it. Nothing on the head unit is built from it, and no release contains it.
+
+`tests/test_gps_wire_oracle.py` compiles the schema with Google's `protoc`, writes the expected messages for a list of
+coordinates given as literal E7 values, and checks that the project's C++ encoder sends the same bytes, on the PC and,
+with `--arm`, under QEMU. The car's GPS reader keeps coordinates in E6 internally and converts them to E7 when it
+builds the Android Auto message, so an encoder that forgot the conversion would be off by a factor of 10 and fail.

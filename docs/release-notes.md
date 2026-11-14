@@ -4,8 +4,8 @@ Follow these when writing or editing release notes, which every version needs.
 
 ## Where they live
 
-Everything is written in one place: the release's section of `CHANGELOG.md`, newest at the top, kept outside git until
-the repository goes public. `tools/publish_release.py` takes three texts from it:
+Everything is written in one place: the release's section of [CHANGELOG.md](../CHANGELOG.md), newest at the top.
+`tools/publish_release.py` takes three texts from it:
 
 - **The CHANGELOG section itself.** It is for people running AA-EntryNav, whether through Flare Drive or by hand with
   `setup.sh`, not a record of every change: that record is the git history, written following

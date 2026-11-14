@@ -18,9 +18,9 @@ as `notes`, and the GitHub Release's text as `changes`, which Flare Drive shows 
 shows both without publishing anything; `notes` brings published releases' list entries and GitHub Releases back in
 line with their sections.
 
-`prepare` raises VERSION and commits it as `Release VERSION: SUMMARY`, and turns CHANGELOG.md's [Unreleased] part into
-the version's section (CHANGELOG.md is outside git, so it is not in the commit). Push that commit, wait for CI, then
-publish.
+`prepare` raises VERSION, turns CHANGELOG.md's [Unreleased] part into the version's section and commits both as
+`Release VERSION: SUMMARY`. Push that commit, wait for CI, then publish. `publish` dates the section and links it to
+the commit; the next release commit takes that change along if it isn't committed before.
 
 Each release carries the owner's label, stable or experimental (experimental unless --stable), shown as a pill in Flare
 Drive. `stability` changes it later: the list is signed again, the archive stays as it is. Whether a release has run in
@@ -94,7 +94,7 @@ FIRMWARE = ["202111011321", "202306092158"]
 # Flare Drive's version code for new releases: 20 is the first that lets the signed index approve a release for the
 # trial firmware (19 still needed each release's SHA-256 built in, so it would list a new release and then refuse it).
 MIN_APP = 20
-# Outside git until the repository goes public. Each version's section holds its texts (docs/release-notes.md).
+# Each version's section holds its texts (docs/release-notes.md).
 CHANGELOG = ROOT / "CHANGELOG.md"
 HEADING = re.compile(r"^## \[([^\]]+)\]", re.M)
 LINK = re.compile(r"^\[([^\]]+)\]: \S+$", re.M)
@@ -252,7 +252,7 @@ def now():
 
 def read_changelog():
     if not CHANGELOG.is_file():
-        sys.exit(f"FAIL: no {CHANGELOG.name} here. It is kept outside git: copy it in from wherever it is kept.")
+        sys.exit(f"FAIL: no {CHANGELOG.name} here.")
     return CHANGELOG.read_text(encoding="utf-8")
 
 
@@ -358,16 +358,17 @@ def with_links(text, index, unreleased_from=None):
 
 
 def prepare(args):
-    """The release commit: VERSION raised and committed as `Release VERSION: SUMMARY`, then CHANGELOG.md's [Unreleased]
-    part turned into the version's section, with any published version still missing its link given one."""
+    """The release commit, `Release VERSION: SUMMARY`: VERSION raised, and CHANGELOG.md's [Unreleased] part turned into
+    the version's section, with any published version still missing its link given one."""
     version = args.version
     if not release_version.is_valid(version):
         sys.exit(f"FAIL: {version} is not {release_version.FORMAT}.")
     subject = f"Release {version}: {args.summary}"
     if len(subject) > 72:
         sys.exit(f"FAIL: the subject is {len(subject)} characters, more than 72: {subject}")
-    if output("git", "status", "--porcelain"):
-        sys.exit("FAIL: the working tree has changes. The release commit holds VERSION only.")
+    changed = [line[3:] for line in git("status", "--porcelain").stdout.splitlines()]
+    if any(name != CHANGELOG.name for name in changed):
+        sys.exit(f"FAIL: the working tree has changes. The release commit holds VERSION and {CHANGELOG.name} only.")
     current = (ROOT / "VERSION").read_text().strip()
     if version_key(version) <= version_key(current):
         sys.exit(f"FAIL: {version} is not above the current version, {current}.")
@@ -385,17 +386,17 @@ def prepare(args):
     if not text[unreleased[0] : unreleased[1]].split("\n", 1)[1].strip():
         sys.exit(f"FAIL: nothing under [Unreleased] in {CHANGELOG.name}. Write the release's section there first.")
 
-    (ROOT / "VERSION").write_text(version + "\n", newline="\n")
-    committed = git("commit", "--quiet", "-m", subject, "--", "VERSION", check=False)
-    if committed.returncode:
-        git("checkout", "--", "VERSION", check=False)
-        sys.exit(f"FAIL: could not commit VERSION: {(committed.stderr or committed.stdout).strip()}")
-    print(f"Committed {output('git', 'rev-parse', '--short', 'HEAD')}: {subject}")
-
     heading_end = text.index("\n", unreleased[0]) + 1
     date = datetime.now().strftime("%Y-%m-%d")
-    text = text[:heading_end] + f"\n## [{version}] - {date} · Unverified\n" + text[heading_end:]
-    write_changelog(with_links(text, index, unreleased_from=version))
+    released = text[:heading_end] + f"\n## [{version}] - {date} · Unverified\n" + text[heading_end:]
+    (ROOT / "VERSION").write_text(version + "\n", newline="\n")
+    write_changelog(with_links(released, index, unreleased_from=version))
+    committed = git("commit", "--quiet", "-m", subject, "--", "VERSION", CHANGELOG.name, check=False)
+    if committed.returncode:
+        (ROOT / "VERSION").write_text(current + "\n", newline="\n")
+        write_changelog(text)
+        sys.exit(f"FAIL: could not commit the release: {(committed.stderr or committed.stdout).strip()}")
+    print(f"Committed {output('git', 'rev-parse', '--short', 'HEAD')}: {subject}")
     print(f"{CHANGELOG.name}: [Unreleased] is now {version}'s section, unverified.")
     if not NOTE.search(section(version)):
         print(f"WARN: {version}'s section has no Flare Drive note (<!-- Flare Drive: ... -->) yet. publish needs one.")
@@ -617,7 +618,7 @@ def record_published(entry, index):
     heading = re.compile(rf"^(## \[{re.escape(entry['version'])}\] - )\d{{4}}-\d{{2}}-\d{{2}}", re.M)
     text = heading.sub(rf"\g<1>{day}", text, count=1)
     write_changelog(with_links(text, {"releases": index["releases"] + [entry]}))
-    print(f"{CHANGELOG.name}: {entry['version']} dated {day} and linked to {entry['sourceCommit'][:7]}.")
+    print(f"{CHANGELOG.name}: {entry['version']} dated {day} and linked to {entry['sourceCommit'][:7]}. Commit it.")
 
 
 def git(*args, check=True):

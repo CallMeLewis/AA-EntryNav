@@ -1,13 +1,28 @@
-# Test fixtures
+# Fixtures
 
-Small files the tests read. Never regenerate a golden file to make a test pass.
+The tests read these files. A golden record changes only when the behaviour it records is meant to change, and the
+commit says why. Never write a new one just so a test passes.
 
-| File | Origin |
-|---|---|
-| `session_phone.golden`, `wireless_phone.golden`, `kombi-golden.txt` | Written by the tests of this project: every byte sent to the phone and to the cluster |
-| `compositor-entryevo.conf` | Copy of `/etc/wayland/compositor.conf` of a BMW EntryNav2 head unit; the test reads its `genivi-flip-renderorder` line |
-| `ilm-scene/` | Output of `LayerManagerControl` on the same head unit: screen, layer and surfaces |
-| `spp-bmw-uuids.txt` | The Bluetooth serial port UUID pair as the head unit holds it, in hexadecimal |
-| `gps_e7/` | `LocationData.proto` of aasdk (GPL-3.0), see its own README |
+## Records the tests made
 
-The car readings hold no personal data: no serial number, no address, no position.
+`session_phone.golden`, `wireless_phone.golden` and `kombi-golden.txt` hold every byte this project sent to a fake
+phone and to the cluster. `test_session_phone`, `test_wireless_phone` and `test_kombi_golden` compare each run against
+them.
+
+## Readings from a head unit
+
+These come from a BMW EntryNav2 head unit, so the tests check the code against the car's own output:
+
+- `compositor-entryevo.conf` is the unit's `/etc/wayland/compositor.conf`. `test_evo_ilm` reads its
+  `genivi-flip-renderorder` line.
+- `ilm-scene/` is what `LayerManagerControl` printed on the same unit for its screen, layers and surfaces.
+  `test_evo_ilm` reads it too.
+- `spp-bmw-uuids.txt` is the pair of Bluetooth serial port UUIDs as the unit stores them, in hex. `test_trial_recovery`
+  reads it.
+
+None of them hold personal data. There is no serial number, address or position in any of them.
+
+## From another project
+
+`gps_e7/` holds aasdk's `LocationData.proto`, which stays under the GPL-3.0. [Its README](gps_e7/README.md) says
+where it comes from and how the test uses it.

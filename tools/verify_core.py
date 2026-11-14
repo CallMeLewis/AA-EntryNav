@@ -2,7 +2,8 @@
 """Check that every source file says whose it is.
 
 A file still holding code from earlier projects carries their licence line; a file written for AA-EntryNav carries the
-project's copyright. The count of the first kind is how much is left to rewrite.
+project's copyright. While any file of the first kind is left, NOTICE.md must keep the licence's URL and both required
+notices, which every copy of that code has to carry.
 """
 
 import re
@@ -17,6 +18,12 @@ SUFFIXES = {".c", ".cpp", ".h", ".hpp", ".py", ".sh"}
 # Data neither project wrote: these files say where they come from instead of carrying a copyright.
 THIRD_PARTY = {"core/include/dhu_sdp.h", "core/include/hu_certificate.h"}
 ORIGIN = "Not written by this project"
+NOTICE = ROOT / "NOTICE.md"
+NOTICE_LINES = (
+    "https://polyformproject.org/licenses/noncommercial/1.0.0",
+    "Required Notice: Copyright (c) 2026 nanaisu - NBT-AAD (https://github.com/Sq00ky/Supra-iDrive6-Android-Auto)",
+    "Required Notice: Copyright (c) 2026 Jiraiya43 - entry-aad",
+)
 
 
 def source_files():
@@ -48,6 +55,11 @@ def main():
     unsigned = [name for name in sorted(THIRD_PARTY) if ORIGIN not in (ROOT / name).read_text(encoding="utf-8")[:600]]
     if unsigned:
         raise SystemExit("FAIL: no origin stated in " + ", ".join(unsigned))
+    if upstream:
+        notice = NOTICE.read_text(encoding="utf-8") if NOTICE.is_file() else ""
+        missing = [line for line in NOTICE_LINES if line not in notice]
+        if missing:
+            raise SystemExit(f"FAIL: {NOTICE.name} lacks what the earlier code requires: " + "; ".join(missing))
     print(f"PASS: every source file has its header; {len(upstream)} still hold code from earlier projects")
 
 

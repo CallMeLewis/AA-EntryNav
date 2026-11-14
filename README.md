@@ -10,23 +10,24 @@
 
 AA-EntryNav adds Android Auto to BMWs with the **EntryNav2** head unit, the one with a 1280×480 screen and CarPlay
 over Wi-Fi. NBT Evo, ID7 and MGU units are different systems and can't run it. Start it from iDrive's *Media* menu and
-your phone connects over the car's own Bluetooth and Wi-Fi, or over a USB cable. It runs alongside iDrive and replaces
-none of BMW's files.
+your phone connects over the car's own Bluetooth and Wi-Fi, or over a USB cable. It adds two folders to the head unit
+and leaves BMW's files as they are.
 
 > [!WARNING]
-> AA-EntryNav is experimental and writes to the head unit. Install it with the car parked, entirely at your own risk.
-> The authors accept no responsibility for any damage to your car or loss of its warranty.
+> AA-EntryNav is experimental, and installing it changes the head unit's system. Install it with the car parked,
+> entirely at your own risk. The authors accept no responsibility for any damage to your car or loss of its warranty.
 
 ## Installing
 
 The easy way is **Flare Drive**, the companion Android app. It downloads a signed release and checks that your car
 can run it before installing. Updates and removal happen there too, along with the switches for the experimental
-features below.
+features below. The [CHANGELOG](CHANGELOG.md) lists what changed in each release.
 
 <details>
 <summary><b>Installing by hand</b></summary>
 
-You need an ENET cable, a PC with SSH and the head unit's root password. This project doesn't provide the password.
+You need an ENET cable, a PC with an SSH client and the head unit's root password. AA-EntryNav doesn't come with the
+password.
 
 1. Back up the car's system with `tools/backup_headunit.sh`. It only reads.
 2. Copy a release archive (from `tools/package_release.py`) to the head unit's `/tmp` and unpack it.
@@ -39,20 +40,25 @@ You need an ENET cable, a PC with SSH and the head unit's root password. This pr
 | `sh /opt/aa/setup.sh status` | What is installed, and whether its files are intact |
 | `sh /opt/aa/setup.sh uninstall` | Removes it. Settings and logs in `/var/local/data/AA` stay, and `--purge` deletes them |
 
+The [installation guide](docs/INSTALLATION.md) has every step in full, what each check looks at, and how to recover.
+
 </details>
 
 ## What it does
 
-- **Wireless Android Auto.** The phone pairs over Bluetooth, then joins the car's own Wi-Fi.
-- **Started from iDrive.** Open *Media*, *Android Auto* to start or stop it, or set it to start with iDrive.
-- **The car's controls.** The iDrive controller, its buttons, the touch screen, and the steering wheel buttons and
-  voice button all work in Android Auto.
-- **The car's microphone and GPS.** Calls and the assistant use the car's microphone, and maps use the car's GPS.
-- **Turn arrows in the cluster and head-up display.** Android Auto's navigation shows its next turn there too.
+Your phone finds the car over Bluetooth and gets the details of its Wi-Fi hotspot, the one CarPlay uses. Android Auto
+then runs over that Wi-Fi and fills iDrive's screen.
+
+- You start and stop it under *Media*, *Android Auto*, and can have it start along with iDrive.
+- It answers to the car's own controls: the iDrive controller and its buttons, the touch screen, the steering wheel
+  buttons and the voice button.
+- Calls and the Assistant hear you through the car's microphone, and maps take their position from the car's GPS.
+- Android Auto's next turn also shows in the instrument cluster and the head-up display.
 
 ### Experimental, off until you switch it on
 
-Each one is a switch in Flare Drive, or a file in `/var/local/data/AA` on the head unit.
+Each one is a switch in Flare Drive, or a file in `/var/local/data/AA` on the head unit. The
+[settings guide](docs/MAINTENANCE.md) lists every file, and how to turn on the logs.
 
 | Feature | File |
 |---|---|
@@ -77,11 +83,16 @@ You need Docker. The build links the ARM programs against a copy of the car's sy
 CI can't hold the copy of the car's system, so it runs only `make check`. The pre-push hook runs `verify_arm.py` on
 each commit pushed to `main`, and `tools/verify_tests.py` makes sure every test runs in one or the other.
 
-## Licence
+[ARCHITECTURE.md](docs/ARCHITECTURE.md) shows how the programs fit together, and [CONTRIBUTING.md](CONTRIBUTING.md)
+says what a change needs.
 
-Files marked `SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0` hold code from earlier projects and are under the
-[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0) until they are
-rewritten. AA-EntryNav comes with no warranty.
+## Credits and licence
+
+AA-EntryNav started from [entry-aad](https://github.com/Jiraiya43/entry-aad) by Jiraiya43, a port of
+[Supra-iDrive6-Android-Auto](https://github.com/Sq00ky/Supra-iDrive6-Android-Auto) by Sq00ky. Files marked
+`SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0` hold code from those projects and are under the
+[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0). Its required notices
+are in [NOTICE.md](NOTICE.md). AA-EntryNav comes with no warranty.
 
 AA-EntryNav is an independent project. It is not made or endorsed by BMW or Google. BMW and iDrive are trademarks of
 BMW AG. Android and Android Auto are trademarks of Google LLC.

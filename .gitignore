@@ -1,6 +1,5 @@
 # Everything stays local unless listed here: build outputs, car logs, copies of BMW files and personal notes never
-# reach git by accident. tools/verify_repo.py checks every pushed commit. CHANGELOG.md, ROADMAP.md, CONTRIBUTING.md,
-# NOTICE.md and the docs other than the two writing guides stay local too until the repository goes public.
+# reach git by accident. tools/verify_repo.py checks every pushed commit.
 /*
 !/.claude/
 /.claude/*
@@ -12,15 +11,16 @@
 !/.githooks/
 !/.github/
 !/.gitignore
+!/CHANGELOG.md
 !/CLAUDE.md
+!/CONTRIBUTING.md
 !/Makefile
+!/NOTICE.md
 !/README.md
+!/ROADMAP.md
 !/VERSION
 !/core/
 !/docs/
-/docs/*
-!/docs/commit-messages.md
-!/docs/release-notes.md
 !/hmiapp/
 !/platform/
 !/pyproject.toml

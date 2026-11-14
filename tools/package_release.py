@@ -106,12 +106,8 @@ def release_files(version: str) -> dict:
     # Flare Drive's ReleasePackage expects LICENSE.md. It carries the licence and notices of the code taken from
     # earlier projects, which go with every copy of a build while any of it is left.
     files["LICENSE.md"] = UPSTREAM_NOTICE.encode()
-    # Flare Drive expects INSTALLATION.md too. The guide is kept outside git until the repository goes public, so it
-    # comes from this folder, not from the commit.
-    guide = ROOT / "docs/INSTALLATION.md"
-    if not guide.is_file():
-        raise SystemExit(f"FAIL: {guide} missing: Flare Drive needs it in the archive. Copy it from the local docs.")
-    files["INSTALLATION.md"] = guide.read_bytes()
+    # Flare Drive expects INSTALLATION.md too: the installation guide.
+    files["INSTALLATION.md"] = (ROOT / "docs/INSTALLATION.md").read_bytes()
     return files
 
 
