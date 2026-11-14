@@ -1,6 +1,6 @@
 <div align="center">
   <img src="hmiapp/res/aa_content_preview_549x484.png" width="150" alt="AA-EntryNav icon">
-  <h1>AA-EntryNav</h1>
+  <h1>Android Auto for EntryNav2</h1>
   <p>Android Auto for BMW iDrive, wireless or over a USB cable.</p>
   <p>
     <a href="https://github.com/CallMeLewis/AA-EntryNav/releases"><img src="https://img.shields.io/github/v/release/CallMeLewis/AA-EntryNav?include_prereleases&amp;display_name=tag&amp;sort=semver" alt="Latest release"></a>
