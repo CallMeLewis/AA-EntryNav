@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "../core/aa_protocol.hpp"
+#include "../platform/audio_route.hpp"
 #include "../platform/evo_alsa_out.hpp"
 #include "../platform/evo_audio.hpp"
 #include "../platform/evo_log.hpp"
@@ -102,10 +103,28 @@ void send(evo::EvoAudio& audio, uint8_t channel, const std::vector<int16_t>& sam
 
 void settingsFile() {
     evo::AudioSettings s;
-    CHECK(s.pcm == "default" && s.gainPercent == 100 && s.duckPercent == 30);
+    CHECK(s.pcm == "entertainment" && s.gainPercent == 100 && s.duckPercent == 30 && s.route == 0x315);
     CHECK(!evo::loadAudioSettings(pathOf("none").c_str(), s));  // no file: sound stays on Bluetooth
     writeAll(pathOf("settings"), "");
-    CHECK(evo::loadAudioSettings(pathOf("settings").c_str(), s) && s.pcm == "default" && s.gainPercent == 100);
+    CHECK(evo::loadAudioSettings(pathOf("settings").c_str(), s) && s.pcm == "entertainment" && s.gainPercent == 100);
+    CHECK(s.route == 0x315);  // an empty file (Flare Drive's switch): CarPlay's media route to "entertainment"
+    {
+        evo::AudioSettings other;
+        writeAll(pathOf("settings"), "pcm=default\n");
+        CHECK(evo::loadAudioSettings(pathOf("settings").c_str(), other) && other.route == 0);  // no route for it
+        writeAll(pathOf("settings"), "pcm=tts\nroute=319\n");
+        CHECK(evo::loadAudioSettings(pathOf("settings").c_str(), other) && other.route == 0x319);
+        writeAll(pathOf("settings"), "route=0\n");
+        CHECK(evo::loadAudioSettings(pathOf("settings").c_str(), other) && other.route == 0);
+        writeAll(pathOf("settings"), "route=12345\nroute=x\n");
+        evo::AudioSettings kept;
+        CHECK(evo::loadAudioSettings(pathOf("settings").c_str(), kept) && kept.route == 0x315);
+        uint8_t payload[4];
+        evo::buildRoutePayload(payload, 0xA512, 0x315);
+        CHECK(payload[0] == 0xA5 && payload[1] == 0x12 && payload[2] == 0x03 && payload[3] == 0x15);
+        CHECK(evo::audioRouteMain("swap", "315") == 2 && evo::audioRouteMain("build", "") == 2 &&
+              evo::audioRouteMain("build", "0") == 2 && evo::audioRouteMain("remove", "10000") == 2);
+    }
     writeAll(pathOf("settings"), "pcm=entertainment\r\ngain=40\nduck=0\nother=1\n");
     CHECK(evo::loadAudioSettings(pathOf("settings").c_str(), s));
     CHECK(s.pcm == "entertainment" && s.gainPercent == 40 && s.duckPercent == 0);
@@ -130,6 +149,7 @@ void mediaAndSpeech() {
     forget();
     evo::AudioSettings s;
     s.pcm = "entertainment";
+    s.route = 0;  // no request to a car's audio manager here
     s.gainPercent = 50;
     evo::EvoAudio audio;
     CHECK(audio.start(s));
@@ -226,6 +246,7 @@ void realTime() {
     setenv("FAKE_ASOUND_PACE", "1", 1);
     evo::AudioSettings s;
     s.pcm = "entertainment";
+    s.route = 0;  // no request to a car's audio manager here
     {
         evo::EvoAudio audio;
         CHECK(audio.start(s));

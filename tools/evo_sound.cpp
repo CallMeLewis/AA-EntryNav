@@ -106,6 +106,7 @@ int demo(const char* pcm, int seconds, int gain) {
     evo::AudioSettings settings;
     settings.pcm = pcm;
     settings.gainPercent = gain;
+    settings.route = 0;  // only the service asks the car's audio manager for a route
     evo::EvoAudio audio;
     if (!audio.start(settings)) {
         return 1;

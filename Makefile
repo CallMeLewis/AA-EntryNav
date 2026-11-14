@@ -42,7 +42,7 @@ KOMBI_OBJ = $(KOMBI_SRC:.cpp=.o)
 DAEMON_SRC = platform/alps_spp.cpp platform/alps_spp_codec.cpp platform/evo_ap.cpp \
              platform/evo_ap_config.cpp platform/evo_spp_snapshot.cpp platform/evo_touch.cpp platform/evo_knob.cpp \
              platform/vmost_client.cpp platform/evo_control.cpp platform/evo_sdr_sensors.cpp platform/evo_mic.cpp \
-             platform/evo_alsa_out.cpp platform/evo_audio.cpp \
+             platform/evo_alsa_out.cpp platform/evo_audio.cpp platform/audio_route.cpp \
              $(KOMBI_SRC) platform/evo_bmw_guidance.cpp platform/evo_pill.cpp \
              platform/peek_timing.cpp platform/wireless_loop.cpp platform/service_app.cpp platform/main.cpp \
              $(USB_SRC) platform/bluez_adapter.cpp
@@ -53,14 +53,16 @@ TRIAL_OBJ = tools/evo_trial.o platform/evo_spp_snapshot.o platform/alps_spp.o pl
 CHECK_OBJ = tools/evo_check.o platform/alps_spp.o platform/alps_spp_codec.o platform/evo_process.o
 CAPTURE_OBJ = tools/evo_capture.o
 MFL_OBJ = tools/evo_mfl.o platform/vmost_client.o
-SOUND_OBJ = tools/evo_sound.o platform/evo_alsa_out.o platform/evo_audio.o
+SOUND_OBJ = tools/evo_sound.o platform/evo_alsa_out.o platform/evo_audio.o platform/audio_route.o \
+            platform/vmost_client.o platform/evo_process.o
 # Android Auto over a cable: the USB device, the accessory requests and the bridge to the session.
 USB_SRC = platform/usb_io.cpp platform/usb_aoa.cpp platform/usb_bridge.cpp platform/usb_link.cpp
 USB_TOOL_OBJ = tools/evo_usb.o $(USB_SRC:.cpp=.o) platform/bluez_adapter.o
 ARM_OBJ = $(sort $(DAEMON_OBJ) $(PLATFORM_OBJ) $(TRIAL_OBJ) $(CHECK_OBJ) $(CAPTURE_OBJ) $(MFL_OBJ) $(SOUND_OBJ) $(USB_TOOL_OBJ))
 # The service's modules tests/test_wireless_lifecycle.cpp links around its fake Alps link and handshake.
 LIFECYCLE_OBJ = $(PLATFORM_OBJ) platform/evo_touch.o platform/evo_knob.o platform/vmost_client.o platform/evo_control.o \
-                platform/evo_mic.o platform/evo_alsa_out.o platform/evo_audio.o platform/evo_pill.o $(KOMBI_OBJ) \
+                platform/evo_mic.o platform/evo_alsa_out.o platform/evo_audio.o platform/audio_route.o platform/evo_pill.o \
+                $(KOMBI_OBJ) \
                 platform/evo_bmw_guidance.o platform/peek_timing.o $(USB_SRC:.cpp=.o) platform/bluez_adapter.o
 
 VIDEO_LIBS = -l:libxsvideo.so.4 -l:libdrm_omap.so.1 -l:libdrm.so.2 -lpthread -lrt
@@ -219,7 +221,8 @@ test-host: test-parsers test-spp-host test-kombi-host test-gps-host test-capture
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_audio_mixer.cpp -o tests/test-audio-mixer
 	./tests/test-audio-mixer
 	gcc -std=c99 -Wall -Wextra -Werror -shared -fPIC tests/fake_asound.c -o tests/fake-asound.so
-	$(HOST_CXX) $(HOST_FLAGS) tests/test_evo_audio.cpp platform/evo_audio.cpp platform/evo_alsa_out.cpp -ldl -o tests/test-evo-audio
+	$(HOST_CXX) $(HOST_FLAGS) tests/test_evo_audio.cpp platform/evo_audio.cpp platform/evo_alsa_out.cpp \
+	    platform/audio_route.cpp platform/vmost_client.cpp platform/evo_process.cpp -ldl -o tests/test-evo-audio
 	./tests/test-evo-audio $(CURDIR)/tests/fake-asound.so
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_aa_frame.cpp core/aa_frame.cpp -o tests/test-aa-frame
 	./tests/test-aa-frame

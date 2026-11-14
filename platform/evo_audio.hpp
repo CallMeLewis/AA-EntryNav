@@ -4,11 +4,12 @@
 // Off unless the settings file exists (service_contract.hpp, kAudioWifi): without it nothing here runs, the phone is
 // told about no media sink and its sound stays on the car's Bluetooth, as before. With it, both streams are mixed
 // (platform/audio_mixer.hpp) and written to one playback PCM of the car (platform/evo_alsa_out.hpp), opened at the
-// first sound and closed after a few seconds of silence. Nothing is sent on vMOST/MOST: whether the car lets that PCM
-// be heard, and at what volume, is the car's own audio management.
+// first sound and closed after a few seconds of silence. Before the first sound, the car's audio manager is asked to
+// connect the PCM to the speakers (platform/audio_route.hpp), and the route is given back when the session ends.
 //
 // The settings file, one setting per line, each optional:
-//   pcm=<name>   the playback PCM, a name of the car's /etc/asound.conf ("default" when absent)
+//   pcm=<name>   the playback PCM, a name of the car's /etc/asound.conf ("entertainment" when absent)
+//   route=<hex>  the route asked of the car's audio manager, 0 for none (0x315 with "entertainment", else none)
 //   gain=<0-100> the whole mix, in percent (100 when absent)
 //   duck=<0-100> what is left of media while a voice prompt plays, in percent (30 when absent)
 #ifndef AA_ENTRYNAV_PLATFORM_EVO_AUDIO_HPP
@@ -29,7 +30,8 @@ struct AudioSettings {
     std::string pcm;
     int gainPercent;
     int duckPercent;
-    AudioSettings() : pcm("default"), gainPercent(100), duckPercent(30) {}
+    uint16_t route;  // asked of the car's audio manager before the first sound, 0 for none
+    AudioSettings() : pcm("entertainment"), gainPercent(100), duckPercent(30), route(0x315) {}
 };
 
 // A PCM name as accepted from the file: 1 to 63 of A-Z a-z 0-9 _ - . : , =
@@ -70,6 +72,8 @@ private:
     pthread_cond_t cv_;
     bool started_, quit_;
     AudioMixer mixer_;  // under mu_
+    bool routeAsked_;   // under mu_: the route was asked for in this session
+    void releaseRoute(bool wait);
 };
 
 }  // namespace evo

@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "aa_protocol.hpp"
+#include "audio_route.hpp"
 #include "evo_log.hpp"
 
 namespace evo {
@@ -86,6 +87,7 @@ bool loadAudioSettings(const char* path, AudioSettings& settings) {
         return false;
     }
     char text[96];
+    bool routeSet = false;
     while (fgets(text, sizeof(text), file)) {
         std::string line(text);
         while (!line.empty() && (line[line.size() - 1] == '\n' || line[line.size() - 1] == '\r')) {
@@ -97,13 +99,24 @@ bool loadAudioSettings(const char* path, AudioSettings& settings) {
             settings.gainPercent = percentOr(line.substr(5), settings.gainPercent);
         } else if (line.compare(0, 5, "duck=") == 0) {
             settings.duckPercent = percentOr(line.substr(5), settings.duckPercent);
+        } else if (line.compare(0, 6, "route=") == 0) {
+            char* end = nullptr;
+            const unsigned long route = strtoul(line.c_str() + 6, &end, 16);
+            if (end && end != line.c_str() + 6 && !*end && route <= 0xffff) {
+                settings.route = static_cast<uint16_t>(route);
+                routeSet = true;
+            }
         }
     }
     fclose(file);
+    // 0x315 is the route to "entertainment" only: another PCM gets none unless the file names one.
+    if (!routeSet && settings.pcm != "entertainment") {
+        settings.route = 0;
+    }
     return true;
 }
 
-EvoAudio::EvoAudio() : thread_(0), started_(false), quit_(false) {
+EvoAudio::EvoAudio() : thread_(0), started_(false), quit_(false), routeAsked_(false) {
     pthread_mutex_init(&mu_, nullptr);
     // Timed waits on the monotonic clock: the car's wall clock jumps when its GPS sets it.
     pthread_condattr_t attr;
@@ -135,8 +148,8 @@ bool EvoAudio::start(const AudioSettings& settings) {
         return false;
     }
     started_ = true;
-    ELOG(kTag, "ready: PCM '%s', gain %d %%, media at %d %% under speech", settings_.pcm.c_str(), settings_.gainPercent,
-         settings_.duckPercent);
+    ELOG(kTag, "ready: PCM '%s', gain %d %%, media at %d %% under speech, route %s", settings_.pcm.c_str(),
+         settings_.gainPercent, settings_.duckPercent, settings_.route ? "asked at the first sound" : "none");
     return true;
 }
 
@@ -150,6 +163,17 @@ void EvoAudio::stop() {
     pthread_mutex_unlock(&mu_);
     pthread_join(thread_, nullptr);
     started_ = false;
+    releaseRoute(true);
+}
+
+void EvoAudio::releaseRoute(bool wait) {
+    pthread_mutex_lock(&mu_);
+    const bool asked = routeAsked_;
+    routeAsked_ = false;
+    pthread_mutex_unlock(&mu_);
+    if (asked) {
+        requestAudioRoute(false, settings_.route, wait);
+    }
 }
 
 void EvoAudio::stream(uint8_t channel, bool started, uint32_t config) {
@@ -203,6 +227,7 @@ void EvoAudio::sessionEnded() {
     mixer_.clear();
     pthread_mutex_unlock(&mu_);
     logStats("session ended");
+    releaseRoute(false);
 }
 
 void EvoAudio::onData(uint8_t channel, const uint8_t* pcm, size_t len, uint64_t, void* user) {
@@ -293,6 +318,16 @@ void EvoAudio::loop() {
             continue;
         }
         if (!out_.isOpen()) {
+            // The car connects the PCM to the speakers once asked, which takes it a few seconds: the opens below are
+            // tried again meanwhile (another source may hold the PCM until then).
+            pthread_mutex_lock(&mu_);
+            const bool ask = settings_.route && !routeAsked_;
+            routeAsked_ = routeAsked_ || ask;
+            pthread_mutex_unlock(&mu_);
+            if (ask) {
+                ELOG(kTag, "asking the car's audio manager for route 0x%x", settings_.route);
+                requestAudioRoute(true, settings_.route);
+            }
             if (refused && now - refusedAt < kRetryOpenAfterMs) {
                 continue;  // this period is lost: the queue must not fill up behind a PCM that does not open
             }

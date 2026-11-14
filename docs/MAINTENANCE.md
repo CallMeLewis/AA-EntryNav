@@ -35,7 +35,7 @@ rm /var/local/data/AA/kombi-off      # arrows again
 | File | While it exists |
 |---|---|
 | `video-720` | A phone on the cable draws a 1280x720 picture and the head unit shows it pixel for pixel. Without the file a phone on the cable draws 1920x1080 and the head unit scales it down to the screen, which smooths the edges. A head unit that can't decode 1920x1080 drops back to 1280x720 by itself. A phone on Wi-Fi always draws 1280x720 |
-| `audio-wifi` | Sound comes over Wi-Fi, an experiment ([details](#sound-over-wi-fi-experimental)). Without the file, sound uses Bluetooth |
+| `audio-wifi` | Music and announcements come over Wi-Fi and play on the car's speakers, an experiment ([details](#sound-over-wi-fi-experimental)). Without the file, sound uses Bluetooth |
 | `select-bt-audio` | iDrive switches to Bluetooth audio when the phone connects, an experiment ([details](#bluetooth-audio-when-the-phone-connects-experimental)). Read at each connection. It does nothing while `audio-wifi` exists |
 | `usb` | A phone plugged into the car's USB port can run Android Auto too, an experiment ([details](#usb-cable-experimental)). Without the file the service leaves the USB bus alone |
 | `wireless-off` | The cable is the only way in. Android Auto leaves the car's Bluetooth and Wi-Fi hotspot as they are. It needs `usb`. With `wireless-off` alone, Android Auto doesn't start |
@@ -108,34 +108,33 @@ pairing right now, and whether that phone is paired.
 ## Sound over Wi-Fi (experimental)
 
 > [!WARNING]
-> Nobody has tried this in a car yet. The service writes to a sound output of the head unit and sends nothing on the
-> car's network. Pick the wrong output and there's no sound at all, so delete the file. Try it parked, with the volume
-> low.
+> Tried once in the reference car, by hand, on 14 November 2026. Try it parked, with the volume low.
 
 The `audio-wifi` file has the phone send its music and announcements over Wi-Fi rather than Bluetooth. The service mixes
 the two, turning the music down while an announcement plays, and plays the result through the car's sound library.
-Calls stay on Bluetooth. Each line of the file is optional:
+Calls stay on Bluetooth. Flare Drive's "sound over Wi-Fi" switch writes an empty file, which uses the defaults below.
+
+The car only plays a sound output once its audio manager has connected it to the speakers. Before the first sound of a
+session, the service asks for that connection on the car's network, as BMW's CarPlay does for its music: route `0x315`,
+the `entertainment` output. It gives the route back when the session ends or Android Auto stops. While the route is
+ours, iDrive shows no Bluetooth audio selected, and the volume knob sets the level. Each line of the file is optional:
 
 | Line | Meaning | Default |
 |---|---|---|
-| `pcm=…` | The sound output, named as in the head unit's `/etc/asound.conf` | `default` |
+| `pcm=…` | The sound output, named as in the head unit's `/etc/asound.conf` | `entertainment` |
+| `route=…` | The route asked of the car's audio manager, in hex, or `0` for none | `315` with `entertainment`, else none |
 | `gain=…` | Overall level, 0 to 100 % | 100 |
 | `duck=…` | How much music is left during an announcement, 0 to 100 % | 30 |
 
-`evo-sound` helps find the right output. Build it with `make dev-tools` and copy it to `/tmp`. It isn't installed.
+The service log shows the request: `asking the car's audio manager for route 0x315`, then `route 0x315 connected to the
+speakers by the car's audio manager`, or why not. The output may refuse to open until the car has switched the route.
+
+`evo-sound` lists the outputs and plays a test tone, without asking for a route. Build it with `make dev-tools` and copy
+it to `/tmp`. It isn't installed.
 
 ```sh
 LD_LIBRARY_PATH=/usr/local/lib:/usr/lib:/lib /tmp/evo-sound list
-LD_LIBRARY_PATH=/usr/local/lib:/usr/lib:/lib /tmp/evo-sound tone default 6 5
-```
-
-`list` prints the outputs the head unit declares. `tone <output> <seconds> <level>` plays 440 Hz on the left, then the
-right, then both. The example plays it at 5 % of full level. Try each output with the radio playing, then with
-Bluetooth as the source, then muted. The one you want is audible and follows the car's volume knob. Then write it to
-the file:
-
-```sh
-printf 'pcm=default\ngain=50\n' > /var/local/data/AA/audio-wifi
+LD_LIBRARY_PATH=/usr/local/lib:/usr/lib:/lib /tmp/evo-sound tone entertainment 6 5
 ```
 
 `tools/car_sound_probe.sh <situation>` changes nothing. It records what the head unit declares and which outputs each

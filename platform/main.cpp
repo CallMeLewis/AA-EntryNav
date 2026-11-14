@@ -5,6 +5,7 @@
 // are in service_app, the picture's peeks in peek_timing, the Bluetooth half of a wireless start in wireless_loop.
 // clang-format off
 #include "alps_spp.hpp"
+#include "audio_route.hpp"
 #include "evo_ap.hpp"
 #include "evo_video.hpp"
 #include "evo_touch.hpp"
@@ -94,6 +95,10 @@ void usage(const char* argv0) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    // The sound route helper, run by the service itself (audio_route.hpp): nothing else of the service starts.
+    if (argc == 4 && !strcmp(argv[1], "--audio-route")) {
+        return evo::audioRouteMain(argv[2], argv[3]);
+    }
     bool run = false, monitor = false, introspect = false, configure = false, video = true, service = false;
     bool cableOnly = false;
     const char* inputArg = nullptr;
