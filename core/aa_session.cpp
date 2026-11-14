@@ -124,12 +124,6 @@ void AASession::setAudioCallbacks(AudioDataCallback data, AudioStreamCallback st
     audioStream_.user = user_data;
 }
 
-void AASession::setBluetooth(const std::string& carAddress, BluetoothPairedCallback paired, void* user_data) {
-    bluetoothAddress_ = carAddress;
-    bluetoothPaired_.fn = paired;
-    bluetoothPaired_.user = user_data;
-}
-
 void AASession::postTouchEvent(const TouchEventOut& ev) {
     inbox_.postTouch(ev);
 }

@@ -21,7 +21,6 @@ const uint8_t kMediaAudio = 9;  // removed from the discovery: media plays over 
 const uint8_t kNavigation = 10;
 const uint8_t kMediaStatus = 12;
 const uint8_t kMicrophone = 14;
-const uint8_t kBluetooth = 15;  // added on a cable only, after the template's services (sdr_builder.hpp)
 
 inline bool isAudioSink(unsigned ch) {
     return ch == kGuidanceAudio || ch == kMediaAudio;
@@ -104,13 +103,6 @@ const uint16_t kBindingResponse = 0x8003;
 const uint16_t kServiceFirst = 0x8000;
 const uint16_t kGuidanceState = 0x8003;  // navigation: guidance active or not
 const uint16_t kPlaybackState = 0x8001;  // media status: playing, paused...
-
-// Bluetooth channel: the phone asks whether it is paired with the car, and pairs when it is not. Ids and fields as
-// aasdk's Android Auto descriptions give them: github.com/opencardev/aasdk, protobuf/aap_protobuf/service/bluetooth.
-const uint16_t kPairingRequest = 0x8001;   // phone: its address and pairing method
-const uint16_t kPairingResponse = 0x8002;  // head unit: status, already paired
-const uint16_t kAuthData = 0x8003;         // head unit: the pairing key it shows; never sent here
-const uint16_t kAuthResult = 0x8004;       // phone: how the pairing went
 }  // namespace msg
 
 // Values the head unit puts in its messages.
@@ -152,7 +144,6 @@ enum class Route {
     kChannelOpen,
     kNavigationStatus,
     kPlaybackStatus,
-    kBluetooth,
     kSetup,
     kStart,
     kAudioStop,
@@ -179,9 +170,6 @@ inline Route routeOf(uint8_t ch, uint16_t id) {
     }
     if (id >= msg::kServiceFirst && (ch == channel::kNavigation || ch == channel::kMediaStatus)) {
         return ch == channel::kNavigation ? Route::kNavigationStatus : Route::kPlaybackStatus;
-    }
-    if (id >= msg::kServiceFirst && ch == channel::kBluetooth) {  // its 0x8001 is no start indication
-        return Route::kBluetooth;
     }
     switch (id) {
         case msg::kSetupRequest:

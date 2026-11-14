@@ -80,19 +80,16 @@ public:
     static void micData(const uint8_t* pcm, size_t len, void* user);
     static void navStatus(uint16_t msgId, const uint8_t* body, size_t len, void* user);
     static void ended(void* user);
-    static void connected(int fd, void* user);  // a phone on Wi-Fi: startSession(fd, user, "")
+    static void connected(int fd, void* user);  // a phone on Wi-Fi: startSession(fd, user)
     // A phone on Wi-Fi connected again while its session runs there: that session ends and this one starts.
     static bool replaced(int fd, void* user);
-    // Prepares the video and starts the session on this socket, which it owns. carBluetooth: the car's address, told
-    // to a phone on a cable so that it pairs with the car (aa::AASession::setBluetooth); empty on Wi-Fi. cable: the
-    // socket comes from the cable, and is refused if a session started meanwhile (a phone on Wi-Fi keeps its session).
-    // True when the session runs; false when the socket was closed instead (stopping, not ready, video failed).
-    static bool startSession(int fd, void* user, const std::string& carBluetooth, bool cable = false);
-    // Is this phone paired with the car's Bluetooth (bluez_adapter.hpp)? On the session thread.
-    static bool bluetoothPaired(const std::string& phone, void* user);
+    // Prepares the video and starts the session on this socket, which it owns. cable: the socket comes from the cable,
+    // and is refused if a session started meanwhile (a phone on Wi-Fi keeps its session). True when the session runs;
+    // false when the socket was closed instead (stopping, not ready, video failed).
+    static bool startSession(int fd, void* user, bool cable = false);
     static void* wireless(void* user);  // thread: runWirelessLoop, then the failure the main loop sees
     // thread, only with the settings file kUsb: a phone on a cable is asked for Android Auto while no session runs,
-    // and handed to startSession() with the car's Bluetooth address. Ends when the service stops.
+    // and handed to startSession(). Ends when the service stops.
     static void* usb(void* user);
 
     // ---- WirelessHost ----
@@ -136,10 +133,9 @@ public:
     unsigned sppLinks, tcpLinks;
     std::atomic<unsigned> videoFrames;  // counted on the session thread without mu
     bool wppReply, wppAccepted;
-    std::atomic<bool> usbStop;     // set with stopping: read by the cable thread while it waits for the phone
-    std::atomic<bool> usbBusy;     // set by the cable thread while it connects a phone or carries its session
-    std::atomic<bool> usbPhone;    // set by the cable thread while a phone is on the cable, connected or not
-    std::string bluetoothAdapter;  // under mu: the car's BlueZ adapter path for bluetoothPaired, set by usb()
+    std::atomic<bool> usbStop;   // set with stopping: read by the cable thread while it waits for the phone
+    std::atomic<bool> usbBusy;   // set by the cable thread while it connects a phone or carries its session
+    std::atomic<bool> usbPhone;  // set by the cable thread while a phone is on the cable, connected or not
 
 private:
     volatile sig_atomic_t* quit_;

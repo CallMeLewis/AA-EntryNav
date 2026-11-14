@@ -20,9 +20,6 @@ uint16_t messageId(const Message& message);
 // A varint field of a received message's body, cut to 32 bits; kNoField when missing or unreadable.
 const uint32_t kNoField = 0xFFFFFFFFu;
 uint32_t bodyField(const Message& message, uint32_t number);
-// A string field of a received message's body, at most `max` bytes of printable ASCII; empty when missing, longer or
-// anything else. Enough for what is only logged or handed on, such as a Bluetooth address.
-std::string bodyText(const Message& message, uint32_t number, size_t max);
 
 namespace message {
 
@@ -57,10 +54,6 @@ Message bindingResponse();
 Message keyEvent(uint64_t timestampUs, uint32_t keycode, bool down);
 Message rotaryEvent(uint64_t timestampUs, uint32_t keycode, int delta);
 Message touchEvent(uint64_t timestampUs, const TouchEventOut& touch);
-
-// Bluetooth channel: the answer to the phone's pairing request, always a success. Not paired: the phone pairs
-// (the session only ever answers already paired: aa_channels.cpp, onBluetooth).
-Message pairingResponse(bool alreadyPaired);
 
 }  // namespace message
 }  // namespace aa

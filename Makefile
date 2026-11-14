@@ -45,7 +45,7 @@ DAEMON_SRC = platform/alps_spp.cpp platform/alps_spp_codec.cpp platform/evo_ap.c
              platform/evo_alsa_out.cpp platform/evo_audio.cpp platform/audio_route.cpp \
              $(KOMBI_SRC) platform/evo_bmw_guidance.cpp platform/evo_pill.cpp \
              platform/peek_timing.cpp platform/wireless_loop.cpp platform/service_app.cpp platform/main.cpp \
-             $(USB_SRC) platform/bluez_adapter.cpp
+             $(USB_SRC)
 DAEMON_OBJ = $(CORE_OBJ) $(DAEMON_SRC:.cpp=.o)
 TRIAL_OBJ = tools/evo_trial.o platform/evo_spp_snapshot.o platform/alps_spp.o platform/alps_spp_codec.o \
             platform/evo_ilm.o platform/evo_process.o platform/evo_ap.o platform/evo_ap_config.o platform/evo_wlan.o \
@@ -63,7 +63,7 @@ ARM_OBJ = $(sort $(DAEMON_OBJ) $(PLATFORM_OBJ) $(TRIAL_OBJ) $(CHECK_OBJ) $(CAPTU
 LIFECYCLE_OBJ = $(PLATFORM_OBJ) platform/evo_touch.o platform/evo_knob.o platform/vmost_client.o platform/evo_control.o \
                 platform/evo_mic.o platform/evo_alsa_out.o platform/evo_audio.o platform/audio_route.o platform/evo_pill.o \
                 $(KOMBI_OBJ) \
-                platform/evo_bmw_guidance.o platform/peek_timing.o $(USB_SRC:.cpp=.o) platform/bluez_adapter.o
+                platform/evo_bmw_guidance.o platform/peek_timing.o $(USB_SRC:.cpp=.o)
 
 VIDEO_LIBS = -l:libxsvideo.so.4 -l:libdrm_omap.so.1 -l:libdrm.so.2 -lpthread -lrt
 

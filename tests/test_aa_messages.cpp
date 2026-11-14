@@ -60,8 +60,6 @@ void messages() {
     CHECK(nightModeEvent(true) == Bytes({0x80, 0x03, 0x52, 0x02, 0x08, 0x01}));
     CHECK(drivingStatusEvent(0) == Bytes({0x80, 0x03, 0x6a, 0x02, 0x08, 0x00}));
     CHECK(bindingResponse() == Bytes({0x80, 0x03, 0x08, 0x00}));
-    CHECK(pairingResponse(false) == Bytes({0x80, 0x02, 0x08, 0x00, 0x10, 0x00}));  // status SUCCESS, already_paired
-    CHECK(pairingResponse(true) == Bytes({0x80, 0x02, 0x08, 0x00, 0x10, 0x01}));
 
     CHECK(keyEvent(5, 3, true) ==
           Bytes({0x80, 0x01, 0x08, 0x05, 0x22, 0x0a, 0x0a, 0x08, 0x08, 0x03, 0x10, 0x01, 0x18, 0x00, 0x20, 0x00}));
@@ -89,14 +87,6 @@ void readers() {
     CHECK(aa::bodyField(Bytes({0x80, 0x01}), 1) == aa::kNoField);
     CHECK(aa::bodyField(Bytes({0x80, 0x01, 0x08}), 1) == aa::kNoField);
     CHECK(aa::bodyField(Bytes({0x80, 0x01, 0x08, 0x8a, 0x80, 0x80, 0x80, 0x10}), 1) == 10);  // cut to 32 bits
-    // A pairing request: phone address (field 1), method 2.
-    const Bytes request({0x80, 0x01, 0x0a, 0x05, 'A', 'B', ':', 'c', 'd', 0x10, 0x02});
-    CHECK(aa::bodyText(request, 1, 17) == "AB:cd" && aa::bodyField(request, 2) == 2);
-    CHECK(aa::bodyText(request, 1, 4).empty());  // longer than allowed
-    CHECK(aa::bodyText(request, 3, 17).empty() && aa::bodyText(Bytes({0x80, 0x01}), 1, 17).empty());
-    CHECK(aa::bodyText(Bytes({0x80, 0x01, 0x0a, 0x02, 'A', 0x00}), 1, 17).empty());  // not printable
-    CHECK(aa::bodyText(Bytes({0x80, 0x01, 0x0a, 0x09, 'A'}), 1, 17).empty());        // cut short
-    CHECK(aa::bodyText(Bytes({0x80, 0x01, 0x08, 0x01}), 1, 17).empty());             // a number, not a string
 }
 
 void routes() {
@@ -108,10 +98,6 @@ void routes() {
     CHECK(routeOf(10, 0x8007) == Route::kNavigationStatus && routeOf(10, 0x8000) == Route::kNavigationStatus);
     CHECK(routeOf(10, 0x8002) == Route::kNavigationStatus && routeOf(10, 0xffff) == Route::kNavigationStatus);
     CHECK(routeOf(12, 0x8001) == Route::kPlaybackStatus && routeOf(12, 0x8000) == Route::kPlaybackStatus);
-    // Bluetooth (15): its pairing request is 0x8001, no start indication; its media and open ids stay theirs.
-    CHECK(routeOf(15, 0x8001) == Route::kBluetooth && routeOf(15, 0x8004) == Route::kBluetooth);
-    CHECK(routeOf(15, 0x8000) == Route::kBluetooth && routeOf(15, 0xffff) == Route::kBluetooth);
-    CHECK(routeOf(15, 0x0007) == Route::kChannelOpen && routeOf(15, 0x0000) == Route::kMedia);
     // Channel open, on any channel, the control channel included.
     CHECK(routeOf(6, 0x0007) == Route::kChannelOpen && routeOf(0, 0x0007) == Route::kChannelOpen);
     CHECK(routeOf(10, 0x0007) == Route::kChannelOpen);

@@ -64,9 +64,6 @@ bool AASession::dispatch(uint8_t channel, const Message& message) {
         case Route::kPlaybackStatus:
             onPlaybackStatus(id, message);
             break;
-        case Route::kBluetooth:
-            onBluetooth(channel, id, message);
-            break;
         case Route::kSetup:
             onSetup(channel);
             break;
@@ -178,8 +175,8 @@ void AASession::onTlsHandshake(const Message& message) {
 // The description of this car: Google's Desktop Head Unit template, adapted by core/sdr_builder.cpp.
 void AASession::onDiscovery() {
     printf("[AASession] >>> Received ServiceDiscoveryRequest from phone! Sending ServiceDiscoveryResponse...\n");
-    const Message response = message::discoveryResponse(buildCarServiceDiscovery(
-        kDhuSdpProtobuf, kDhuSdpProtobufLen, vehicleFile_, audio_.fn != nullptr, bluetoothAddress_, hdVideo_));
+    const Message response = message::discoveryResponse(
+        buildCarServiceDiscovery(kDhuSdpProtobuf, kDhuSdpProtobufLen, vehicleFile_, audio_.fn != nullptr, hdVideo_));
     if (sendSealed(channel::kControl, response)) {
         printf("[AASession] >>> Sent ServiceDiscoveryResponse (%u bytes)\n", static_cast<unsigned>(response.size()));
     }
@@ -224,37 +221,6 @@ void AASession::onPing(const Message& message) {
 void AASession::onChannelOpen(uint8_t channel) {
     printf("[AASession] >>> ChannelOpenRequest on Channel %u: ChannelOpenResponse (SUCCESS)\n", channel);
     sendSealed(channel, message::channelOpenResponse(), frame::kSealedChannelControl);
-}
-
-// ---- Bluetooth channel --------------------------------------------------------------------------------------------
-
-// Only on a cable, where the phone is told the car's Bluetooth address. The phone sends its address and the pairing
-// method it chose; the answer is always "already paired". Answering "not paired" makes the phone start a pairing of
-// its own, and an Android phone that was paired already can drop its pairing to do so. Seen on the car on 11 November
-// 2026: BMW's stack (BlueZ 4 facade) reported a phone iDrive showed as connected as not paired, the phone asked again
-// every few seconds, the car took no pairing, and the owner had to remove the phone and pair it again in iDrive.
-// Pairing therefore stays with iDrive, as on Wi-Fi. What BMW's stack says is still asked and logged.
-void AASession::onBluetooth(uint8_t channel, uint16_t id, const Message& message) {
-    const size_t kAddressMax = 17;
-    if (id == msg::kPairingRequest) {
-        const std::string phone = bodyText(message, 1, kAddressMax);
-        const uint32_t method = bodyField(message, 2);
-        const bool known = !phone.empty() && bluetoothPaired_.fn && bluetoothPaired_.fn(phone, bluetoothPaired_.user);
-        const bool sent = sendSealed(channel, message::pairingResponse(true));
-        printf("[AASession] >>> Bluetooth pairing request from %s (method %d): answered already paired (%s), %s\n",
-               phone.empty() ? "an unreadable address" : phone.c_str(), signedOrMinusOne(method),
-               known ? "the car's stack agrees" : "the car's stack did not confirm it; pairing stays with iDrive",
-               sent ? "sent" : "SEND FAILED");
-        return;
-    }
-    if (id == msg::kAuthResult) {
-        const uint32_t status = bodyField(message, 1);
-        printf("[AASession] >>> Bluetooth pairing result from the phone: status %d%s\n", signedOrMinusOne(status),
-               status == kStatusOk ? " (paired)" : "");
-        return;
-    }
-    printf("[AASession] Bluetooth channel message ID=0x%04X, Len=%u (not handled)\n", id,
-           static_cast<unsigned>(message.size()));
 }
 
 // ---- sensor channel -----------------------------------------------------------------------------------------------

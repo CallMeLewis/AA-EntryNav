@@ -37,10 +37,6 @@ using NavStatusCallback = void (*)(uint16_t, const uint8_t*, size_t, void*);
 using AudioDataCallback = void (*)(uint8_t, const uint8_t*, size_t, uint64_t, void*);
 // A sound stream starts (true, with its configuration's index in the channel's list) or stops.
 using AudioStreamCallback = void (*)(uint8_t, bool, uint32_t, void*);
-// Is the phone with this Bluetooth address ("AA:BB:CC:DD:EE:FF", as the phone sends it) paired with the car? Asked
-// on the session thread when the phone asks; may take a moment (a D-Bus call), not seconds. Only logged: the phone is
-// always answered "already paired" (aa_channels.cpp, onBluetooth).
-using BluetoothPairedCallback = bool (*)(const std::string&, void*);
 
 class AASession {
 public:
@@ -78,10 +74,6 @@ public:
     // then expected in its pixels. Off by default. Set before start(): it goes into the service discovery.
     void setHdVideo(bool on) { hdVideo_ = on; }
     bool hdVideo() const { return hdVideo_; }
-    // The car's Bluetooth for the sessions started from now on: the phone is told its address (a service of its own,
-    // core/sdr_builder.hpp); `paired` is asked for the log when the phone asks about pairing. An empty address, the
-    // default, leaves the phone untold, as on Wi-Fi where it reached the car through its Bluetooth. Set before start().
-    void setBluetooth(const std::string& carAddress, BluetoothPairedCallback paired, void* user_data = nullptr);
 
     // Car input for the phone, from any thread: queued, then sent by the session thread.
     void postTouchEvent(const TouchEventOut& ev);
@@ -157,7 +149,6 @@ private:
     void onMicrophoneOpen(uint8_t channel, const Message& message);
     void onNavigationStatus(uint16_t id, const Message& message);
     void onPlaybackStatus(uint16_t id, const Message& message);
-    void onBluetooth(uint8_t channel, uint16_t id, const Message& message);
 
     pthread_mutex_t lifecycleLock_;  // start() and stop(), called from the accept and main threads
     mutable pthread_mutex_t socketLock_;
@@ -175,8 +166,6 @@ private:
     Callback<AudioStreamCallback> audioStream_;
     const char* vehicleFile_;
     bool hdVideo_;
-    std::string bluetoothAddress_;
-    Callback<BluetoothPairedCallback> bluetoothPaired_;
 
     CarInbox inbox_;
     std::atomic<uint32_t> longestSilenceMs_;

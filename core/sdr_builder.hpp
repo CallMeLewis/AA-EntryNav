@@ -55,14 +55,6 @@ int removeMediaChannel(std::vector<uint8_t>& sdr);
 // the prompts into its own audio, which plays over Bluetooth. Returns the fields changed (0 or 1).
 int retypeGuidanceSink(std::vector<uint8_t>& sdr);
 
-// A car Bluetooth address as BlueZ prints it: six pairs of hex digits joined by colons, "00:1A:7D:DA:71:13".
-bool validBluetoothAddress(const std::string& s);
-// The car's Bluetooth as a service of its own (channel 15) right after the template's last one: its address, in
-// capitals, and the pairing methods the car's stack offers (numeric comparison, then PIN). The phone opens the
-// channel, asks whether it is paired with the car, and pairs when it is not. False, nothing added, when the address is
-// invalid, the description malformed or the service already there.
-bool addBluetoothService(std::vector<uint8_t>& sdr, const std::string& carAddress);
-
 // The platform's last word on the description, after removeMediaChannel (platform/evo_sdr_sensors.cpp registers
 // one: the sensor list cut to what the car feeds). Returns what it removed.
 using DiscoveryTrim = int (*)(std::vector<uint8_t>& sdr);
@@ -72,12 +64,11 @@ void setDiscoveryTrim(DiscoveryTrim trim);
 // and year (SdrIdentity::loadVehicleFile), given by the platform; null keeps the reference car. wifiAudio: the
 // platform plays the phone's sound itself, so the template's sinks stay as they are (media on channel 9, 48 kHz
 // stereo; guidance on channel 8, 16 kHz mono first) and neither removeMediaChannel nor retypeGuidanceSink runs.
-// bluetoothAddress: the car's, for addBluetoothService; empty (as on Wi-Fi, where the phone is already connected to
-// the car's Bluetooth) leaves the description without it. hdVideo: the 1080p canvas, else 720p (canvasFor).
+// The car's Bluetooth address is never in it: told it, Android Auto takes the phone's Bluetooth over (pairing
+// waited for a code from the car, reconnection never finished; reference car, 14 November 2026). hdVideo: the 1080p
+// canvas, else 720p (canvasFor).
 std::vector<uint8_t> buildCarServiceDiscovery(const uint8_t* base, size_t baseLen, const char* vehicleFile,
-                                              bool wifiAudio = false,
-                                              const std::string& bluetoothAddress = std::string(),
-                                              bool hdVideo = false);
+                                              bool wifiAudio = false, bool hdVideo = false);
 
 }  // namespace aa
 

@@ -28,11 +28,6 @@ const uint32_t kInsetsField = 1;       // top, bottom, left, right
 const uint32_t kTouchscreenField = 2;  // in an input source
 const uint32_t kWidthField = 1;        // in a touchscreen, with kHeightField
 const uint32_t kHeightField = 2;
-const uint32_t kBluetoothServiceField = 6;  // in a service
-const uint32_t kCarAddressField = 1;        // in a Bluetooth service, with its pairing methods (packed enums)
-const uint32_t kPairingMethodsField = 2;
-const uint64_t kPairingNumericComparison = 2;
-const uint64_t kPairingPin = 4;
 
 const uint64_t kGuidanceAudio = 1;
 const uint8_t kSystemAudio = 2;
@@ -329,70 +324,15 @@ void setDiscoveryTrim(DiscoveryTrim trim) {
     g_trim = trim;
 }
 
-bool validBluetoothAddress(const std::string& s) {
-    if (s.size() != 17) {
-        return false;
-    }
-    for (size_t i = 0; i < s.size(); ++i) {
-        const char c = s[i];
-        const bool hex = (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f');
-        if (i % 3 == 2 ? c != ':' : !hex) {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool addBluetoothService(std::vector<uint8_t>& sdr, const std::string& carAddress) {
-    if (!validBluetoothAddress(carAddress)) {
-        return false;
-    }
-    size_t after = 0;  // the end of the last service
-    pb::FieldReader reader(sdr.data(), sdr.size());
-    pb::Field field;
-    while (reader.next(field)) {
-        if (isChannel(field, channel::kBluetooth)) {
-            return false;
-        }
-        if (pb::isMessage(field, kServiceField)) {
-            after = field.end;
-        }
-    }
-    if (reader.malformed()) {
-        return false;
-    }
-    std::string address(carAddress);
-    for (size_t i = 0; i < address.size(); ++i) {
-        if (address[i] >= 'a' && address[i] <= 'f') {
-            address[i] = static_cast<char>(address[i] - 'a' + 'A');
-        }
-    }
-    Bytes methods;  // packed
-    pb::appendVarint(methods, kPairingNumericComparison);
-    pb::appendVarint(methods, kPairingPin);
-    Bytes bluetooth;
-    pb::appendString(bluetooth, kCarAddressField, address);
-    pb::appendMessage(bluetooth, kPairingMethodsField, methods);
-    Bytes service;
-    pb::appendUint(service, kChannelIdField, channel::kBluetooth);
-    pb::appendMessage(service, kBluetoothServiceField, bluetooth);
-    Bytes entry;
-    pb::appendMessage(entry, kServiceField, service);
-    sdr.insert(sdr.begin() + static_cast<std::ptrdiff_t>(after), entry.begin(), entry.end());
-    printf("[SDR] Bluetooth service (channel %u): car %s, pairing by numeric comparison or PIN\n", channel::kBluetooth,
-           address.c_str());
-    return true;
-}
-
 std::vector<uint8_t> buildCarServiceDiscovery(const uint8_t* base, size_t baseLen, const char* vehicleFile,
-                                              bool wifiAudio, const std::string& bluetoothAddress, bool hdVideo) {
+                                              bool wifiAudio, bool hdVideo) {
     SdrIdentity identity;
     if (vehicleFile) {
         identity.loadVehicleFile(vehicleFile);
     }
     std::vector<uint8_t> sdr = buildServiceDiscovery(base, baseLen, identity);
-    printf("[SDR] ServiceDiscovery identity: %s %s %s (BT channel: %s)\n", identity.carMake.c_str(),
-           identity.carModel.c_str(), identity.carYear.c_str(), bluetoothAddress.empty() ? "none" : "added below");
+    printf("[SDR] ServiceDiscovery identity: %s %s %s\n", identity.carMake.c_str(), identity.carModel.c_str(),
+           identity.carYear.c_str());
     tuneMainDisplay(sdr, canvasFor(hdVideo));
     declareTouchscreen(sdr, canvasFor(hdVideo));
     if (wifiAudio) {
@@ -406,9 +346,6 @@ std::vector<uint8_t> buildCarServiceDiscovery(const uint8_t* base, size_t baseLe
     }
     if (!wifiAudio) {
         retypeGuidanceSink(sdr);
-    }
-    if (!bluetoothAddress.empty() && !addBluetoothService(sdr, bluetoothAddress)) {
-        printf("[SDR] Bluetooth service not added: car address \"%s\" unusable\n", bluetoothAddress.c_str());
     }
     return sdr;
 }

@@ -15,8 +15,7 @@ const uint32_t kSetupMaxUnackedField = 2, kSetupConfigField = 3;
 const uint32_t kFocusModeField = 1, kFocusUnrequestedField = 2;
 const uint32_t kAckSessionField = 1, kAckCountField = 2;
 const uint32_t kMicSessionField = 1, kMicStatusField = 2;
-const uint32_t kSensorValueField = 1;    // the single value of NightMode and DrivingStatus
-const uint32_t kAlreadyPairedField = 2;  // in a pairing response, after its status
+const uint32_t kSensorValueField = 1;  // the single value of NightMode and DrivingStatus
 // InputEventIndication: the touch, key and relative events, and the fields inside them.
 const uint32_t kTouchField = 3, kKeysField = 4, kRelativeField = 6;
 const uint32_t kEventListField = 1;  // repeated ButtonEvent / RelativeInputEvent
@@ -68,29 +67,6 @@ uint32_t bodyField(const Message& message, uint32_t number) {
         return kNoField;
     }
     return static_cast<uint32_t>(value);
-}
-
-std::string bodyText(const Message& message, uint32_t number, size_t max) {
-    if (message.size() <= kMessageIdSize) {
-        return std::string();
-    }
-    pb::FieldReader reader(&message[kMessageIdSize], message.size() - kMessageIdSize);
-    pb::Field field;
-    while (reader.next(field)) {
-        if (!pb::isMessage(field, number)) {
-            continue;
-        }
-        if (field.size > max) {
-            return std::string();
-        }
-        for (size_t i = 0; i < field.size; ++i) {
-            if (field.data[i] < 0x20 || field.data[i] > 0x7e) {
-                return std::string();
-            }
-        }
-        return std::string(reinterpret_cast<const char*>(field.data), field.size);
-    }
-    return std::string();
 }
 
 namespace message {
@@ -248,12 +224,6 @@ Message touchEvent(uint64_t timestampUs, const TouchEventOut& touch) {
     pb::appendUint(event, kPointerIndexField, static_cast<uint32_t>(touch.index));
     pb::appendUint(event, kTouchActionField, static_cast<uint32_t>(touch.action));
     return inputEvent(timestampUs, kTouchField, event);
-}
-
-Message pairingResponse(bool alreadyPaired) {
-    Message m = statusOnly(msg::kPairingResponse, kStatusOk);
-    pb::appendUint(m, kAlreadyPairedField, alreadyPaired ? 1 : 0);
-    return m;
 }
 
 }  // namespace message

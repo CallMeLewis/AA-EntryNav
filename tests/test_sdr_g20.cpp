@@ -95,7 +95,7 @@ bool hdMatches() {
     evo::setCarGpsSourceForTest("/nonexistent");
     const std::vector<uint8_t> golden(kSdrG20WithoutCarGps, kSdrG20WithoutCarGps + sizeof(kSdrG20WithoutCarGps));
     const std::vector<uint8_t> hd =
-        aa::buildCarServiceDiscovery(kDhuSdpProtobuf, kDhuSdpProtobufLen, nullptr, false, std::string(), true);
+        aa::buildCarServiceDiscovery(kDhuSdpProtobuf, kDhuSdpProtobufLen, nullptr, false, true);
     Display sd, hdd;
     if (!display(golden, sd) || !display(hd, hdd)) {
         printf("FAIL 1080p: display or touchscreen not found\n");

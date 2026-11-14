@@ -86,10 +86,11 @@ Over a cable, the phone runs Android Auto in Android's accessory mode. This is h
   phone off the bus for about a second, so the service waits 30 seconds before asking again. Right after a plug-in,
   or after a session on the cable, it retries up to three times 2 seconds apart instead, and unplugging the phone and
   plugging it back in clears the wait.
-- **Pairing stays with iDrive.** The service reads the car's Bluetooth address from BMW's Bluetooth stack without
-  changing anything there. It always tells the phone that the two are already paired. Saying otherwise made a paired
-  phone try to pair again, and that can lose the pairing. Without Bluetooth, the cable still carries Android Auto, but
-  there are no calls and no sound unless `audio-wifi` is on.
+- **Bluetooth stays with the phone and iDrive.** The service doesn't tell the phone the car's Bluetooth address. Told
+  it, Android Auto took the phone's Bluetooth over: the phone hid its own pairing code and waited for one from the
+  car, and it didn't reconnect after its Bluetooth dropped. Pair through iDrive's new device screen as usual, cable in
+  or not. Without Bluetooth, the cable still carries Android Auto, but there are no calls and no sound unless
+  `audio-wifi` is on.
 - While the cable is connecting a phone or carrying its session, the service doesn't send that phone to the Wi-Fi.
 
 `wireless-off` makes the cable the only path. Android Auto then puts nothing on BMW's Bluetooth serial slot, so there's

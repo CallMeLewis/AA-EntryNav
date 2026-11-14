@@ -266,13 +266,6 @@ void onAudio(uint8_t channel, const uint8_t* data, size_t len, uint64_t pts, voi
 void onAudioStream(uint8_t channel, bool started, uint32_t config, void*) {
     event(format("audio stream channel=%u started=%d config=%u", channel, started ? 1 : 0, config));
 }
-// The car knows one phone, AA:BB:CC:DD:EE:01.
-bool onPairedQuestion(const std::string& phone, void*) {
-    const bool paired = phone == "AA:BB:CC:DD:EE:01";
-    event("paired? " + phone + (paired ? " yes" : " no"));
-    return paired;
-}
-
 void watch(aa::AASession& session, bool touch) {
     session.setTouchForwarding(touch);
     session.setDisconnectCallback(onEnded);
@@ -537,7 +530,7 @@ private:
 struct Link {
     aa::AASession session;
     int phoneFd;
-    explicit Link(bool touch = true, bool wifiAudio = false, const char* carBluetooth = nullptr) : phoneFd(-1) {
+    explicit Link(bool touch = true, bool wifiAudio = false) : phoneFd(-1) {
         int fds[2];
         if (socketpair(AF_UNIX, SOCK_STREAM, 0, fds) != 0) {
             fprintf(stderr, "FAIL socketpair\n");
@@ -546,9 +539,6 @@ struct Link {
         watch(session, touch);
         if (wifiAudio) {
             session.setAudioCallbacks(onAudio, onAudioStream);
-        }
-        if (carBluetooth) {
-            session.setBluetooth(carBluetooth, onPairedQuestion);
         }
         phoneFd = fds[1];
         if (!session.start(fds[0])) {
@@ -1020,27 +1010,6 @@ void wifiAudio(std::vector<std::string>& log) {
     ended(link, log);
 }
 
-// A phone on a cable, told the car's Bluetooth: the description ends its services with channel 15, the phone opens
-// it and asks about a phone the car does not know, one it knows, and one whose address cannot be read: each is answered
-// already paired, so that the phone never starts a pairing of its own. Then its pairing result and a message the head
-// unit has no use for. Nothing else changes.
-void cableBluetooth(std::vector<std::string>& log) {
-    Link link(true, false, "00:1a:7d:da:71:13");
-    Phone phone(link.phoneFd, log);
-    phone.handshake();
-    phone.discover();
-    log.push_back("-- channel 15 opened, pairing requests, the phone's pairing result, an unhandled message");
-    phone.send(15, kSealedCtl, bytes({0x00, 0x07, 0x08, 0x00, 0x10, 0x0f}));
-    phone.send(15, kSealed, bytes({0x80, 0x01, 0x0a, 0x11}) + text("AA:BB:CC:DD:EE:02") + bytes({0x10, 0x02}));
-    phone.send(15, kSealed, bytes({0x80, 0x01, 0x0a, 0x11}) + text("AA:BB:CC:DD:EE:01") + bytes({0x10, 0x04}));
-    phone.send(15, kSealed, bytes({0x80, 0x01, 0x10, 0x02}));
-    phone.send(15, kSealed, bytes({0x80, 0x04, 0x08, 0x00}));
-    phone.send(15, kSealed, bytes({0x80, 0x03, 0x0a, 0x01, 0x31}));
-    phone.settle();
-    phone.leave();
-    ended(link, log);
-}
-
 // A phone that stops speaking by itself (iDrive has the screen, no music) keeps its session as long as it answers the
 // head unit's pings. One that answers nothing loses it within the 5 s silence limit, pings or not. This runs on the
 // clock, so it is checked here and kept out of the golden. An empty verdict means it passed.
@@ -1069,13 +1038,10 @@ struct Scenario {
     void (*run)(std::vector<std::string>&);
 };
 
-const Scenario kScenarios[] = {{"full session", fullSession},
-                               {"fragment edges", fragmentEdges},
-                               {"plain edges", plainEdges},
-                               {"cut headers", cutHeaders},
-                               {"lifecycle", lifecycle},
-                               {"sound over Wi-Fi", wifiAudio},
-                               {"cable, car Bluetooth", cableBluetooth}};
+const Scenario kScenarios[] = {
+    {"full session", fullSession}, {"fragment edges", fragmentEdges}, {"plain edges", plainEdges},
+    {"cut headers", cutHeaders},   {"lifecycle", lifecycle},          {"sound over Wi-Fi", wifiAudio},
+};
 
 void timedOut(int) {
     static const char msg[] = "FAIL test-session-phone: no progress\n";

@@ -161,50 +161,6 @@ int main() {
             CHECK(it->first == 8 || wifi[it->first] == it->second);
         }
     }
-    // The car's Bluetooth (a phone on a cable): one service more, channel 15, right after the last service and before
-    // the identity fields; every other byte as without it. Its body: the address in capitals, then the pairing
-    // methods packed (2 numeric comparison, 4 PIN).
-    {
-        const std::vector<uint8_t> plain = aa::buildCarServiceDiscovery(kDhuSdpProtobuf, kDhuSdpProtobufLen, nullptr);
-        const std::vector<uint8_t> told =
-            aa::buildCarServiceDiscovery(kDhuSdpProtobuf, kDhuSdpProtobufLen, nullptr, false, "00:1a:7D:DA:71:13");
-        std::vector<uint64_t> unused;
-        std::map<uint64_t, std::vector<uint8_t>> before = channels(plain, unused), after = channels(told, unused);
-        CHECK(!before.count(15) && after.count(15) && after.size() == before.size() + 1);
-        static const char kAddress[] = "00:1A:7D:DA:71:13";
-        std::vector<uint8_t> service = {0x08, 0x0f, 0x32, 0x17, 0x0a, 0x11};
-        service.insert(service.end(), kAddress, kAddress + 17);
-        const uint8_t methods[] = {0x12, 0x02, 0x02, 0x04};
-        service.insert(service.end(), methods, methods + sizeof(methods));
-        std::vector<uint8_t> entry = {0x0a, static_cast<uint8_t>(service.size())};
-        entry.insert(entry.end(), service.begin(), service.end());
-        CHECK(after[15] == entry);
-        // Inserted after the last service: the description without it is the one sent on Wi-Fi.
-        std::vector<F> top = fields(told);
-        size_t lastService = 0, firstOther = top.size();
-        for (size_t i = 0; i < top.size(); ++i) {
-            if (top[i].num == 1) {
-                lastService = i;
-            } else if (firstOther == top.size()) {
-                firstOther = i;
-            }
-        }
-        CHECK(top[lastService].raw == entry && lastService + 1 == firstOther);
-        std::vector<uint8_t> without(told);
-        const size_t at = std::search(told.begin(), told.end(), entry.begin(), entry.end()) - told.begin();
-        without.erase(without.begin() + at, without.begin() + at + entry.size());
-        CHECK(without == plain);
-        // Once only, and never with an address that is not one.
-        std::vector<uint8_t> again(told);
-        CHECK(!aa::addBluetoothService(again, kAddress) && again == told);
-        std::vector<uint8_t> bad(plain);
-        CHECK(!aa::addBluetoothService(bad, "00:1A:7D:DA:71") && !aa::addBluetoothService(bad, "00-1A-7D-DA-71-13") &&
-              !aa::addBluetoothService(bad, "00:1A:7D:DA:71:1G") && !aa::addBluetoothService(bad, "") && bad == plain);
-        CHECK(aa::buildCarServiceDiscovery(kDhuSdpProtobuf, kDhuSdpProtobufLen, nullptr, false, "nonsense") == plain);
-        std::vector<uint8_t> broken(3, 0xff);
-        CHECK(!aa::addBluetoothService(broken, kAddress) && broken.size() == 3);
-        CHECK(aa::validBluetoothAddress("aa:bb:cc:dd:ee:ff") && !aa::validBluetoothAddress("aa:bb:cc:dd:ee:ff:"));
-    }
     // Vehicle file (written at installation for another car): model and year only, invalid lines ignored.
     char vehicle[96];
     snprintf(vehicle, sizeof(vehicle), "/tmp/entry-sdr-vehicle-%d", int(getpid()));
@@ -236,6 +192,6 @@ int main() {
           !aa::validCarYear("3000"));
     puts(
         "PASS AA sensors: DHU template cut to NIGHT_MODE + DRIVING_STATUS (the phone keeps its GPS), channel 9 "
-        "always removed by the core, other channels identical, car Bluetooth service, vehicle file (model, year)");
+        "always removed by the core, other channels identical, no car Bluetooth service, vehicle file (model, year)");
     return 0;
 }
