@@ -151,11 +151,11 @@ int main(int argc, char** argv) {
     save(path, ring);
     p = reader.poll(now + 8000);
     assert(p.valid && p.hasSpeed && !p.hasBearing);  // nearly stopped: no course
-    put32(ring, 0x4c + 28, 200000);
+    put32(ring, 0x4c + 28, 70000);
     ring[0x4c + 0x30] = 4;
     save(path, ring);
     p = reader.poll(now + 8250);
-    assert(p.valid && !p.hasSpeed);  // impossible value: not sent
+    assert(p.valid && !p.hasSpeed);  // 70 m/s: Android Auto would stop using the speed for the session
     put32(ring, 0x4c + 28, 0);
     put32(ring, 0x4c + 20, 0);
     ring[0x4c + 44] = 0;
@@ -179,14 +179,21 @@ int main(int argc, char** argv) {
     save(path, ring);
     p = reader.poll(now + 11000);
     assert(p.valid && p.latitudeE6 == -33900000 && p.longitudeE6 == 151200000);
-    // This layout has no speed or course: both come from two fixes (0.0009 deg north in 1 s, about 100 m/s).
-    lat = -33.8991;
+    // This layout has no speed or course: both come from two fixes (0.0005 deg north in 1 s, about 56 m/s).
+    lat = -33.8995;
     put32(ring, 0x48, 103);
     memcpy(&ring[0x50], &lat, 8);
     save(path, ring);
     p = reader.poll(now + 12000);
-    assert(p.valid && p.hasSpeed && p.speedMps > 95 && p.speedMps < 105 && p.hasBearing &&
+    assert(p.valid && p.hasSpeed && p.speedMps > 53 && p.speedMps < 58 && p.hasBearing &&
            (p.bearingDeg < 1 || p.bearingDeg > 359));
+    {
+        // Two fixes 100 m apart in 1 s: no speed or course rather than 100 m/s.
+        const aa::CarLocation before = evo::gpsDegrees(-33.9, 151.2, 1000);
+        aa::CarLocation after = evo::gpsDegrees(-33.8991, 151.2, 2000);
+        evo::gpsDerive(before, after);
+        assert(after.valid && !after.hasSpeed && !after.hasBearing);
+    }
     // This car's layout: the receiver's own speed and heading (TGNSSCourse after the position) win over any estimate.
     float realSpeed = 13.9f, realHeading = 87.5f, realAltitude = 231.5f;
     memcpy(&ring[0x70], &realSpeed, 4);

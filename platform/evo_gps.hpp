@@ -62,6 +62,11 @@ inline aa::CarLocation gpsDegrees(double lat, double lon, uint64_t now) {
     p.valid = true;
     return p;
 }
+// Speeds sent are below this. Android Auto 17.9 stops using the speed for the rest of the session once a fix says
+// 70 m/s or more (upstream's decompile, Sq00ky gps.hpp), and a speed worked out from two fixes can jump that high.
+// A faster fix, 252 km/h and up, goes without its speed.
+const double kGpsMaxSpeedMps = 70;
+
 // Keep the latest record even if invalid: never resurrect an older fix.
 // External slot: TGNSSPosition (32 bytes) then TGNSSCourse (24 bytes), the two structs libgnsssv hands to CarPlay
 // (its SOME/IP data thread takes the position at +0x48 and the course at +0x68 of the slot's shared-memory address).
@@ -115,7 +120,7 @@ inline aa::CarLocation decodeGpsRecord(const std::vector<uint8_t>& r, uint64_t n
         memcpy(&heading, &r[32 + 16], 4);
         const uint32_t courseFlags =
             gpsU32(&r[32 + 20]);  // CarPlay cbCourse/RMC: bit 0 speed (m/s), bit 2 heading (degrees)
-        if ((courseFlags & 1) && isfinite(speed) && speed >= 0 && speed <= 150) {
+        if ((courseFlags & 1) && isfinite(speed) && speed >= 0 && speed < kGpsMaxSpeedMps) {
             p.hasSpeed = true;
             p.speedMps = speed;
             if ((courseFlags & 4) && isfinite(heading) && heading >= 0 && heading < 360 && speed >= 0.5f) {
@@ -146,7 +151,7 @@ inline aa::CarLocation decodeGpsRecord(const std::vector<uint8_t>& r, uint64_t n
     memcpy(&course, &r[44], 2);
     int32_t altitude;
     memcpy(&altitude, &r[20], 4);
-    if (speed <= 150) {
+    if (speed < kGpsMaxSpeedMps) {
         p.hasSpeed = true;
         p.speedMps = speed;
         if (speed >= 0.5 && course < 36000) {
@@ -175,7 +180,7 @@ inline void gpsDerive(const aa::CarLocation& prev, aa::CarLocation& cur) {
         (cur.longitudeE6 - prev.longitudeE6) * metresPerE6 * cos(cur.latitudeE6 / 1000000.0 * M_PI / 180.0);
     const double d = sqrt(dx * dx + dy * dy);
     const double speed = d / dt;
-    if (speed > 150) {
+    if (speed >= kGpsMaxSpeedMps) {
         return;
     }
     cur.hasSpeed = true;

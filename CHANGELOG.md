@@ -21,6 +21,9 @@ Each version links to the commit its archive was built from.
   session ends and the phone connects again. Unverified.
 - **Maps no longer sees a petrol car that also charges at Tesla Superchargers.** Android Auto was told what Google's
   test head unit says. Without a `fuel=` line it is now told petrol only. Unverified.
+- **The car's GPS speed stays inside what Android Auto accepts.** A speed of 70 m/s or more, which a speed worked out
+  from two positions could reach, made Android Auto ignore the car's speed for the rest of the drive. Such a speed is
+  no longer sent. Unverified.
 
 ## [0.1.5] - 2026-11-14 · Unverified
 
