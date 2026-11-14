@@ -542,6 +542,8 @@ bool ServiceApp::startSession(int fd, void* user, const std::string& carBluetoot
         pthread_mutex_lock(&a->videoMu);
         if (cable) {
             config = a->videoConfig;
+        } else {
+            config.paceMs = kWifiFrameSpacingMs;  // frames that come in pairs over the Wi-Fi spaced out (FramePacer)
         }
         a->video.stop();
         videoOk = a->video.init(config) && a->video.start();
@@ -550,12 +552,13 @@ bool ServiceApp::startSession(int fd, void* user, const std::string& carBluetoot
             ELOG("ServiceApp", "the 1920x1080 picture did not start: 1280x720 from now on");
             a->video.stop();
             a->videoConfig = EvoVideoConfig(false);
-            config = a->videoConfig;
+            config = a->videoConfig;  // only the cable asks for 1080p, and the cable needs no pacing
             videoOk = a->video.init(config) && a->video.start();
         }
         pthread_mutex_unlock(&a->videoMu);
-        if (!cable && a->videoConfig.hd()) {
-            ELOG("ServiceApp", "phone on Wi-Fi: 1280x720 (1920x1080 is for the cable)");
+        if (!cable) {
+            ELOG("ServiceApp", "phone on Wi-Fi: 1280x720%s, frames that come close together spaced %u ms apart",
+                 a->videoConfig.hd() ? " (1920x1080 is for the cable)" : "", kWifiFrameSpacingMs);
         }
     }
     // The phone is told the canvas the decoder took; touches follow it.

@@ -39,6 +39,7 @@ struct EvoVideoConfig {
     uint32_t layerId;                          // kAaLayerId, already visible
     unsigned bufCount;                         // 8 dma-bufs
     uint32_t bufSize;                          // 1 MiB each, 2 MiB with hd (an IDR frame is larger)
+    uint32_t paceMs;                           // FramePacer spacing: 0 on the cable, kWifiFrameSpacingMs on Wi-Fi
     explicit EvoVideoConfig(bool hd = false);  // this car's values, for the 720p or the 1080p canvas
     bool hd() const { return width > displayWidth; }
 };
@@ -48,11 +49,37 @@ struct EvoVideoConfig {
 const uint32_t kVideoStatsMs = 10000;
 const uint32_t kVideoStallMs = 3000;   // no buffer given back by the decoder for this long: it is stuck
 const uint32_t kKeyframeAskMs = 2000;  // a new IDR is asked for at most this often
+
+// Over the car's Wi-Fi the phone's frames often come in pairs, so close together that the screen shows only the second:
+// on 14 November 2026, 224 to 241 of every ~298 frames were shown, against 297 to 300 on the cable. A frame that comes
+// less than spacingMs after the previous one waits for the rest of that time before it goes to the decoder. Frames that
+// come evenly go straight on, and a frame that waited never makes the next one wait, so the delay never adds up: at
+// most spacingMs, on some frames only. It doesn't hide longer gaps, which would take a buffer and a lasting delay.
+const uint32_t kWifiFrameSpacingMs = 25;  // under the 33 ms between the phone's frames at 30 per second
+struct FramePacer {
+    uint32_t spacingMs;  // 0: off
+    uint32_t lastMs;     // the previous frame went to the decoder (evo::monoMs), 0 before the first
+    bool lastHeld;       // that frame waited
+    FramePacer() : spacingMs(0), lastMs(0), lastHeld(false) {}
+    // How long a frame that came at nowMs waits before it goes to the decoder.
+    uint32_t holdMs(uint32_t nowMs) const {
+        if (!spacingMs || !lastMs || lastHeld) {
+            return 0;
+        }
+        const uint32_t since = nowMs - lastMs;
+        return since < spacingMs ? spacingMs - since : 0;
+    }
+    void sent(uint32_t nowMs, bool held) {
+        lastMs = nowMs ? nowMs : 1;
+        lastHeld = held;
+    }
+};
 struct VideoStats {
     uint32_t sinceMs;                             // start of the stretch (evo::monoMs)
     uint32_t lastFrameMs;                         // previous frame from the phone, 0 before the first
     unsigned fromPhone, dropped, decoded, shown;  // frames received, dropped, handed to the decoder, shown
-    uint32_t maxGapMs, maxBufferWaitMs, maxDecodeCallMs;
+    unsigned held;                                // frames that waited for the FramePacer
+    uint32_t maxGapMs, maxBufferWaitMs, maxDecodeCallMs, maxHoldMs;
     VideoStats()
         : sinceMs(0),
           lastFrameMs(0),
@@ -60,9 +87,11 @@ struct VideoStats {
           dropped(0),
           decoded(0),
           shown(0),
+          held(0),
           maxGapMs(0),
           maxBufferWaitMs(0),
-          maxDecodeCallMs(0) {}
+          maxDecodeCallMs(0),
+          maxHoldMs(0) {}
     // A new stretch from nowMs; the time of the last frame is kept, so a gap across two stretches still counts.
     void reset(uint32_t nowMs) {
         const uint32_t last = lastFrameMs;
@@ -137,6 +166,7 @@ private:
     bool needKeyframe_;       // a frame was dropped since the last IDR handed to the decoder
     uint32_t keyframeAskMs_;  // the last request (0: none)
     VideoStats stats_;        // under mu_
+    FramePacer pacer_;        // under mu_; its spacing from cfg_.paceMs
     // Logs the stretch and starts a new one when it is due. Called with mu_ held; releases it around the log line.
     void logStatsIfDue(uint32_t nowMs);
 };

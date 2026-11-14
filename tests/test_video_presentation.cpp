@@ -178,8 +178,27 @@ int main() {
     assert(!video.init(bad));
     bad.shownHeight = 400;
     assert(!video.init(bad));
+
+    // The Wi-Fi's frame pacing: off on the cable; on the Wi-Fi, a frame right behind the previous one waits for the
+    // rest of the spacing, a frame that waited never makes the next one wait, and evenly spaced frames never wait.
+    assert(evo::EvoVideoConfig().paceMs == 0 && evo::EvoVideoConfig(true).paceMs == 0);
+    evo::FramePacer off;
+    off.sent(1000, false);
+    assert(off.holdMs(1001) == 0);
+    evo::FramePacer pacer;
+    pacer.spacingMs = evo::kWifiFrameSpacingMs;
+    assert(pacer.holdMs(1000) == 0);  // the first frame
+    pacer.sent(1000, false);
+    assert(pacer.holdMs(1033) == 0);  // 30 frames a second: straight on
+    pacer.sent(1033, false);
+    assert(pacer.holdMs(1035) == 23);  // a pair: the second waits until 25 ms after the first
+    pacer.sent(1058, true);
+    assert(pacer.holdMs(1058) == 0);  // a third right behind it goes on: the waits never add up
+    pacer.sent(1058, false);
+    assert(pacer.holdMs(1060) == 23);
+    assert(pacer.holdMs(0xFFFFFFF0u) == 0);  // long after (and across the clock's wrap): straight on
     puts(
         "PASS video presentation: visibility, opacity cache, camera hide, SPS/PPS after a refused IDR, a new IDR asked "
         "for after a lost frame, a stuck decoder reported once, reconnect, 720p shown 1:1 and 1080p shrunk onto the "
-        "panel");
+        "panel, frame pacing on the Wi-Fi");
 }

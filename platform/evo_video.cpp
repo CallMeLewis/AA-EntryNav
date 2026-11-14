@@ -2,6 +2,8 @@
 // Android Auto video: libxsvideo decoder, dma-buf feeding and surface visibility (see evo_video.hpp).
 #include "evo_video.hpp"
 
+#include <unistd.h>
+
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
@@ -26,7 +28,8 @@ EvoVideoConfig::EvoVideoConfig(bool hd)
       surfaceId(kAaSurfaceId),
       layerId(kAaLayerId),
       bufCount(8),
-      bufSize(hd ? 2u << 20 : 1u << 20) {}
+      bufSize(hd ? 2u << 20 : 1u << 20),
+      paceMs(0) {}
 
 EvoVideo::EvoVideo()
     : h_(nullptr),
@@ -76,6 +79,10 @@ bool EvoVideo::init(const EvoVideoConfig& cfg) {
     }
     pool_.destroy();  // Also release a previous init() whose start() failed.
     cfg_ = cfg;
+    pthread_mutex_lock(&mu_);
+    pacer_ = FramePacer();
+    pacer_.spacingMs = cfg.paceMs;
+    pthread_mutex_unlock(&mu_);
     ELOG("Video", "init %ux%u, top %ux%u on the %ux%u panel, surface 0x%x layer 0x%x (%u dma-bufs of %u B)", cfg_.width,
          cfg_.height, cfg_.shownWidth, cfg_.shownHeight, cfg_.displayWidth, cfg_.displayHeight, cfg_.surfaceId,
          cfg_.layerId, cfg_.bufCount, cfg_.bufSize);
@@ -244,6 +251,19 @@ bool EvoVideo::postVideoFrame(const uint8_t* data, size_t len, uint64_t pts) {
     pthread_mutex_lock(&mu_);
     const uint32_t arrivedMs = monoMs();
     stats_.frame(arrivedMs);
+    // On the Wi-Fi, a frame right behind the previous one waits a little (FramePacer). This is the session's thread:
+    // the phone's next messages wait as long, 25 ms at most.
+    const uint32_t holdMs = pacer_.holdMs(arrivedMs);
+    if (holdMs) {
+        ++stats_.held;
+        if (holdMs > stats_.maxHoldMs) {
+            stats_.maxHoldMs = holdMs;
+        }
+        pthread_mutex_unlock(&mu_);
+        usleep(holdMs * 1000);
+        pthread_mutex_lock(&mu_);
+    }
+    const uint32_t readyMs = monoMs();
     bool idr = isIdr(data, len);
     if (idr) {
         ++idrSeen_;
@@ -253,7 +273,7 @@ bool EvoVideo::postVideoFrame(const uint8_t* data, size_t len, uint64_t pts) {
     size_t need = len + (prependCfg ? codecCfg_.size() : 0);
 
     int bi = pool_.acquireFree();
-    if (bi < 0 && !stalled_ && arrivedMs - lastReleaseMs_ >= kVideoStallMs) {
+    if (bi < 0 && !stalled_ && readyMs - lastReleaseMs_ >= kVideoStallMs) {
         stalled_ = true;  // reported once through takeStall()
     }
     // Bounded wait for a free buffer (the event thread releases one on each DMABUF_COMPLETE); none once stuck.
@@ -274,7 +294,7 @@ bool EvoVideo::postVideoFrame(const uint8_t* data, size_t len, uint64_t pts) {
         }
         bi = pool_.acquireFree();
     }
-    const uint32_t waitedMs = monoMs() - arrivedMs;
+    const uint32_t waitedMs = monoMs() - readyMs;
     if (waitedMs > stats_.maxBufferWaitMs) {
         stats_.maxBufferWaitMs = waitedMs;
     }
@@ -312,6 +332,7 @@ bool EvoVideo::postVideoFrame(const uint8_t* data, size_t len, uint64_t pts) {
     int rc = xsv_decode_video_frame(h_, fd, static_cast<uint32_t>(need));
     const uint32_t doneMs = monoMs();
     pthread_mutex_lock(&mu_);
+    pacer_.sent(callMs, holdMs != 0);
     if (doneMs - callMs > stats_.maxDecodeCallMs) {
         stats_.maxDecodeCallMs = doneMs - callMs;
     }
@@ -371,10 +392,10 @@ void EvoVideo::logStatsIfDue(uint32_t nowMs) {
     stats_.reset(nowMs);
     pthread_mutex_unlock(&mu_);
     ELOG("Video",
-         "last %u ms: %u frames from the phone (longest gap %u ms), %u dropped, %u to the decoder, %u shown; "
-         "wait for a buffer up to %u ms, decoder call up to %u ms, %d of %u buffers in use",
-         nowMs - s.sinceMs, s.fromPhone, s.maxGapMs, s.dropped, s.decoded, s.shown, s.maxBufferWaitMs,
-         s.maxDecodeCallMs, inFlight, pool_.count());
+         "last %u ms: %u frames from the phone (longest gap %u ms), %u held back (up to %u ms), %u dropped, %u to the "
+         "decoder, %u shown; wait for a buffer up to %u ms, decoder call up to %u ms, %d of %u buffers in use",
+         nowMs - s.sinceMs, s.fromPhone, s.maxGapMs, s.held, s.maxHoldMs, s.dropped, s.decoded, s.shown,
+         s.maxBufferWaitMs, s.maxDecodeCallMs, inFlight, pool_.count());
     pthread_mutex_lock(&mu_);
 }
 
