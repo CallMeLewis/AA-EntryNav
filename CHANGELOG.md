@@ -9,6 +9,16 @@ Each version links to the commit its archive was built from.
 
 ## [Unreleased]
 
+## [0.1.5-test.6] - 2026-11-14 · Unverified
+
+<!-- Flare Drive:
+Wireless Android Auto reconnects after a quick ignition cycle, instead of staying on Connecting. Android Auto also
+starts again if it was stopped while your phone was reconnecting.
+-->
+
+Two fixes for reconnecting, to try before 0.1.5. Android Auto reconnects after a quick ignition cycle, and starts again
+after stopping while your phone was reconnecting. The service and the supervisor change. This version is unverified.
+
 ### Fixed
 
 - **Android Auto reconnects after a quick ignition cycle.** When your phone's Bluetooth came back during a session,
@@ -270,7 +280,7 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 - **Changing the car's clock no longer upsets Android Auto's timing.** When GPS corrected the clock while driving, a
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
-[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.5-test.5...HEAD
+[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.5-test.6...HEAD
 [0.1.5-test.5]: https://github.com/CallMeLewis/AA-EntryNav/tree/44dd960247e64cc8729d9613e594f2f29c092f1a
 [0.1.5-test.4]: https://github.com/CallMeLewis/AA-EntryNav/tree/9ffd01a68f190c4d024332e91474af6f195378dc
 [0.1.5-test.3]: https://github.com/CallMeLewis/AA-EntryNav/tree/1e5dd83343c90c716cc8d24d1b0396bac86ced87
