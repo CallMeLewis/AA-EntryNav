@@ -9,6 +9,16 @@ Each version links to the commit its archive was built from.
 
 ## [Unreleased]
 
+## [0.1.5-test.7] - 2026-11-14 · Unverified
+
+<!-- Flare Drive:
+Sound over Wi-Fi now plays on the car's speakers, with the volume knob, and Bluetooth only carries calls. With a phone
+on the cable, Bluetooth pairs and reconnects normally again.
+-->
+
+Music over Wi-Fi, and Bluetooth fixes for the cable, to try before 0.1.5. Turn on sound over Wi-Fi in Flare Drive to
+hear Android Auto through the car as CarPlay plays. Only the service changes. This version is unverified.
+
 ### Added
 
 - **Music over Wi-Fi plays on the car's speakers.** With sound over Wi-Fi switched on in Flare Drive, Android Auto's
@@ -295,7 +305,7 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 - **Changing the car's clock no longer upsets Android Auto's timing.** When GPS corrected the clock while driving, a
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
-[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.5-test.6...HEAD
+[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.5-test.7...HEAD
 [0.1.5-test.6]: https://github.com/CallMeLewis/AA-EntryNav/tree/28ea2fa85eec44b439ace26c9bff01fdd0d26ab5
 [0.1.5-test.5]: https://github.com/CallMeLewis/AA-EntryNav/tree/44dd960247e64cc8729d9613e594f2f29c092f1a
 [0.1.5-test.4]: https://github.com/CallMeLewis/AA-EntryNav/tree/9ffd01a68f190c4d024332e91474af6f195378dc
