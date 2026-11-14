@@ -2,6 +2,7 @@
 // What the cluster shows, tick by tick: the guidance state machine between the phone's maneuver and the requests.
 
 //   DEPART at 0 m            -> no guidance: Maps sends one at a route start and after each reroute
+//   new maneuver, old dist.  -> waits up to 3 s for a distance sent after its step
 //   first maneuver           -> the whole route start, maneuver 0 patched (direction, distance and unit, road)
 //   distance text changes    -> one distance update, at most every distanceEveryS
 //   next maneuver            -> maneuver 0 updated in place (the factory's update block, the route stays); the whole
@@ -90,6 +91,8 @@ private:
     };
 
     void noManeuver(double now, const char* why);
+    bool isShown(const Maneuver& m) const;
+    bool waitForOwnDistance(const Maneuver& m, double now);
     bool holdForApproach(const Maneuver& m);
     bool settleDistance(Maneuver& m, double now);
     void fitForCluster(Maneuver& m) const;
@@ -116,8 +119,9 @@ private:
     bool departing_;           // the last step was a DEPART at 0 m (logged once per run of them)
     Maneuver lastDistance_;
     double distanceAt_;
-    Since gap_;         // no guidance
-    Since noDistance_;  // a maneuver without a distance yet
+    Since gap_;            // no guidance
+    Since noDistance_;     // a maneuver without a distance yet
+    Since staleDistance_;  // a new maneuver with a distance from before its step
 
     // The lane row's route position
     bool hasSection_;  // laneSection_ is the section of the last graph built with lanes

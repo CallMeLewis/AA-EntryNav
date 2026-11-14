@@ -67,6 +67,9 @@ struct Maneuver {
     bool hasMetres;
     int64_t metres;                // to the maneuver
     std::vector<PhoneLane> lanes;  // left to right; phones send them near the junction only
+    // The distance came before the step last changed, so it may still be the previous step's: right after a turn the
+    // next step can arrive with the last step's few metres.
+    bool distanceBeforeStep;
 
     Maneuver();
     // Same type, road and exit angle: the same turn, whatever its distance.
@@ -77,6 +80,7 @@ struct Maneuver {
 // The newest body of each message the arrows read. A plain value: the service copies it from the session thread.
 class NavInbox {
 public:
+    NavInbox();
     // Keeps the body when the arrows read this message; false for any other message.
     bool keep(uint16_t id, const uint8_t* body, size_t size);
     void clear();
@@ -89,6 +93,8 @@ public:
 
 private:
     std::vector<uint8_t> status_, turn_, turnDistance_, state_, position_;
+    uint32_t distances_;      // distance bodies kept (NavigationCurrentPosition, NextTurnDistanceEvent)
+    uint32_t stepDistances_;  // distances_ when a step body (NavigationState, NextTurnEvent) last changed
 };
 
 }  // namespace kombi

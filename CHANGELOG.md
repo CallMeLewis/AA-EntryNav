@@ -27,6 +27,9 @@ Each version links to the commit its archive was built from.
 - **No straight arrow at 0 in the cluster when a route starts.** Maps sends a short "depart" step at the start of a
   route and after each reroute. The cluster no longer draws it, and after a reroute the last arrow stays until the
   next turn. Unverified.
+- **The next turn in the cluster no longer flashes up with a few metres to go.** Right after a turn, the next step
+  can come before its own distance. The cluster now waits up to 3 s for that distance, so a turn that is still far off
+  stays hidden. Unverified.
 - **Roundabout exit numbers in the cluster from phones that send only the older turn message.** Unverified.
 
 ## [0.1.5] - 2026-11-14 · Unverified

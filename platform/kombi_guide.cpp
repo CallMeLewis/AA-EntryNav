@@ -14,7 +14,8 @@ const char* const kTag = "KombiNav";
 const size_t kMaxRoadChars = 40;  // the cluster shows far fewer
 const size_t kMaxDistanceChars = 8;
 const double kMetresPerMile = 1609.344;
-const double kPositionStepM = 1.0;  // a smaller move sends no new route position
+const double kPositionStepM = 1.0;   // a smaller move sends no new route position
+const double kStaleDistanceS = 3.0;  // a new maneuver waits at most this long for a distance of its own
 }  // namespace
 
 GuideSettings::GuideSettings()
@@ -75,7 +76,7 @@ void Guide::step(const Maneuver* next, double now, const char* whyNone) {
     gap_.end();
     Maneuver m = *next;
     exitWord_ = exitWord(m.cue, exitWord_);  // an instruction without the word keeps the language of the last one
-    if (holdForApproach(m) || !settleDistance(m, now)) {
+    if (waitForOwnDistance(m, now) || holdForApproach(m) || !settleDistance(m, now)) {
         return;
     }
     fitForCluster(m);
@@ -108,6 +109,7 @@ void Guide::step(const Maneuver* next, double now, const char* whyNone) {
 
 void Guide::noManeuver(double now, const char* why) {
     noDistance_.end();
+    staleDistance_.end();
     if (!showing_) {
         return;
     }
@@ -118,9 +120,32 @@ void Guide::noManeuver(double now, const char* why) {
     }
 }
 
+// The maneuver on the cluster. It is fitted for the cluster first, as the one shown was (exit label, empty or long
+// road), or a roundabout or an unnamed road would never count as the same.
+bool Guide::isShown(const Maneuver& m) const {
+    if (!showing_) {
+        return false;
+    }
+    Maneuver fitted = m;
+    fitForCluster(fitted);
+    return fitted.sameTurn(shown_);
+}
+
+// True while a new maneuver waits for a distance of its own. Right after a turn the next step can arrive with the
+// last step's distance: shown at once, it would get a few metres, and then be cleared by the approach rule once its
+// real distance came. It waits for a distance that came after its step, or kStaleDistanceS. Nothing changes on the
+// cluster meanwhile.
+bool Guide::waitForOwnDistance(const Maneuver& m, double now) {
+    if (!m.distanceBeforeStep || isShown(m)) {
+        staleDistance_.end();
+        return false;
+    }
+    staleDistance_.begin(now);
+    return now - staleDistance_.at < kStaleDistanceS;
+}
+
 // True when the maneuver is still too far to show (the arrow is cleared if one is up). An unknown distance shows.
-// Hysteresis keeps the same maneuver; it is fitted for the cluster first, as the one shown was (exit label, empty or
-// long road), or a roundabout or an unnamed road would never count as the same.
+// Hysteresis keeps the same maneuver.
 bool Guide::holdForApproach(const Maneuver& m) {
     if (settings_.approachMiles <= 0) {
         return false;
@@ -129,12 +154,7 @@ bool Guide::holdForApproach(const Maneuver& m) {
     if (!metresToManeuver(m, metres)) {
         return false;
     }
-    bool same = false;
-    if (showing_) {
-        Maneuver fitted = m;
-        fitForCluster(fitted);
-        same = fitted.sameTurn(shown_);
-    }
+    const bool same = isShown(m);
     const double limit = settings_.approachMiles * kMetresPerMile * (same ? settings_.hysteresis : 1.0);
     if (metres <= limit) {
         return false;
@@ -350,6 +370,7 @@ void Guide::forget() {
     lastDistance_ = Maneuver();
     gap_.end();
     noDistance_.end();
+    staleDistance_.end();
     sentAny_ = false;
     shownLanes_.clear();
     hasPosition_ = false;

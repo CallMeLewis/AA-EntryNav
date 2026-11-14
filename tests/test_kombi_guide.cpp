@@ -349,6 +349,44 @@ void departAtZero() {
     CHECK(r.guide.showing() && r.count() == 97 * 3);
 }
 
+void ownDistance() {
+    using kombitest::position;
+    using kombitest::put;
+    using kombitest::state;
+    GuideSettings s;
+    s.distanceEveryS = 0;
+    Rig r(s);
+    NavInbox in;
+    put(in, kNavStatus, kombitest::status(1));
+    put(in, kNavState, state(Step(7, "TEST ST")));
+    put(in, kNavPosition, position(20, "50", 6));
+    r.tick(0, in);
+    CHECK(r.guide.showing() && r.lastRoad() == "TEST ST");
+    const size_t shown = r.count();
+    // The turn is made: the next step comes with the last step's 20 m. Nothing changes until its own distance
+    // comes, which is past the approach: hidden, never drawn at 20 m.
+    put(in, kNavState, state(Step(8, "MAIN ST")));
+    r.tick(1, in);
+    CHECK(r.guide.showing() && r.count() == shown && r.out.cancels == 0);
+    put(in, kNavPosition, position(3000, "1.9", 5));
+    r.tick(2, in);
+    CHECK(!r.guide.showing() && r.out.cancels == 1 && r.lastRoad() == "TEST ST");
+    // A distance that never comes: after 3 s the step shows with the one there is.
+    put(in, kNavPosition, position(100, "300", 6));
+    put(in, kNavState, state(Step(5, "OAK AVE")));
+    r.tick(3, in);
+    r.tick(5.9, in);
+    CHECK(!r.guide.showing());
+    r.tick(6, in);
+    CHECK(r.guide.showing() && r.lastRoad() == "OAK AVE");
+    // The step shown changing (its instruction) waits for nothing.
+    put(in, kNavState, state(Step(5, "OAK AVE").cue("Turn slightly left")));
+    put(in, kNavPosition, position(90, "300", 6));
+    put(in, kNavState, state(Step(5, "OAK AVE").cue("Bear left")));
+    r.tick(7, in);
+    CHECK(r.guide.showing() && r.out.cancels == 1);
+}
+
 std::vector<kombitest::Lane> junction(int k) {
     std::vector<kombitest::Lane> l;
     if (k == 0) {
@@ -460,10 +498,11 @@ int main() {
     graceAndYield();
     approach();
     departAtZero();
+    ownDistance();
     lanesWithGraphs();
     lanesInPlace();
     puts(
         "PASS kombi guide: in place and whole graphs, distances, lanes and positions, grace, approach, refusals, "
-        "DEPART at 0 m");
+        "DEPART at 0 m, a new step's own distance");
     return 0;
 }

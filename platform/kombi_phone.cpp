@@ -3,6 +3,7 @@
 #include "kombi_phone.hpp"
 
 #include <cstdio>
+#include <cstring>
 
 #include "pb.hpp"
 
@@ -238,7 +239,8 @@ Maneuver::Maneuver()
       exitAngle(0),
       distanceUnit(kUnitUnknown),
       hasMetres(false),
-      metres(0) {}
+      metres(0),
+      distanceBeforeStep(false) {}
 
 bool Maneuver::sameTurn(const Maneuver& other) const {
     return type == other.type && road == other.road && hasExitAngle == other.hasExitAngle &&
@@ -248,6 +250,8 @@ bool Maneuver::sameTurn(const Maneuver& other) const {
 bool Maneuver::sameDistance(const Maneuver& other) const {
     return distanceText == other.distanceText && distanceUnit == other.distanceUnit;
 }
+
+NavInbox::NavInbox() : distances_(0), stepDistances_(0) {}
 
 bool NavInbox::keep(uint16_t id, const uint8_t* body, size_t size) {
     std::vector<uint8_t>* slot;
@@ -269,6 +273,12 @@ bool NavInbox::keep(uint16_t id, const uint8_t* body, size_t size) {
             break;
         default:
             return false;
+    }
+    if (id == kNavPosition || id == kNavTurnDistance) {
+        ++distances_;
+    } else if ((id == kNavState || id == kNavTurn) &&
+               (slot->size() != size || (size && memcmp(&(*slot)[0], body, size) != 0))) {
+        stepDistances_ = distances_;
     }
     slot->assign(body, body + size);
     return true;
@@ -299,6 +309,7 @@ bool NavInbox::nextManeuver(Maneuver& out) const {
     } else if (!turnDistance_.empty()) {
         readTurnDistance(Fields::of(turnDistance_), out);
     }
+    out.distanceBeforeStep = distances_ != 0 && distances_ == stepDistances_;
     return true;
 }
 
