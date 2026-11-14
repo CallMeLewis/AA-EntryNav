@@ -535,23 +535,33 @@ bool ServiceApp::startSession(int fd, void* user, const std::string& carBluetoot
     ELOG("ServiceApp", "phone TCP connection received; preparing the video and the AA session");
     a->session.stop();  // join callbacks before destroying/reinitializing video buffers
     bool videoOk = true;
+    // 1080p over the cable only. Over the car's Wi-Fi a phone that is asked for 1080p alone sets the session up, never
+    // starts the picture and hangs up within seconds, so a phone on Wi-Fi always gets 720p.
+    EvoVideoConfig config(false);
     if (a->videoEnabled) {
         pthread_mutex_lock(&a->videoMu);
+        if (cable) {
+            config = a->videoConfig;
+        }
         a->video.stop();
-        videoOk = a->video.init(a->videoConfig) && a->video.start();
-        if (!videoOk && a->videoConfig.hd()) {
+        videoOk = a->video.init(config) && a->video.start();
+        if (!videoOk && config.hd()) {
             // The decoder or the buffers refused 1080p: 720p from now on, for this run of the service.
             ELOG("ServiceApp", "the 1920x1080 picture did not start: 1280x720 from now on");
             a->video.stop();
             a->videoConfig = EvoVideoConfig(false);
-            videoOk = a->video.init(a->videoConfig) && a->video.start();
+            config = a->videoConfig;
+            videoOk = a->video.init(config) && a->video.start();
         }
         pthread_mutex_unlock(&a->videoMu);
+        if (!cable && a->videoConfig.hd()) {
+            ELOG("ServiceApp", "phone on Wi-Fi: 1280x720 (1920x1080 is for the cable)");
+        }
     }
     // The phone is told the canvas the decoder took; touches follow it.
-    const bool hd = a->videoEnabled && a->videoConfig.hd();
-    a->shownWidth = hd ? a->videoConfig.shownWidth : a->videoConfig.displayWidth;
-    a->shownHeight = hd ? a->videoConfig.shownHeight : a->videoConfig.displayHeight;
+    const bool hd = a->videoEnabled && config.hd();
+    a->shownWidth = hd ? config.shownWidth : config.displayWidth;
+    a->shownHeight = hd ? config.shownHeight : config.displayHeight;
     a->session.setHdVideo(hd);
     pthread_mutex_lock(&a->mu);
     if (!videoOk) {

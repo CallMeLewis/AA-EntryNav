@@ -15,6 +15,12 @@ Each version links to the commit its archive was built from.
   been tried on. It still checks that the car has what Android Auto needs, and stops if it doesn't. Installing on any
   car is at your own risk. Unverified.
 
+### Fixed
+
+- **Wireless Android Auto connects again.** Since 0.1.5-test.1, a phone on Wi-Fi connected, then hung up within a few
+  seconds without showing a picture, and iDrive kept saying Connecting. The sharper 1920x1080 picture now stays on the
+  cable, and a phone on Wi-Fi gets the 1280x720 picture it had before. Unverified.
+
 ## [0.1.5-test.3] - 2026-11-13 · Unverified
 
 <!-- Flare Drive:

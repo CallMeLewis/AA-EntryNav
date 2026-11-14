@@ -34,7 +34,7 @@ rm /var/local/data/AA/kombi-off      # arrows again
 
 | File | While it exists |
 |---|---|
-| `video-720` | The phone draws a 1280x720 picture and the head unit shows it pixel for pixel. Without the file the phone draws 1920x1080 and the head unit scales it down to the screen, which smooths the edges. A head unit that can't decode 1920x1080 drops back to 1280x720 by itself |
+| `video-720` | A phone on the cable draws a 1280x720 picture and the head unit shows it pixel for pixel. Without the file a phone on the cable draws 1920x1080 and the head unit scales it down to the screen, which smooths the edges. A head unit that can't decode 1920x1080 drops back to 1280x720 by itself. A phone on Wi-Fi always draws 1280x720 |
 | `audio-wifi` | Sound comes over Wi-Fi, an experiment ([details](#sound-over-wi-fi-experimental)). Without the file, sound uses Bluetooth |
 | `select-bt-audio` | iDrive switches to Bluetooth audio when the phone connects, an experiment ([details](#bluetooth-audio-when-the-phone-connects-experimental)). Read at each connection. It does nothing while `audio-wifi` exists |
 | `usb` | A phone plugged into the car's USB port can run Android Auto too, an experiment ([details](#usb-cable-experimental)). Without the file the service leaves the USB bus alone |
