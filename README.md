@@ -1,6 +1,6 @@
 <div align="center">
   <img src="hmiapp/res/aa_content_preview_549x484.png" width="150" alt="AA-EntryNav icon">
-  <h1>Android Auto for EntryNav2</h1>
+  <h1>AA-EntryNav</h1>
   <p>Android Auto for BMW iDrive, wireless or over a USB cable.</p>
   <p>
     <a href="https://github.com/CallMeLewis/AA-EntryNav/releases"><img src="https://img.shields.io/github/v/release/CallMeLewis/AA-EntryNav?include_prereleases&amp;display_name=tag&amp;sort=semver" alt="Latest release"></a>
@@ -19,13 +19,6 @@ none of BMW's files.
 
 ## Installing
 
-The easy way is **Flare Drive**, the companion Android app. It downloads a signed release and checks that your car
-can run it before installing. Updates and removal happen there too, along with the switches for the experimental
-features below.
-
-<details>
-<summary><b>Installing by hand</b></summary>
-
 You need an ENET cable, a PC with SSH and the head unit's root password. This project doesn't provide the password.
 
 1. Back up the car's system with `tools/backup_headunit.sh`. It only reads.
@@ -39,8 +32,6 @@ You need an ENET cable, a PC with SSH and the head unit's root password. This pr
 | `sh /opt/aa/setup.sh status` | What is installed, and whether its files are intact |
 | `sh /opt/aa/setup.sh uninstall` | Removes it. Settings and logs in `/var/local/data/AA` stay, and `--purge` deletes them |
 
-</details>
-
 ## What it does
 
 - **Wireless Android Auto.** The phone pairs over Bluetooth, then joins the car's own Wi-Fi.
@@ -52,7 +43,8 @@ You need an ENET cable, a PC with SSH and the head unit's root password. This pr
 
 ### Experimental, off until you switch it on
 
-Each one is a switch in Flare Drive, or a file in `/var/local/data/AA` on the head unit.
+Each one is a file in `/var/local/data/AA` on the head unit. Create the file over SSH to switch the feature on, or
+delete it to switch it off, then restart Android Auto.
 
 | Feature | File |
 |---|---|
