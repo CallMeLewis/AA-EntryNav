@@ -175,28 +175,38 @@ int main() {
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, peers) == 0);
     assert(app.session.start(peers[0]) && app.session.isActive());
     preparing(false);
-    fixtureLink = true;  // phone reopens SPP while TCP projection is active
+    fixtureLink = true;  // the phone reopens SPP while its session runs on the Wi-Fi: offered the same Wi-Fi again
+    awaitStarts(2);
+    assert(app.session.isActive());
+    pthread_mutex_lock(&app.mu);
+    assert(app.sppLinks == 1);  // not a new start
+    pthread_mutex_unlock(&app.mu);
+    // A phone connection being prepared (the fake handshake leaves one): a returning link is held, not answered.
+    fixtureLink = true;
     usleep(350000);
-    assert(starts == 1 && app.session.isActive());
+    assert(starts == 2 && app.session.isActive());
     app.session.stop();
     close(peers[1]);
-    awaitStarts(2);  // rearming is allowed only after the real session ended
+    preparing(false);
+    awaitStarts(3);  // a new start once nothing runs
     // The cable connecting a phone or carrying its session: the phone is not sent onto the Wi-Fi meanwhile. The fake
     // handshake left a TCP connection being prepared: cleared first, so that only the cable holds the loop back.
     preparing(false);
     app.usbBusy = true;
     fixtureLink = true;
     usleep(350000);
-    assert(starts == 2);
+    assert(starts == 3);
     app.usbBusy = false;
-    awaitStarts(3);
+    awaitStarts(4);
     app.requestStop();
     pthread_join(thread, 0);
     pthread_mutex_lock(&app.mu);
     assert(app.wirelessDone && app.sppLinks == 3 && app.wppReply && app.wppAccepted);
     pthread_mutex_unlock(&app.mu);
     puts(
-        "PASS actual wireless loop: no handshake during TCP preparation, an active session or the cable's turn, "
-        "rearmed after each; app commands, waiting aside for \"show\", and volume through the peeks; a key leaving "
-        "Android Auto removes the app key file; PC socketpair only");
+        "PASS actual wireless loop: no handshake during TCP preparation or the cable's turn, rearmed after each; a "
+        "link "
+        "back during a Wi-Fi session offered the same Wi-Fi again; app commands, waiting aside for \"show\", and "
+        "volume "
+        "through the peeks; a key leaving Android Auto removes the app key file; PC socketpair only");
 }

@@ -91,6 +91,13 @@ bool ServiceApp::projectionBusy() {
     return v || session.isActive();
 }
 
+bool ServiceApp::wifiSessionRunning() {
+    pthread_mutex_lock(&mu);
+    const bool preparing = tcpPreparing;
+    pthread_mutex_unlock(&mu);
+    return !preparing && !usbBusy && session.isActive();
+}
+
 void ServiceApp::sppLinkOpened() {
     pthread_mutex_lock(&mu);
     ++sppLinks;

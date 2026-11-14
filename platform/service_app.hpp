@@ -97,6 +97,7 @@ public:
     bool stopRequested() override;
     bool projectionBusy() override;
     bool cableBusy() override { return usbBusy; }
+    bool wifiSessionRunning() override;
     void sppLinkOpened() override;
     void handshakeEnded(bool spoke, bool accepted) override;
 

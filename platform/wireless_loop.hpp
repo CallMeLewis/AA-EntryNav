@@ -22,6 +22,8 @@ public:
     // the Wi-Fi a few seconds before the cable session started, then dropped the cable for the Wi-Fi 7 s later, with
     // its Bluetooth links to the car reconnecting around each switch.
     virtual bool cableBusy() = 0;
+    // An Android Auto session runs over the Wi-Fi: not being prepared, and not on the cable.
+    virtual bool wifiSessionRunning() = 0;
     virtual void sppLinkOpened() = 0;
     // A handshake ended: the phone spoke the wireless protocol, it accepted the Wi-Fi.
     virtual void handshakeEnded(bool spoke, bool accepted) = 0;
@@ -32,8 +34,9 @@ protected:
 
 // Runs until a stop is requested or Bluetooth stops. Each link that comes up gets aa::WirelessSetup with the access
 // point and TCP port the phone is told, after a short listen (a MyBMW link speaks first: nothing is written into it);
-// once the phone accepts, the link is served until it closes. A link that comes up while a projection is busy is held,
-// without a new WifiStartRequest, until that projection ends.
+// once the phone accepts, the link is served until it closes. A link that comes up while a phone connection is being
+// prepared, or while the cable has the phone, is held without a new WifiStartRequest until that ends. One that comes up
+// while a session runs over the Wi-Fi gets the handshake again, with the Wi-Fi the phone is already on.
 void runWirelessLoop(AlpsSppLink& bt, const aa::ApInfo& ap, uint16_t port, WirelessHost& host);
 
 }  // namespace evo

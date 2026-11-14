@@ -9,6 +9,17 @@ Each version links to the commit its archive was built from.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A smoother wireless picture.** Over Wi-Fi the phone's frames often arrive in pairs, and the screen showed only the
+  second of each, so about a quarter of them were lost and the picture judders. A frame that arrives right behind
+  another now waits up to 25 ms, so both are shown. Frames that arrive evenly aren't held, so touch and the iDrive
+  controller respond as before. Unverified.
+- **Wireless Android Auto no longer drops when My BMW connects.** When the car connects to the My BMW app, Android
+  Auto's Bluetooth link to the phone drops with it. The phone opened it again and waited for the car, which said
+  nothing, so it closed it every 12 seconds, and sometimes the whole session ended. The car now answers that link with
+  the Wi-Fi the phone is already on. Unverified.
+
 ## [0.1.5-test.4] - 2026-11-14 · Unverified
 
 <!-- Flare Drive:
