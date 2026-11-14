@@ -170,6 +170,10 @@ void readTurn(const Fields& turn, Maneuver& m) {
         m.type = left == right ? left : 0;
     }
     m.road = turn.text(1);
+    int64_t exit = 0;
+    if (turn.varint(5, exit)) {
+        m.exitNumber = static_cast<int>(exit);
+    }
     if (turn.varint(6, angle)) {
         m.hasExitAngle = true;
         m.exitAngle = angle;

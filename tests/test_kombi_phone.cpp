@@ -110,6 +110,18 @@ void olderMessages() {
         kombitest::put(in, evo::kombi::kNavTurn, turn);
         const Maneuver m = next(in);
         CHECK(m.type == cases[i].type && m.road == "ELM ST" && m.hasExitAngle && m.exitAngle == 45);
+        CHECK(m.exitNumber == -1);
+    }
+    {
+        // A roundabout's exit number (field 5) from a phone that sends only NextTurnEvent.
+        Bytes turn;
+        aa::pb::appendUint(turn, 2, 1);
+        aa::pb::appendUint(turn, 3, 11);
+        aa::pb::appendUint(turn, 5, 3);
+        NavInbox in = kombitest::inbox(Bytes());
+        kombitest::put(in, evo::kombi::kNavTurn, turn);
+        const Maneuver m = next(in);
+        CHECK(m.type == 34 && m.exitNumber == 3);
     }
     // Display distance in thousandths: tenths for the "_P1" units, else whole and rounded half to even.
     struct Distance {

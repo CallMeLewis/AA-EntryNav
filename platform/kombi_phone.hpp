@@ -59,7 +59,7 @@ struct Maneuver {
     int type;
     std::string road;
     std::string cue;  // the step's instruction, its first text
-    int exitNumber;   // NavigationManeuver's roundabout exit number as sent; -1 when absent
+    int exitNumber;   // the roundabout exit number as sent (NavigationManeuver or NextTurnEvent); -1 when absent
     bool hasExitAngle;
     int64_t exitAngle;
     std::string distanceText;  // the phone's display value: "0.3", "600"
