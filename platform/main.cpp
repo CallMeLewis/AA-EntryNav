@@ -197,9 +197,9 @@ int main(int argc, char** argv) {
     evo::ServiceApp app(kAaPort, video, &quit);
     app.session.setTouchForwarding(input == evo::INPUT_FORWARD);
     app.session.setVehicleFile(evo::contract::kVehicle);  // the car's model and year, written at installation
-    // Over the cable, the 1080p canvas shrunk onto the panel, unless the video-720 file asks for the 720p one shown 1:1.
-    // A phone on Wi-Fi always gets 720p. Should the decoder refuse 1080p, the service falls back to 720p by itself
-    // (ServiceApp::startSession).
+    // Over the cable, the 1080p canvas shrunk onto the panel, unless the video-720 file asks for the 720p one shown
+    // 1:1. A phone on Wi-Fi always gets 720p. Should the decoder refuse 1080p, the service falls back to 720p by
+    // itself (ServiceApp::startSession).
     app.videoConfig = evo::EvoVideoConfig(access(evo::contract::kVideo720, F_OK) != 0);
     if (video) {
         ELOG("Main", "picture: %ux%u from a phone on the cable%s; 1280x720 on Wi-Fi", app.videoConfig.width,
