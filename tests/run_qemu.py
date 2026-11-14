@@ -49,6 +49,7 @@ CASES = [
     # The developer tools: the recorder's parser on 32 bits, and evo-check's loading with every symbol bound.
     ("capture-selftest", "evo-capture", ["--selftest"], None),
     ("check-load", "evo-check", ["--help"], "--dbus-watch"),
+    ("ric-load", "evo-ric", ["--help"], "--watch"),
 ]
 
 

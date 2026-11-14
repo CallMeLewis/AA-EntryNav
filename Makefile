@@ -6,7 +6,7 @@
 #   bash toolchain/tc.sh make <target>
 #
 #   all            what the car runs: aa-entrynav, evo-trial and hmiapp/libAAEntryNav.so (ARM)
-#   dev-tools      evo-check and evo-capture, read-only diagnostics run by hand on the car, evo-sound, which plays a
+#   dev-tools      evo-check, evo-capture and evo-ric, read-only diagnostics run by hand on the car, evo-sound, which plays a
 #                  test tone on one of the car's sound outputs, and evo-usb, Android Auto's cable link by hand (ARM,
 #                  not installed)
 #   test-arm-all   every ARM program tests/run_qemu.py runs (ARM)
@@ -52,13 +52,14 @@ TRIAL_OBJ = tools/evo_trial.o platform/evo_spp_snapshot.o platform/alps_spp.o pl
             platform/vmost_client.o
 CHECK_OBJ = tools/evo_check.o platform/alps_spp.o platform/alps_spp_codec.o platform/evo_process.o
 CAPTURE_OBJ = tools/evo_capture.o
+RIC_OBJ = tools/evo_ric.o
 MFL_OBJ = tools/evo_mfl.o platform/vmost_client.o
 SOUND_OBJ = tools/evo_sound.o platform/evo_alsa_out.o platform/evo_audio.o platform/audio_route.o \
             platform/vmost_client.o platform/evo_process.o
 # Android Auto over a cable: the USB device, the accessory requests and the bridge to the session.
 USB_SRC = platform/usb_io.cpp platform/usb_aoa.cpp platform/usb_bridge.cpp platform/usb_link.cpp
 USB_TOOL_OBJ = tools/evo_usb.o $(USB_SRC:.cpp=.o) platform/bluez_adapter.o
-ARM_OBJ = $(sort $(DAEMON_OBJ) $(PLATFORM_OBJ) $(TRIAL_OBJ) $(CHECK_OBJ) $(CAPTURE_OBJ) $(MFL_OBJ) $(SOUND_OBJ) $(USB_TOOL_OBJ))
+ARM_OBJ = $(sort $(DAEMON_OBJ) $(PLATFORM_OBJ) $(TRIAL_OBJ) $(CHECK_OBJ) $(CAPTURE_OBJ) $(RIC_OBJ) $(MFL_OBJ) $(SOUND_OBJ) $(USB_TOOL_OBJ))
 # The service's modules tests/test_wireless_lifecycle.cpp links around its fake Alps link and handshake.
 LIFECYCLE_OBJ = $(PLATFORM_OBJ) platform/evo_touch.o platform/evo_knob.o platform/vmost_client.o platform/evo_control.o \
                 platform/evo_mic.o platform/evo_alsa_out.o platform/evo_audio.o platform/audio_route.o platform/evo_pill.o \
@@ -101,12 +102,16 @@ hmiapp/libAAEntryNav.so: $(HMI_OBJ)
 	    $(LDSHLIB) $(HMI_LIBDIRS) -l:libAppFramework.A.so -l:libCoreFramework.A.so -lpthread -ldl
 
 # Read-only diagnostics, run by hand on the car; neither is part of a release.
-dev-tools: evo-check evo-capture evo-sound evo-usb evo-mfl
+dev-tools: evo-check evo-capture evo-ric evo-sound evo-usb evo-mfl
 evo-check: $(CHECK_OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDSHLIB) -l:libdbus-1.so.3 -lpthread -lrt
 # Passive SOME/IP recorder (tools/evo_capture.cpp: receive only, nothing sent).
 evo-capture: $(CAPTURE_OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDSHLIB) -lrt
+# Passive recorder of the cluster guidance calls on the session bus (tools/evo_ric.cpp: it listens, and sends
+# nothing to BMW's programs), with tools/ric_capture.sh to run it from a laptop on the ENET cable.
+evo-ric: $(RIC_OBJ)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDSHLIB) -l:libdbus-1.so.3 -lpthread -lrt
 # Steering wheel buttons, by hand (tools/evo_mfl.cpp): a copy of 0x15.02 and read-only Gets, printed.
 evo-mfl: $(MFL_OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDSHLIB) -ldl -lrt
@@ -140,7 +145,7 @@ style:
 	$(RUFF) check .
 	$(SHELLCHECK) -s sh -S style .githooks/pre-push
 	$(SHELLCHECK) -S style toolchain/tc.sh
-	$(SHELLCHECK) -s sh -S style tools/setup.sh tools/backup_headunit.sh
+	$(SHELLCHECK) -s sh -S style tools/setup.sh tools/backup_headunit.sh tools/ric_capture.sh
 check: style verify_core verify_repo verify_tests test-host
 
 # ---- tests on the PC ------------------------------------------------------------------------------------------------
@@ -276,6 +281,8 @@ test-gps-host:
 test-capture-host:
 	$(HOST_CXX) $(HOST_FLAGS) tools/evo_capture.cpp -o tests/test-evo-capture
 	./tests/test-evo-capture --selftest
+	$(HOST_CXX) $(HOST_FLAGS) tools/evo_ric.cpp $(HOST_DBUS) -o tests/test-evo-ric
+	env -u XDG_RUNTIME_DIR dbus-run-session -- ./tests/test-evo-ric --selftest
 
 # Root only (AF_PACKET): sudo make test-touch-live. Loopback traffic, no other interface touched.
 test-touch-live:
@@ -354,7 +361,7 @@ test-wireless-lifecycle-arm-build: $(CORE_OBJ) $(LIFECYCLE_OBJ)
 	    -Wl,--gc-sections -o tests/test-wireless-lifecycle-arm $(LDSHLIB) $(VIDEO_LIBS) -l:libssl.so.1.0.0 -l:libcrypto.so.1.0.0 -l:libdbus-1.so.3 -ldl
 
 clean:
-	rm -f $(ARM_OBJ) $(ARM_OBJ:.o=.d) $(HMI_OBJ) $(HMI_OBJ:.o=.d) aa-entrynav evo-trial evo-check evo-capture evo-sound evo-usb \
+	rm -f $(ARM_OBJ) $(ARM_OBJ:.o=.d) $(HMI_OBJ) $(HMI_OBJ:.o=.d) aa-entrynav evo-trial evo-check evo-capture evo-ric evo-sound evo-usb \
 	    hmiapp/libAAEntryNav.so hmiapp/AAEntryNav_ALL_Texts.zip hmiapp/AAEntryNav_ALL_Images.zip \
 	    tests/test-* tests/evo-check-host tests/*.so
 

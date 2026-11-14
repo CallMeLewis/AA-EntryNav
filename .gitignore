@@ -50,6 +50,8 @@ __pycache__/
 /tools/*
 !/tools/backup_headunit.sh
 !/tools/evo_capture.cpp
+!/tools/evo_ric.cpp
+!/tools/ric_capture.sh
 !/tools/evo_check.cpp
 !/tools/evo_sound.cpp
 !/tools/evo_usb.cpp
