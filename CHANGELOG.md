@@ -24,6 +24,9 @@ Each version links to the commit its archive was built from.
 - **The car's GPS speed stays inside what Android Auto accepts.** A speed of 70 m/s or more, which a speed worked out
   from two positions could reach, made Android Auto ignore the car's speed for the rest of the drive. Such a speed is
   no longer sent. Unverified.
+- **No straight arrow at 0 in the cluster when a route starts.** Maps sends a short "depart" step at the start of a
+  route and after each reroute. The cluster no longer draws it, and after a reroute the last arrow stays until the
+  next turn. Unverified.
 - **Roundabout exit numbers in the cluster from phones that send only the older turn message.** Unverified.
 
 ## [0.1.5] - 2026-11-14 · Unverified

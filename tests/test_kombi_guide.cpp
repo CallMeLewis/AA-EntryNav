@@ -328,6 +328,27 @@ void approach() {
     }
 }
 
+void departAtZero() {
+    // Nothing at a route start; after a reroute the arrow shown stays, and the turn after it is a new graph.
+    Rig r;
+    r.tick(0, Step(1, "START RD"), 0, "0", 1);
+    CHECK(!r.guide.showing() && r.count() == 0);
+    r.tick(1, Step(7, "TEST ST"), 800, "0.5", 5);
+    CHECK(r.guide.showing() && r.count() == 97);
+    r.tick(2, Step(1, "TEST ST"), 0, "0", 1);
+    r.tick(3, Step(1, "TEST ST"), 0, "0", 1);
+    CHECK(r.guide.showing() && r.count() == 97 && r.out.cancels == 0);
+    r.tick(4, Step(8, "MAIN ST"), 480, "0.3", 5);
+    CHECK(r.guide.showing() && r.count() == 97 * 2 && r.lastRoad() == "MAIN ST");
+    // A run of them past the grace time clears, as any gap does.
+    for (int t = 5; t <= 14; ++t) {
+        r.tick(t, Step(1, "MAIN ST"), 0, "0", 1);
+    }
+    CHECK(!r.guide.showing() && r.out.cancels == 1);
+    r.tick(15, Step(1, "MAIN ST"), 200, "200", 1);  // a DEPART with a distance shows
+    CHECK(r.guide.showing() && r.count() == 97 * 3);
+}
+
 std::vector<kombitest::Lane> junction(int k) {
     std::vector<kombitest::Lane> l;
     if (k == 0) {
@@ -438,8 +459,11 @@ int main() {
     distancesAndNames();
     graceAndYield();
     approach();
+    departAtZero();
     lanesWithGraphs();
     lanesInPlace();
-    puts("PASS kombi guide: in place and whole graphs, distances, lanes and positions, grace, approach, refusals");
+    puts(
+        "PASS kombi guide: in place and whole graphs, distances, lanes and positions, grace, approach, refusals, "
+        "DEPART at 0 m");
     return 0;
 }

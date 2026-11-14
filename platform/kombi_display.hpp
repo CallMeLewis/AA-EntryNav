@@ -88,6 +88,9 @@ const char* exitWord(const std::string& cue, const char* none);
 
 // Metres to the maneuver: the phone's value, else its display text read in its unit.
 bool metresToManeuver(const Maneuver& m, double& metres);
+// A DEPART (type 1) under 1 m away. Maps sends one for about a second when guidance starts and after each reroute,
+// before the first real turn: nothing to show but a straight arrow at 0. One with no distance yet is not.
+bool departHere(const Maneuver& m);
 
 // Distance text in one unit system. Miles + feet, as Google Maps shows it in the US: from 0.1 mi one-decimal miles,
 // below that feet rounded down to 50.

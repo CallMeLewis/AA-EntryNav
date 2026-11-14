@@ -265,6 +265,11 @@ bool sane(double& metres) {
 }
 }  // namespace
 
+bool departHere(const Maneuver& m) {
+    double metres = 0;
+    return m.type == 1 && metresToManeuver(m, metres) && metres < 1.0;
+}
+
 bool metresToManeuver(const Maneuver& m, double& metres) {
     if (m.hasMetres) {
         metres = static_cast<double>(m.metres);

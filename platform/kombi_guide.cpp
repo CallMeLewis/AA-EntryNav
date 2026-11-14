@@ -40,6 +40,7 @@ Guide::Guide(const RouteGraph& graph, GuideOutput& output, const GuideSettings& 
       rebuildNext_(false),
       inPlaceOk_(true),
       exitWord_("Exit"),
+      departing_(false),
       distanceAt_(0),
       hasSection_(false),
       hasPosition_(false),
@@ -56,6 +57,17 @@ void Guide::step(const Maneuver* next, double now, const char* whyNone) {
     if (stop_ != kRunning) {
         return;
     }
+    // A DEPART at 0 m counts as no guidance: after a reroute the arrow shown stays through it and goes after graceS as
+    // in any gap, and at a route start nothing is drawn until the first turn.
+    const bool depart = next && departHere(*next);
+    if (depart) {
+        if (!departing_) {
+            ELOG(kTag, "DEPART at 0 m: not shown%s", showing_ ? ", the arrow shown stays" : "");
+        }
+        next = nullptr;
+        whyNone = "depart only";
+    }
+    departing_ = depart;
     if (!next) {
         noManeuver(now, whyNone);
         return;

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // What the cluster shows, tick by tick: the guidance state machine between the phone's maneuver and the requests.
 
+//   DEPART at 0 m            -> no guidance: Maps sends one at a route start and after each reroute
 //   first maneuver           -> the whole route start, maneuver 0 patched (direction, distance and unit, road)
 //   distance text changes    -> one distance update, at most every distanceEveryS
 //   next maneuver            -> maneuver 0 updated in place (the factory's update block, the route stays); the whole
@@ -112,6 +113,7 @@ private:
     bool rebuildNext_;         // the next maneuver gets the whole route start: there was a gap in the guidance
     bool inPlaceOk_;           // false once the cluster refused an update in place, until the next clear
     const char* exitWord_;     // "exit" in the language of the phone's last instruction that had the word
+    bool departing_;           // the last step was a DEPART at 0 m (logged once per run of them)
     Maneuver lastDistance_;
     double distanceAt_;
     Since gap_;         // no guidance
