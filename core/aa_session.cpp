@@ -39,6 +39,11 @@ const unsigned kOwnPingsLogEvery = 300;
 // did not fire, and the session sat on a black screen until the cable was pulled. Ended at this limit, a session on
 // the cable is started again: the phone is reset and asked again.
 const uint64_t kSetupMs = 10000;
+// Once one TLS record is lost or damaged, none of the records after it decrypt, and the phone keeps sending them, so
+// neither the silence limit nor the setup limit fires: the picture stays frozen until the cable is pulled or the Wi-Fi
+// drops. This many encrypted frames in a row that do not decrypt end the session. One that decrypts starts the count
+// again. Upstream (Sq00ky, 5ec2bad) ends its sessions at the same count.
+const unsigned kMaxUndecrypted = 16;
 const unsigned kFramesLoggedFirst = 40;  // per channel, then one frame in kFramesLoggedEvery
 const unsigned kFramesLoggedEvery = 3000;
 const unsigned kKeysLogged = 200;  // evo_knob logs every key anyway
@@ -71,6 +76,7 @@ AASession::AASession()
       longestSilenceMs_(0),
       lastReceivedMs_(0),
       setupUntilMs_(0),
+      undecrypted_(0),
       videoReady_(false),
       mediaMessages_(0),
       microphoneChunks_(0) {
@@ -225,6 +231,7 @@ bool AASession::start(int client_fd) {
     }
     assembler_.clear();
     inbox_.reset();
+    undecrypted_ = 0;
     videoReady_ = false;
     microphoneChunks_ = 0;
     mediaMessages_ = 0;
@@ -487,6 +494,13 @@ AASession::Received AASession::receive(uint8_t& channel, Message& message) {
         plain.swap(payload);
     } else if (!tls_.open(&payload[0], payload.size(), plain)) {
         printf("[AASession] Failed to decrypt encrypted frame (%u bytes).\n", header.length);
+        if (++undecrypted_ >= kMaxUndecrypted) {
+            printf(
+                "[AASession] %u encrypted frames in a row did not decrypt: the encrypted stream is broken, ending "
+                "the session\n",
+                undecrypted_);
+            return kLost;
+        }
         // Its message is lost: acked once, like any dropped media, and the rest of its fragments dropped quietly.
         const uint8_t position = header.position();
         const bool continues = position == frame::kMiddle || position == frame::kLast;
@@ -500,6 +514,8 @@ AASession::Received AASession::receive(uint8_t& channel, Message& message) {
             ackDropped(channel);
         }
         return kNothing;
+    } else {
+        undecrypted_ = 0;
     }
     switch (assembler_.add(header, plain, message)) {
         case MessageAssembler::kComplete:

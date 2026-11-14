@@ -16,6 +16,9 @@ Each version links to the commit its archive was built from.
 
 ### Fixed
 
+- **A frozen picture now ends the session.** When the encrypted stream from the phone broke, Android Auto froze on its
+  last picture until the cable was pulled or the Wi-Fi dropped. After 16 frames in a row that can't be read, the
+  session ends and the phone connects again. Unverified.
 - **Maps no longer sees a petrol car that also charges at Tesla Superchargers.** Android Auto was told what Google's
   test head unit says. Without a `fuel=` line it is now told petrol only. Unverified.
 

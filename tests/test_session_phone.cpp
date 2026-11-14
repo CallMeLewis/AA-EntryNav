@@ -373,6 +373,17 @@ public:
         const bool first = (flags & 0x03) == 0x01;
         frame(channel, flags, (flags & 0x08) ? tls_.seal(data) : data, first ? &total : nullptr);
     }
+    // A whole message, encrypted, its TLS record cut over `frames` whole frames: the head unit can decrypt nothing
+    // until the last one arrives.
+    void sealedInFrames(uint8_t channel, const Bytes& message, size_t frames) {
+        log_.push_back(format("ph ch=%u fl=%02x in %u frames ", channel, kSealed, static_cast<unsigned>(frames)) +
+                       describe(channel, message, false));
+        const Bytes record = tls_.seal(message);
+        for (size_t i = 0; i < frames; ++i) {
+            const size_t from = record.size() * i / frames, to = record.size() * (i + 1) / frames;
+            frame(channel, kSealed, Bytes(record.begin() + from, record.begin() + to), nullptr);
+        }
+    }
     void raw(const char* what, const Bytes& data) {
         log_.push_back(std::string("ph raw ") + what + " " + hex(data));
         writeAll(data);
@@ -873,6 +884,27 @@ void fragmentEdges(std::vector<std::string>& log) {
     ended(link, log);
 }
 
+// Frames that do not decrypt. Fifteen in a row are dropped and the session goes on; a frame that decrypts starts the
+// count again. Once a record is damaged none after it decrypts, and the sixteenth in a row ends the session.
+void brokenStream(std::vector<std::string>& log) {
+    Link link;
+    Phone phone(link.phoneFd, log);
+    phone.handshake();
+    phone.discover();
+    log.push_back("-- a ping cut over 16 frames: 15 do not decrypt, the last one does");
+    phone.sealedInFrames(0, bytes({0x00, 0x0b, 0x08, 0x05}), 16);
+    phone.settle();
+    log.push_back("-- the same again: the count started again, so 15 more do not end the session");
+    phone.sealedInFrames(0, bytes({0x00, 0x0b, 0x08, 0x06}), 16);
+    phone.settle();
+    log.push_back("-- a damaged record, then 15 more frames: the session ends");
+    for (int i = 0; i < 16; ++i) {
+        phone.raw("sealed garbage", bytes({0x00, 0x0b, 0x00, 0x08, 1, 2, 3, 4, 5, 6, 7, 8}));
+    }
+    phone.untilClosed();
+    ended(link, log);
+}
+
 // Without TLS: what still works, an overflowing reassembly, a frame cut short.
 void plainEdges(std::vector<std::string>& log) {
     {
@@ -1039,8 +1071,9 @@ struct Scenario {
 };
 
 const Scenario kScenarios[] = {
-    {"full session", fullSession}, {"fragment edges", fragmentEdges}, {"plain edges", plainEdges},
-    {"cut headers", cutHeaders},   {"lifecycle", lifecycle},          {"sound over Wi-Fi", wifiAudio},
+    {"full session", fullSession},   {"fragment edges", fragmentEdges}, {"plain edges", plainEdges},
+    {"cut headers", cutHeaders},     {"lifecycle", lifecycle},          {"sound over Wi-Fi", wifiAudio},
+    {"broken stream", brokenStream},
 };
 
 void timedOut(int) {

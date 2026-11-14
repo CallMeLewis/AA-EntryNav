@@ -174,6 +174,7 @@ private:
     TlsClient tls_;
     MessageAssembler assembler_;
     uint64_t setupUntilMs_;       // the handshake must end by then (kSetupMs); 0 once it has
+    unsigned undecrypted_;        // encrypted frames in a row that did not decrypt (kMaxUndecrypted)
     bool videoReady_;             // the phone set the video channel up: a focus can go
     uint32_t mediaSessions_[32];  // per channel, the session id of its start indication, echoed in our acks
     uint32_t mediaMessages_;      // media messages received, every channel
