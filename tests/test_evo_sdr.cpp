@@ -108,6 +108,37 @@ static std::map<uint64_t, std::vector<uint8_t>> channels(const std::vector<uint8
     return m;
 }
 
+// The driver's side (top-level field 6, -1 if absent) and the sensor source's fuel types and EV connectors.
+static void carFacts(const std::vector<uint8_t>& sdr, int& side, std::vector<uint64_t>& fuels,
+                     std::vector<uint64_t>& connectors) {
+    side = -1;
+    fuels.clear();
+    connectors.clear();
+    std::vector<F> top = fields(sdr);
+    for (size_t i = 0; i < top.size(); ++i) {
+        if (top[i].num == 6 && top[i].wt == 0) {
+            side = int(top[i].v);
+        }
+        if (top[i].num != 1) {
+            continue;
+        }
+        std::vector<F> svc = fields(top[i].body);
+        for (size_t j = 0; j < svc.size(); ++j) {
+            if (svc[j].num != 2) {
+                continue;
+            }
+            std::vector<F> source = fields(svc[j].body);
+            for (size_t k = 0; k < source.size(); ++k) {
+                if (source[k].num == 3) {
+                    fuels.push_back(source[k].v);
+                } else if (source[k].num == 4) {
+                    connectors.push_back(source[k].v);
+                }
+            }
+        }
+    }
+}
+
 int main() {
     char gpsFile[96];
     snprintf(gpsFile, sizeof(gpsFile), "/tmp/entry-sdr-gps-test-%d", int(getpid()));
@@ -180,6 +211,37 @@ int main() {
     aa::SdrIdentity own;
     CHECK(own.loadVehicleFile(vehicle) && own.vehicleId == "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0");
     CHECK(own.carModel == "M340i");
+    // The driver's side and the fuel. The template says left-hand drive, unleaded + electric, a Tesla supercharger.
+    int side;
+    std::vector<uint64_t> fuels, connectors;
+    carFacts(orig, side, fuels, connectors);
+    CHECK(side == 0 && fuels.size() == 2 && fuels[0] == 1 && fuels[1] == 10 && connectors.size() == 1);
+    carFacts(aa::buildCarServiceDiscovery(kDhuSdpProtobuf, kDhuSdpProtobufLen, nullptr), side, fuels, connectors);
+    CHECK(side == 0 && fuels.size() == 1 && fuels[0] == 1 && connectors.empty());  // reference car: petrol
+    f = fopen(vehicle, "w");
+    CHECK(f);
+    fputs("side=right\nfuel=diesel\nside=centre\nfuel=lpg\nside=Right\n", f);
+    fclose(f);
+    aa::SdrIdentity rhd;
+    CHECK(rhd.loadVehicleFile(vehicle) && rhd.rightHandDrive && rhd.fuel == aa::kFuelDiesel && rhd.carModel == "M340i");
+    for (int wifi = 0; wifi < 2; ++wifi) {
+        carFacts(aa::buildCarServiceDiscovery(kDhuSdpProtobuf, kDhuSdpProtobufLen, vehicle, wifi != 0), side, fuels,
+                 connectors);
+        CHECK(side == 1 && fuels.size() == 1 && fuels[0] == 4 && connectors.empty());
+    }
+    std::vector<uint8_t> noSide;  // a description without the field gets it
+    std::vector<F> top = fields(orig);
+    for (size_t i = 0; i < top.size(); ++i) {
+        if (top[i].num != 6) {
+            noSide.insert(noSide.end(), top[i].raw.begin(), top[i].raw.end());
+        }
+    }
+    carFacts(noSide, side, fuels, connectors);
+    CHECK(side == -1 && aa::describeCar(noSide, rhd));
+    carFacts(noSide, side, fuels, connectors);
+    CHECK(side == 1 && fuels.size() == 1 && fuels[0] == 4);
+    std::vector<uint8_t> broken(5, 0xff);
+    CHECK(!aa::describeCar(broken, rhd) && broken == std::vector<uint8_t>(5, 0xff));
     unlink(vehicle);
     aa::SdrIdentity none;
     CHECK(!none.loadVehicleFile(vehicle) && none.carModel == "M340i" && none.vehicleId == referenceId);
@@ -192,6 +254,7 @@ int main() {
           !aa::validCarYear("3000"));
     puts(
         "PASS AA sensors: DHU template cut to NIGHT_MODE + DRIVING_STATUS (the phone keeps its GPS), channel 9 "
-        "always removed by the core, other channels identical, no car Bluetooth service, vehicle file (model, year)");
+        "always removed by the core, other channels identical, no car Bluetooth service, vehicle file (model, year, "
+        "driver's side, fuel)");
     return 0;
 }

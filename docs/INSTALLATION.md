@@ -140,6 +140,9 @@ mkdir -p /var/local/data/AA && printf 'model=320d\nyear=2020\nid=%s\n' "$(cat /p
 If the car has run Android Auto before, adding `id=` makes the phone see a new car, and you have to accept it on the
 phone again.
 
+Two more lines describe the car. Add `side=right` for a right-hand drive car, and `fuel=diesel` for a diesel, so Maps
+suggests the right fuel stops. Without them Android Auto is told the driver sits on the left and the car takes petrol.
+
 ### Restarting
 
 ```sh

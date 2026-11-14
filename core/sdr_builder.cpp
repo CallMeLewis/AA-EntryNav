@@ -28,6 +28,10 @@ const uint32_t kInsetsField = 1;       // top, bottom, left, right
 const uint32_t kTouchscreenField = 2;  // in an input source
 const uint32_t kWidthField = 1;        // in a touchscreen, with kHeightField
 const uint32_t kHeightField = 2;
+const uint32_t kDriverPositionField = 6;  // top level: 0 left, 1 right
+const uint32_t kSensorSourceField = 2;    // in a service
+const uint32_t kFuelTypeField = 3;        // in a sensor source, repeated
+const uint32_t kEvConnectorField = 4;     // in a sensor source, repeated
 
 const uint64_t kGuidanceAudio = 1;
 const uint8_t kSystemAudio = 2;
@@ -140,7 +144,9 @@ SdrIdentity::SdrIdentity()
       huMake("BMW"),
       huModel("EntryNav2"),
       swBuild("aa-entrynav"),
-      swVersion("1.3.33") {}
+      swVersion("1.3.33"),
+      rightHandDrive(false),
+      fuel(kFuelPetrol) {}
 
 bool validCarModel(const std::string& s) {
     if (s.empty() || s.size() > 24) {
@@ -197,6 +203,10 @@ bool SdrIdentity::loadVehicleFile(const char* path) {
             carYear = line.substr(5);
         } else if (line.compare(0, 3, "id=") == 0 && validVehicleId(line.substr(3))) {
             vehicleId = line.substr(3);
+        } else if (line == "side=left" || line == "side=right") {
+            rightHandDrive = line == "side=right";
+        } else if (line == "fuel=petrol" || line == "fuel=diesel") {
+            fuel = line == "fuel=diesel" ? kFuelDiesel : kFuelPetrol;
         }
     }
     fclose(file);
@@ -264,6 +274,48 @@ bool declareTouchscreen(std::vector<uint8_t>& sdr, const Canvas& canvas) {
         printf("[SDR] touchscreen declared %ux%u\n", canvas.width, canvas.height);
     }
     return ok && changed;
+}
+
+bool describeCar(std::vector<uint8_t>& sdr, const SdrIdentity& id) {
+    // The sensor source: its fuel types and EV connectors dropped, the car's one fuel written last.
+    const auto fuelOnly = [&](const pb::Field& source, Bytes& to) -> bool {
+        Bytes body;
+        if (!pb::rewriteMessage(source.data, source.size, body, [](const pb::Field& field, Bytes&) -> bool {
+                return field.number == kFuelTypeField || field.number == kEvConnectorField;
+            })) {
+            return false;
+        }
+        pb::appendUint(body, kFuelTypeField, id.fuel);
+        pb::appendMessage(to, source.number, body);
+        return true;
+    };
+    bool sideSet = false, fuelSet = false;
+    Bytes out;
+    const bool ok = pb::rewriteMessage(sdr.data(), sdr.size(), out, [&](const pb::Field& field, Bytes& to) -> bool {
+        if (field.type == pb::kVarint && field.number == kDriverPositionField) {
+            pb::appendUint(to, kDriverPositionField, id.rightHandDrive ? 1 : 0);
+            sideSet = true;
+            return true;
+        }
+        if (isChannel(field, channel::kSensors)) {
+            return rewriteInner(field, to, [&](const pb::Field& part, Bytes& into) -> bool {
+                const bool done = pb::isMessage(part, kSensorSourceField) && fuelOnly(part, into);
+                fuelSet = fuelSet || done;
+                return done;
+            });
+        }
+        return false;
+    });
+    if (!ok) {
+        return false;
+    }
+    if (!sideSet) {
+        pb::appendUint(out, kDriverPositionField, id.rightHandDrive ? 1 : 0);
+    }
+    sdr.swap(out);
+    printf("[SDR] driver's side: %s; fuel: %s, no EV connector%s\n", id.rightHandDrive ? "right" : "left",
+           id.fuel == kFuelDiesel ? "diesel" : "petrol", fuelSet ? "" : " (no sensor source: fuel not told)");
+    return true;
 }
 
 int removeMediaChannel(std::vector<uint8_t>& sdr) {
@@ -335,6 +387,7 @@ std::vector<uint8_t> buildCarServiceDiscovery(const uint8_t* base, size_t baseLe
            identity.carYear.c_str());
     tuneMainDisplay(sdr, canvasFor(hdVideo));
     declareTouchscreen(sdr, canvasFor(hdVideo));
+    describeCar(sdr, identity);
     if (wifiAudio) {
         printf("[SDR] sound over Wi-Fi: media sink (channel %u) and guidance sink (channel %u) kept\n",
                channel::kMediaAudio, channel::kGuidanceAudio);

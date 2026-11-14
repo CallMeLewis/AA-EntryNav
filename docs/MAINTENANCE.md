@@ -27,7 +27,7 @@ rm /var/local/data/AA/kombi-off      # arrows again
 
 | File | Effect |
 |---|---|
-| `vehicle` | Holds up to three lines, `model=…`, `year=…` and `id=…` (a UUID). The phone shows the model and year. It files its settings for the car under the ID, so give each car its own if one phone goes into two of them |
+| `vehicle` | Holds up to five lines: `model=…`, `year=…`, `id=…` (a UUID), `side=left` or `side=right`, and `fuel=petrol` or `fuel=diesel`. The phone shows the model and year. It files its settings for the car under the ID, so give each car its own if one phone goes into two of them. The side tells Android Auto where the driver sits, and Maps uses the fuel for fuel stops. Without them the car is left-hand drive and takes petrol |
 | `gps-telephone` | While it exists, the phone uses its own GPS and the car's position isn't sent |
 
 ### Picture, sound and connection

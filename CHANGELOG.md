@@ -9,6 +9,16 @@ Each version links to the commit its archive was built from.
 
 ## [Unreleased]
 
+### Added
+
+- **Right-hand drive and diesel cars can say so.** A `side=right` line in the `vehicle` file tells Android Auto the
+  driver sits on the right, and `fuel=diesel` tells Maps the car takes diesel. Unverified.
+
+### Fixed
+
+- **Maps no longer sees a petrol car that also charges at Tesla Superchargers.** Android Auto was told what Google's
+  test head unit says. Without a `fuel=` line it is now told petrol only. Unverified.
+
 ## [0.1.5] - 2026-11-14 · Unverified
 
 <!-- Flare Drive:
