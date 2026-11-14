@@ -9,6 +9,16 @@ Each version links to the commit its archive was built from.
 
 ## [Unreleased]
 
+## [0.1.5-test.4] - 2026-11-14 · Unverified
+
+<!-- Flare Drive:
+Wireless Android Auto connects again. Since 0.1.5-test.1 a phone on Wi-Fi hung up a few seconds after connecting, and
+iDrive kept saying Connecting. The sharper picture now stays on the cable.
+-->
+
+A fix for wireless Android Auto, to try before 0.1.5. A phone on Wi-Fi gets the 1280x720 picture again, and the
+1920x1080 one stays on the cable. The service and the installer change. This version is unverified.
+
 ### Changed
 
 - **Android Auto installs on any iDrive software version.** The installer no longer stops on a version it hasn't
@@ -229,7 +239,7 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 - **Changing the car's clock no longer upsets Android Auto's timing.** When GPS corrected the clock while driving, a
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
-[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.5-test.3...HEAD
+[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.5-test.4...HEAD
 [0.1.5-test.3]: https://github.com/CallMeLewis/AA-EntryNav/tree/1e5dd83343c90c716cc8d24d1b0396bac86ced87
 [0.1.5-test.2]: https://github.com/CallMeLewis/AA-EntryNav/tree/aea35095080027157d7f2f218fd21e341f48cf71
 [0.1.5-test.1]: https://github.com/CallMeLewis/AA-EntryNav/tree/f6405a09a8a38f02b0d4c968b6df5acbbf03c376
