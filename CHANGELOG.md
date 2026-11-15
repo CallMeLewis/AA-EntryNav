@@ -9,6 +9,16 @@ Each version links to the commit its archive was built from.
 
 ## [Unreleased]
 
+## [0.1.6-test.3] - 2026-11-15 · Unverified
+
+<!-- Flare Drive:
+Fill in from the car, under Vehicle in Flare Drive 2.1.6, now also gives the car its own ID. The log no longer shows
+part of the VIN.
+-->
+
+The car gets its own ID from its VIN, and the log no longer shows part of the VIN. Only the iDrive app changes. This
+version is unverified.
+
 ### Added
 
 - **Flare Drive can fill in the car's details for you.** The iDrive app now also gives the car an ID made from its
@@ -293,7 +303,7 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 - **Changing the car's clock no longer upsets Android Auto's timing.** When GPS corrected the clock while driving, a
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
-[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.6-test.2...HEAD
+[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.6-test.3...HEAD
 [0.1.6-test.2]: https://github.com/CallMeLewis/AA-EntryNav/tree/aec8c05f7b85e9c299de2f804ca0a8ed939ac723
 [0.1.6-test.1]: https://github.com/CallMeLewis/AA-EntryNav/tree/e2bde66ac3b3ba7c417f7a85784790d7c6bf2716
 [0.1.5]: https://github.com/CallMeLewis/AA-EntryNav/tree/2b475f0c2594c6b7b4849ddca0093c84648b9385
