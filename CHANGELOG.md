@@ -304,6 +304,7 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
 [Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.6-test.3...HEAD
+[0.1.6-test.3]: https://github.com/CallMeLewis/AA-EntryNav/tree/fb8661df47aab7c890309682ac42f5613b72f20a
 [0.1.6-test.2]: https://github.com/CallMeLewis/AA-EntryNav/tree/aec8c05f7b85e9c299de2f804ca0a8ed939ac723
 [0.1.6-test.1]: https://github.com/CallMeLewis/AA-EntryNav/tree/e2bde66ac3b3ba7c417f7a85784790d7c6bf2716
 [0.1.5]: https://github.com/CallMeLewis/AA-EntryNav/tree/2b475f0c2594c6b7b4849ddca0093c84648b9385
