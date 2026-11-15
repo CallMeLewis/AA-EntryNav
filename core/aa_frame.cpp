@@ -64,13 +64,19 @@ MessageAssembler::Outcome MessageAssembler::add(const FrameHeader& header, const
         }
         return kSkipped;
     }
+    // A MIDDLE with no FIRST before it is the tail of a message that never started: it goes, and the rest of its
+    // fragments up to the LAST with it, so that the tail never comes out as a message of its own.
+    if (position == frame::kMiddle && !pending.sized) {
+        skip(header.channel);
+        return kNoFirst;
+    }
     // A FIRST replaces what the channel held, and a WHOLE leaves it as it is: only a continuation adds to it.
     const size_t held = continues ? pending.data.size() : 0;
     const size_t others = pendingBytes() - pending.data.size();
     if (held + payload.size() > frame::kMaxMessage || others + held + payload.size() > frame::kMaxPending) {
-        if (position == frame::kMiddle) {
+        if (position == frame::kFirst || position == frame::kMiddle) {
             skip(header.channel);  // the memory goes now, and the fragments up to the LAST are dropped quietly
-        } else if (position != frame::kWhole) {
+        } else if (position == frame::kLast) {
             pending_.erase(header.channel);
         }
         return kOverflow;
@@ -93,8 +99,8 @@ MessageAssembler::Outcome MessageAssembler::add(const FrameHeader& header, const
         default:
             break;
     }
-    // LAST. Fragments without a FIRST still count as a start once they brought data.
-    const bool started = pending.sized || !pending.data.empty();
+    // LAST. Only a FIRST starts a message.
+    const bool started = pending.sized;
     const uint32_t onWire = pending.onWire + header.length;
     const uint32_t size = pending.sized ? pending.size : 0;
     pending.data.insert(pending.data.end(), payload.begin(), payload.end());

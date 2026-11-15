@@ -41,9 +41,10 @@ public:
         kComplete,     // `message` holds a whole message
         kOverflow,     // the channel's message would pass frame::kMaxMessage, or all channels' frame::kMaxPending:
                        // dropped, and the rest of its fragments with it (kSkipped)
-        kNoFirst,      // a LAST fragment with nothing before it: dropped
+        kNoFirst,      // a MIDDLE or LAST fragment with no FIRST before it: dropped, and after a MIDDLE the rest of
+                       // its fragments with it (kSkipped)
         kShortOfSize,  // a LAST fragment closed a message smaller than announced: dropped
-        kSkipped,      // a MIDDLE or LAST fragment of a message dropped at kOverflow: dropped quietly
+        kSkipped,      // a MIDDLE or LAST fragment of a message dropped at kOverflow or kNoFirst: dropped quietly
     };
 
     MessageAssembler() : received_(0), announced_(0) {}
@@ -68,7 +69,7 @@ public:
 private:
     struct Pending {
         std::vector<uint8_t> data;
-        bool sized;       // a FIRST fragment announced a size
+        bool sized;       // a FIRST fragment started the message and announced its size
         uint32_t size;    // that size
         uint32_t onWire;  // the length fields received so far
         bool skipping;    // the message overflowed: its fragments up to its LAST are dropped

@@ -540,7 +540,8 @@ AASession::Received AASession::receive(uint8_t& channel, Message& message) {
         case MessageAssembler::kSkipped:
             return kNothing;
         case MessageAssembler::kNoFirst:
-            printf("[AASession] LAST fragment on channel %u with no FIRST: dropping\n", channel);
+            printf("[AASession] %s fragment on channel %u with no FIRST: dropping\n",
+                   header.position() == frame::kMiddle ? "MIDDLE" : "LAST", channel);
             return kNothing;
         case MessageAssembler::kShortOfSize:
             printf("[AASession] channel %u reassembled %u wire bytes, phone announced %u: dropping\n", channel,
