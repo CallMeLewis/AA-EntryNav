@@ -242,6 +242,37 @@ int main() {
     CHECK(side == 1 && fuels.size() == 1 && fuels[0] == 4);
     std::vector<uint8_t> broken(5, 0xff);
     CHECK(!aa::describeCar(broken, rhd) && broken == std::vector<uint8_t>(5, 0xff));
+    // The series: its make, and its code after the model. The series line may come before or after model=.
+    struct SeriesCase {
+        const char* file;
+        const char* make;
+        const char* model;
+    };
+    const SeriesCase seriesCases[] = {
+        {"series=F20\n", "BMW", "1 Series (F20)"},
+        {"series=F20\nmodel=M140i\n", "BMW", "M140i (F20)"},
+        {"model=M140i\nseries=F20\n", "BMW", "M140i (F20)"},
+        {"model=M140i (F21)\nseries=F20\n", "BMW", "M140i (F21)"},  // a bracket already: kept as written
+        {"series=F56\n", "MINI", "Hatch (F56)"},
+        {"series=J29\n", "Toyota", "Supra (J29)"},
+        {"series=RR14\n", "Rolls-Royce", "RR14"},                 // a code with no name: the code alone
+        {"series=F45\n", "BMW", "2 Series Active Tourer (F45)"},  // 28 characters
+        {"series=G20\nmodel=M340i xDrive Touring LCI\n", "BMW", "M340i xDrive Touring LCI (G20)"},
+        {"series=G20\nmodel=M340i xDrive Touring Edition\n", "BMW", "M340i xDrive Touring Edition"},  // too long
+        {"series=f20\nseries=Unbekannt\nseries=\nmodel=118i\n", "BMW", "118i"},                       // no such series
+        {"series=F20\nseries=X99\n", "BMW", "1 Series (F20)"},  // an unknown code changes nothing
+    };
+    for (size_t i = 0; i < sizeof(seriesCases) / sizeof(seriesCases[0]); ++i) {
+        f = fopen(vehicle, "w");
+        CHECK(f);
+        fputs(seriesCases[i].file, f);
+        fclose(f);
+        aa::SdrIdentity car;
+        CHECK(car.loadVehicleFile(vehicle) && car.carMake == seriesCases[i].make &&
+              car.carModel == seriesCases[i].model && car.vehicleId == referenceId);
+    }
+    CHECK(aa::findCarSeries("F20") && !aa::findCarSeries("") && !aa::findCarSeries("F2") &&
+          !aa::findCarSeries("Unbekannt"));
     unlink(vehicle);
     aa::SdrIdentity none;
     CHECK(!none.loadVehicleFile(vehicle) && none.carModel == "M340i" && none.vehicleId == referenceId);
@@ -249,12 +280,12 @@ int main() {
           !aa::validVehicleId("0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f") &&
           !aa::validVehicleId("0f1e2d3c04b5a-6978-8796-a5b4c3d2e1f0") &&
           !aa::validVehicleId("0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1fg"));
-    CHECK(aa::validCarModel("X3 M40i") && !aa::validCarModel("") && !aa::validCarModel(std::string(25, 'a')) &&
-          !aa::validCarModel("a'b") && aa::validCarYear("1999") && !aa::validCarYear("999") &&
-          !aa::validCarYear("3000"));
+    CHECK(aa::validCarModel("X3 M40i") && aa::validCarModel("M140i (F20)") && aa::validCarModel(std::string(32, 'a')) &&
+          !aa::validCarModel("") && !aa::validCarModel(std::string(33, 'a')) && !aa::validCarModel("a'b") &&
+          aa::validCarYear("1999") && !aa::validCarYear("999") && !aa::validCarYear("3000"));
     puts(
         "PASS AA sensors: DHU template cut to NIGHT_MODE + DRIVING_STATUS (the phone keeps its GPS), channel 9 "
         "always removed by the core, other channels identical, no car Bluetooth service, vehicle file (model, year, "
-        "driver's side, fuel)");
+        "driver's side, fuel, series)");
     return 0;
 }

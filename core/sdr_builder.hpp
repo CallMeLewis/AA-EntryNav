@@ -25,10 +25,22 @@ struct SdrIdentity {
     // "year=2021", "id=<uuid>", one per line), and its driver's side and fuel ("side=right", "fuel=diesel"). A missing
     // file or an invalid line keeps the reference values. False if unreadable. Without an id= line the reference id
     // stays, so a phone keeps the settings it already has.
+    // A "series=F20" line from findCarSeries sets the make and adds the code to the model: "M140i (F20)" from
+    // model=M140i, "1 Series (F20)" without a model= line. A model that already has a bracket keeps it as written.
     bool loadVehicleFile(const char* path);
 };
-// Accepted model and year: 1 to 24 of A-Z a-z 0-9 space . _ -, and 1xxx or 2xxx.
+// Accepted model and year: 1 to 32 of A-Z a-z 0-9 space . _ - ( ), and 1xxx or 2xxx.
 bool validCarModel(const std::string& s);
+
+// A series code as iDrive's coding names it (BAUREIHE), with the make and the series the phone shows. name is null for
+// a code whose cars we can't name: the phone then shows the code itself.
+struct CarSeries {
+    const char* code;
+    const char* make;
+    const char* name;
+};
+// The series with this code, exactly as iDrive writes it ("F20", "RR31"); null for any other.
+const CarSeries* findCarSeries(const std::string& code);
 bool validCarYear(const std::string& s);
 // Accepted id: a UUID as /proc/sys/kernel/random/uuid prints it, 8-4-4-4-12 lowercase hex digits.
 bool validVehicleId(const std::string& s);

@@ -9,6 +9,12 @@ Each version links to the commit its archive was built from.
 
 ## [Unreleased]
 
+### Added
+
+- **The phone can show the car's series.** A `series=F20` line in the `vehicle` file makes the phone show "1 Series
+  (F20)", or "M140i (F20)" with `model=M140i`. It also sets the make for MINI, Rolls-Royce and the Toyota Supra. Every
+  series code iDrive knows is covered. Unverified.
+
 ## [0.1.6-test.1] - 2026-11-15 · Unverified
 
 <!-- Flare Drive:

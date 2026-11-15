@@ -56,7 +56,7 @@ then runs over that Wi-Fi and fills iDrive's screen.
 - Calls and the Assistant hear you through the car's microphone, and maps take their position from the car's GPS.
 - Android Auto's next turn also shows in the instrument cluster and the head-up display, on cars whose cluster takes
   it over the car's network, such as the G20 and the X3 G01. F-series clusters don't show it yet.
-- The phone is told the car's model and year, and which side the driver sits, from the `vehicle` file in the
+- The phone is told the car's model, series and year, and which side the driver sits, from the `vehicle` file in the
   [settings guide](docs/MAINTENANCE.md).
 
 ### Experimental, off until you switch it on

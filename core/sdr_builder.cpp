@@ -148,14 +148,135 @@ SdrIdentity::SdrIdentity()
       rightHandDrive(false),
       fuel(kFuelPetrol) {}
 
+namespace {
+
+const size_t kMaxCarModel = 32;
+
+// Every series code in the head unit's coding (libhmicoding.so, BAUREIHE), 202306092158. A null name: not known
+// which cars the code covers.
+const CarSeries kCarSeries[] = {
+    {"F01", "BMW", "7 Series"},
+    {"F02", "BMW", "7 Series"},
+    {"F03", "BMW", "7 Series"},
+    {"F04", "BMW", "7 Series"},
+    {"F06", "BMW", "6 Series Gran Coupe"},
+    {"F07", "BMW", "5 Series GT"},
+    {"F10", "BMW", "5 Series"},
+    {"F11", "BMW", "5 Series"},
+    {"F12", "BMW", "6 Series"},
+    {"F13", "BMW", "6 Series"},
+    {"F15", "BMW", "X5"},
+    {"F16", "BMW", "X6"},
+    {"F18", "BMW", "5 Series"},
+    {"F20", "BMW", "1 Series"},
+    {"F21", "BMW", "1 Series"},
+    {"F22", "BMW", "2 Series"},
+    {"F23", "BMW", "2 Series"},
+    {"F25", "BMW", "X3"},
+    {"F26", "BMW", "X4"},
+    {"F30", "BMW", "3 Series"},
+    {"F31", "BMW", "3 Series"},
+    {"F32", "BMW", "4 Series"},
+    {"F33", "BMW", "4 Series"},
+    {"F34", "BMW", "3 Series GT"},
+    {"F35", "BMW", "3 Series"},
+    {"F36", "BMW", "4 Series Gran Coupe"},
+    {"F39", "BMW", "X2"},
+    {"F40", "BMW", "1 Series"},
+    {"F44", "BMW", "2 Series Gran Coupe"},
+    {"F45", "BMW", "2 Series Active Tourer"},
+    {"F46", "BMW", "2 Series Gran Tourer"},
+    {"F47", "BMW", nullptr},
+    {"F48", "BMW", "X1"},
+    {"F49", "BMW", "X1"},
+    {"F52", "BMW", "1 Series"},
+    {"F54", "MINI", "Clubman"},
+    {"F55", "MINI", "Hatch"},
+    {"F56", "MINI", "Hatch"},
+    {"F57", "MINI", "Convertible"},
+    {"F60", "MINI", "Countryman"},
+    {"F80", "BMW", "M3"},
+    {"F82", "BMW", "M4"},
+    {"F83", "BMW", "M4"},
+    {"F85", "BMW", "X5 M"},
+    {"F86", "BMW", "X6 M"},
+    {"F87", "BMW", "M2"},
+    {"F88", "BMW", nullptr},
+    {"F90", "BMW", "M5"},
+    {"F91", "BMW", "M8"},
+    {"F92", "BMW", "M8"},
+    {"F97", "BMW", "X3 M"},
+    {"F98", "BMW", "X4 M"},
+    {"G01", "BMW", "X3"},
+    {"G02", "BMW", "X4"},
+    {"G05", "BMW", "X5"},
+    {"G06", "BMW", "X6"},
+    {"G07", "BMW", "X7"},
+    {"G08", "BMW", "iX3"},
+    {"G11", "BMW", "7 Series"},
+    {"G12", "BMW", "7 Series"},
+    {"G14", "BMW", "8 Series"},
+    {"G15", "BMW", "8 Series"},
+    {"G16", "BMW", "8 Series Gran Coupe"},
+    {"G20", "BMW", "3 Series"},
+    {"G21", "BMW", "3 Series"},
+    {"G22", "BMW", "4 Series"},
+    {"G23", "BMW", "4 Series"},
+    {"G24", "BMW", nullptr},
+    {"G26", "BMW", "4 Series Gran Coupe"},
+    {"G28", "BMW", "3 Series"},
+    {"G29", "BMW", "Z4"},
+    {"G30", "BMW", "5 Series"},
+    {"G31", "BMW", "5 Series"},
+    {"G32", "BMW", "6 Series GT"},
+    {"G38", "BMW", "5 Series"},
+    {"I01", "BMW", "i3"},
+    {"I12", "BMW", "i8"},
+    {"I15", "BMW", "i8"},
+    {"J29", "Toyota", "Supra"},
+    {"RR04", "Rolls-Royce", "Ghost"},
+    {"RR05", "Rolls-Royce", "Wraith"},
+    {"RR06", "Rolls-Royce", "Dawn"},
+    {"RR11", "Rolls-Royce", nullptr},
+    {"RR12", "Rolls-Royce", nullptr},
+    {"RR14", "Rolls-Royce", nullptr},
+    {"RR21", "Rolls-Royce", "Ghost"},
+    {"RR22", "Rolls-Royce", nullptr},
+    {"RR24", "Rolls-Royce", nullptr},
+    {"RR25", "Rolls-Royce", "Spectre"},
+    {"RR31", "Rolls-Royce", "Cullinan"},
+};
+
+// The model the phone shows for this series: the one written in the file, else the series name, else the code. The
+// code goes in brackets after a name unless the name has a bracket already or would grow too long.
+std::string modelOfSeries(const std::string& written, const CarSeries& series) {
+    const std::string base = !written.empty() ? written : series.name ? series.name : "";
+    if (base.empty()) {
+        return series.code;
+    }
+    const std::string tagged = base + " (" + series.code + ")";
+    return base.find('(') != std::string::npos || tagged.size() > kMaxCarModel ? base : tagged;
+}
+
+}  // namespace
+
+const CarSeries* findCarSeries(const std::string& code) {
+    for (size_t i = 0; i < sizeof(kCarSeries) / sizeof(kCarSeries[0]); ++i) {
+        if (code == kCarSeries[i].code) {
+            return &kCarSeries[i];
+        }
+    }
+    return nullptr;
+}
+
 bool validCarModel(const std::string& s) {
-    if (s.empty() || s.size() > 24) {
+    if (s.empty() || s.size() > kMaxCarModel) {
         return false;
     }
     for (size_t i = 0; i < s.size(); ++i) {
         const char c = s[i];
         const bool allowed = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == ' ' ||
-                             c == '.' || c == '_' || c == '-';
+                             c == '.' || c == '_' || c == '-' || c == '(' || c == ')';
         if (!allowed) {
             return false;
         }
@@ -192,13 +313,18 @@ bool SdrIdentity::loadVehicleFile(const char* path) {
         return false;
     }
     char text[64];
+    std::string written;  // the model= line
+    const CarSeries* series = nullptr;
     while (fgets(text, sizeof(text), file)) {
         std::string line(text);
         while (!line.empty() && (line[line.size() - 1] == '\n' || line[line.size() - 1] == '\r')) {
             line.erase(line.size() - 1);
         }
         if (line.compare(0, 6, "model=") == 0 && validCarModel(line.substr(6))) {
-            carModel = line.substr(6);
+            written = line.substr(6);
+            carModel = written;
+        } else if (line.compare(0, 7, "series=") == 0 && findCarSeries(line.substr(7))) {
+            series = findCarSeries(line.substr(7));
         } else if (line.compare(0, 5, "year=") == 0 && validCarYear(line.substr(5))) {
             carYear = line.substr(5);
         } else if (line.compare(0, 3, "id=") == 0 && validVehicleId(line.substr(3))) {
@@ -210,6 +336,10 @@ bool SdrIdentity::loadVehicleFile(const char* path) {
         }
     }
     fclose(file);
+    if (series) {
+        carMake = series->make;
+        carModel = modelOfSeries(written, *series);
+    }
     return true;
 }
 
