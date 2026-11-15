@@ -111,11 +111,11 @@ A file that holds entry-aad's code keeps its original header, `Copyright (c) 202
 
 1. Write the release's notes under `## [Unreleased]` in `CHANGELOG.md`, Flare Drive note included, as
    [docs/release-notes.md](docs/release-notes.md) describes.
-2. Run `tools/publish_release.py prepare X.Y.Z "<summary>"`. It turns the Unreleased part into the version's section
-   and commits it with `VERSION` as `Release X.Y.Z: <summary>`. `preview` shows the Flare Drive note and the GitHub
-   Release's text.
+2. Run `tools/publish_release.py prepare X.Y.Z "<summary>"`. It turns the Unreleased part into the version's section,
+   dated today and linked to the `vX.Y.Z` tag, and commits it with `VERSION` as `Release X.Y.Z: <summary>`. `preview`
+   shows the Flare Drive note and the GitHub Release's text.
 3. Push the commit. The pre-push hook builds it for ARM and runs the QEMU tests. Wait for CI to pass as well.
-4. Run `tools/publish_release.py publish`. It builds and tests the commit again and adds it to Flare Drive's release
-   list with its note. It also tags it `vX.Y.Z` and creates a GitHub Release with the archive, its `.sha256` and the
-   text from the CHANGELOG section. Last, it dates the section and links it to the commit. Commit that change, or let
-   the next release commit take it along.
+4. The same day, run `tools/publish_release.py publish`. It builds and tests the commit again and adds it to Flare
+   Drive's release list with its note. It also tags it `vX.Y.Z` and creates a GitHub Release with the archive, its
+   `.sha256` and the text from the CHANGELOG section. It changes nothing in the repository, so there is nothing to
+   commit afterwards.

@@ -18,9 +18,9 @@ as `notes`, and the GitHub Release's text as `changes`, which Flare Drive shows 
 shows both without publishing anything; `notes` brings published releases' list entries and GitHub Releases back in
 line with their sections.
 
-`prepare` raises VERSION, turns CHANGELOG.md's [Unreleased] part into the version's section and commits both as
-`Release VERSION: SUMMARY`. Push that commit, wait for CI, then publish. `publish` dates the section and links it to
-the commit; the next release commit takes that change along if it isn't committed before.
+`prepare` raises VERSION, turns CHANGELOG.md's [Unreleased] part into the version's section, dated today and linked
+to the tag v<version>, and commits both as `Release VERSION: SUMMARY`. Push that commit, wait for CI, then publish the
+same day. `publish` changes nothing in the repository: it refuses a section dated another day.
 
 Each release carries the owner's label, stable or experimental (experimental unless --stable), shown as a pill in Flare
 Drive. `stability` changes it later: the list is signed again, the archive stays as it is. Whether a release has run in
@@ -39,10 +39,9 @@ the darkzone.dev zone, kept on this PC (~/.flare-drive/cloudflare-purge-token, o
 before anything changes.
 
 `publish` builds what CI tested: it refuses a dirty tree, a HEAD whose CI has not passed, a version already published,
-and a version whose CHANGELOG.md section or Flare Drive note is missing. It then builds the ARM programs, runs the QEMU
-tests, validates and packages (README.md, Building), in Docker when not on Linux, uploads the archive, and only then the
-signed index, so Flare Drive never sees an entry whose archive is missing. It then dates the version's CHANGELOG.md
-heading with the day it was published and links the version to the commit its archive was built from.
+and a version whose CHANGELOG.md section, Flare Drive note, link or today's date is missing. It then builds the ARM
+programs, runs the QEMU tests, validates and packages (README.md, Building), in Docker when not on Linux, uploads the
+archive, and only then the signed index, so Flare Drive never sees an entry whose archive is missing.
 
 Once the index lists a release, `publish` tags it v<version> on GitHub, at the commit its archive was built
 from (the index's sourceCommit), push the tag, and give it a GitHub Release with the published archive and its SHA-256
@@ -334,21 +333,21 @@ def release_body(text):
     return "\n".join(lines).strip() + "\n"
 
 
-def with_links(text, index, unreleased_from=None):
-    """text with a link for every published version that has none, to the commit its archive was built from, and with
-    [Unreleased] comparing from v<unreleased_from> when given. The links stay at the end: [Unreleased], then the
-    versions newest first."""
+def with_links(text, versions, unreleased_from=None):
+    """text with a link for every version in versions that has none, to its tag v<version>, which publish puts on the
+    commit its archive is built from; and with [Unreleased] comparing from v<unreleased_from> when given. A link to a
+    tag can be written before the commit it names exists, so the release commit carries its own. Links already there
+    stay as they are (older ones name the commit). The links stay at the end: [Unreleased], then the versions newest
+    first."""
     lines = text.rstrip("\n").split("\n")
     links = {}
     while lines and (not lines[-1].strip() or LINK.match(lines[-1])):
         line = lines.pop()
         if line.strip():
             links[LINK.match(line).group(1)] = line
-    for release in index["releases"]:
-        if release["version"] not in links:
-            links[release["version"]] = (
-                f"[{release['version']}]: https://github.com/{REPO}/tree/{release['sourceCommit']}"
-            )
+    for version in versions:
+        if version not in links:
+            links[version] = f"[{version}]: https://github.com/{REPO}/tree/v{version}"
     if unreleased_from:
         links["Unreleased"] = f"[Unreleased]: https://github.com/{REPO}/compare/v{unreleased_from}...HEAD"
     versions = sorted((label for label in links if release_version.is_valid(label)), key=version_key, reverse=True)
@@ -359,7 +358,8 @@ def with_links(text, index, unreleased_from=None):
 
 def prepare(args):
     """The release commit, `Release VERSION: SUMMARY`: VERSION raised, and CHANGELOG.md's [Unreleased] part turned into
-    the version's section, with any published version still missing its link given one."""
+    the version's section, dated today and linked to its tag, with any published version still missing its link given
+    one."""
     version = args.version
     if not release_version.is_valid(version):
         sys.exit(f"FAIL: {version} is not {release_version.FORMAT}.")
@@ -387,20 +387,23 @@ def prepare(args):
         sys.exit(f"FAIL: nothing under [Unreleased] in {CHANGELOG.name}. Write the release's section there first.")
 
     heading_end = text.index("\n", unreleased[0]) + 1
-    date = datetime.now().strftime("%Y-%m-%d")
+    date = today()
     released = text[:heading_end] + f"\n## [{version}] - {date} · Unverified\n" + text[heading_end:]
     (ROOT / "VERSION").write_text(version + "\n", newline="\n")
-    write_changelog(with_links(released, index, unreleased_from=version))
+    published = [r["version"] for r in index["releases"]]
+    write_changelog(with_links(released, published + [version], unreleased_from=version))
     committed = git("commit", "--quiet", "-m", subject, "--", "VERSION", CHANGELOG.name, check=False)
     if committed.returncode:
         (ROOT / "VERSION").write_text(current + "\n", newline="\n")
         write_changelog(text)
         sys.exit(f"FAIL: could not commit the release: {(committed.stderr or committed.stdout).strip()}")
     print(f"Committed {output('git', 'rev-parse', '--short', 'HEAD')}: {subject}")
-    print(f"{CHANGELOG.name}: [Unreleased] is now {version}'s section, unverified.")
+    print(
+        f"{CHANGELOG.name}: [Unreleased] is now {version}'s section, unverified, dated {date} and linked to v{version}."
+    )
     if not NOTE.search(section(version)):
         print(f"WARN: {version}'s section has no Flare Drive note (<!-- Flare Drive: ... -->) yet. publish needs one.")
-    print("Check both texts with preview, push the commit, wait for CI, then publish.")
+    print("Check both texts with preview, push the commit, wait for CI, then publish today, the section's date.")
 
 
 def preview(args):
@@ -478,6 +481,8 @@ def publish(args):
     # Both texts before the build, which takes minutes: a missing section or note stops it at once.
     text = section(version)
     note, body = flare_drive_note(version, text), release_body(text)
+    # The release commit holds the section's date and link, so publishing changes nothing in the repository.
+    check_dated_and_linked(version, text)
     print(f"Flare Drive note: {note}", flush=True)
     # The build and every check CI can't run (tools/verify_arm.py, as the pre-push hook runs them), then the
     # archive. Each step stops the publish on failure. Packaging runs on Linux too: zipped elsewhere, the iDrive app's
@@ -604,21 +609,31 @@ def upload(key, index, archive, version, commit, stable, note, body):
         sys.exit("FAIL: the uploaded archive doesn't read back the same. The index was not changed.")
     publish_index(key, {"schema": 1, "published": now(), "releases": index["releases"] + [entry]})
     print(f"Published {version} ({entry['sha256'][:12]}…) from {commit[:7]}.")
-    record_published(entry, index)
     if tag_release(entry):
         github_release(entry, body, latest=newest_stable(index["releases"], version))
     verify(None)
 
 
-def record_published(entry, index):
-    """Dates the version's CHANGELOG.md heading with the day it was published and links the version to the commit its
-    archive was built from."""
-    text = read_changelog()
-    day = entry["published"][:10]
-    heading = re.compile(rf"^(## \[{re.escape(entry['version'])}\] - )\d{{4}}-\d{{2}}-\d{{2}}", re.M)
-    text = heading.sub(rf"\g<1>{day}", text, count=1)
-    write_changelog(with_links(text, {"releases": index["releases"] + [entry]}))
-    print(f"{CHANGELOG.name}: {entry['version']} dated {day} and linked to {entry['sourceCommit'][:7]}. Commit it.")
+def today():
+    """The release date CHANGELOG.md headings carry: this PC's day, the same for prepare and publish."""
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+def check_dated_and_linked(version, text):
+    """Stops publish unless the version's section is dated today and CHANGELOG.md links it, both written by prepare,
+    so the release commit is complete and publish has nothing to commit afterwards."""
+    dated = re.match(rf"## \[{re.escape(version)}\] - (\d{{4}}-\d{{2}}-\d{{2}})", text)
+    day = today()
+    if not dated or dated.group(1) != day:
+        found = dated.group(1) if dated else "no date"
+        sys.exit(
+            f"FAIL: {version}'s heading in {CHANGELOG.name} says {found}, but it is published today, {day}. Change "
+            "the heading's date to today, commit and push it, wait for CI, then publish."
+        )
+    if not re.search(rf"^\[{re.escape(version)}\]: ", read_changelog(), re.M):
+        sys.exit(
+            f"FAIL: {CHANGELOG.name} has no link for {version}. prepare writes one: [{version}]: ...tree/v{version}"
+        )
 
 
 def git(*args, check=True):

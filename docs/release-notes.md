@@ -45,7 +45,8 @@ memory. Only the iDrive app (`libAAEntryNav.so`) changes. This version is unveri
 
 - Verified means this exact build has run in a car. Unverified means it has only been tested on PC and under QEMU.
 - The heading is `## [X.Y.Z]`, ` - `, the release date (YYYY-MM-DD), then ` · Unverified`, or ` · Verified` once this
-  exact build has run in a car. `prepare` writes it; `publish` sets the date to the day it published the release.
+  exact build has run in a car. `prepare` writes it with today's date, so publish the same day: `publish` refuses a
+  section dated another day, and you then change the date and commit it before publishing.
 - A build to try before X.Y.Z is `X.Y.Z-test.N` or `X.Y.Z-beta.N`, with a section of its own. Test builds come before
   beta builds, and X.Y.Z itself is above both, so Flare Drive offers it as an update over them
   (`tools/release_version.py`). A beta or test build is always experimental, and a pre-release on GitHub. X.Y.Z's
@@ -58,8 +59,9 @@ memory. Only the iDrive app (`libAAEntryNav.so`) changes. This version is unveri
 - Each bullet opens with its point in bold, then the detail. Markdown is fine here: GitHub renders it.
 - Each bullet says whether that change is verified or unverified, in a closing sentence that starts with "Verified" or
   "Unverified", which the GitHub Release leaves out. Nothing counts as working until a car has shown it.
-- A version links to the commit its archive was built from, in the links at the end of the file. `publish` adds the
-  link once it has published the release, and `prepare` adds any that are still missing.
+- A version links to its tag, `vX.Y.Z`, in the links at the end of the file. `prepare` writes the link into the release
+  commit, and `publish` puts the tag on the commit the archive is built from, so publishing leaves nothing to commit.
+  Versions up to 0.1.6-test.3 link to their commit instead.
 
 ## The Flare Drive note
 
