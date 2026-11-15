@@ -56,6 +56,7 @@ constexpr char kServiceLogOld[] = "/tmp/aa-entrynav-service.old.log";  // the lo
 constexpr char kStateFile[] = "/tmp/aa-entrynav-state";                // "state pid overlay", written by the service
 constexpr char kAppKeyFile[] = "/tmp/aa-entrynav-appkey";              // a key that also moved iDrive went to AA
 constexpr char kDayNightFile[] = "/tmp/aa-entrynav-daynight";          // day or night, written by the app
+constexpr char kCarFile[] = "/tmp/aa-entrynav-car";                    // the car's own details, by the app
 constexpr char kWirelessLock[] = "/tmp/aa-entrynav-wireless.lock";     // one wireless start at a time
 constexpr char kWlandApConf[] = "/tmp/wland/ap.conf";  // BMW's hotspot settings, written by wland (platform/evo_ap.cpp)
 // The service's udev rule while Android Auto over a cable is on (usb_link.hpp: kUsbUdevRuleDir/kUsbUdevRuleName). The

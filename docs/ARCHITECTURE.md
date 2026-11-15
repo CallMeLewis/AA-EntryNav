@@ -113,6 +113,9 @@ the same session over USB.
   service writes.
 - **Bluetooth audio.** With the `select-bt-audio` file, `bt_audio_plan.hpp` picks the moment and `bt_audio` sends
   iDrive's own source switch to Bluetooth audio.
+- **The car's own details.** `car_coding` reads the series, the driver's side and the fuel from iDrive's coding, and
+  `car_signals` takes the VIN from the car's data. `car_identity.hpp` turns them into vehicle file lines, which the app
+  writes to `/tmp/aa-entrynav-car` for Flare Drive to offer. The app never writes the `vehicle` file itself.
 - **The Flare Drive page.** `flare_page` asks for the PIN with iDrive's speller, then shows the QR code. `pin_lock.hpp`
   and `sha256.hpp` keep a salted hash of the PIN and the lockout after wrong tries. `flare_link.hpp` builds the link
   from `ap.conf`, `qr_code` encodes it, and `qr_png` writes the PNG iDrive displays. None of these use a library.

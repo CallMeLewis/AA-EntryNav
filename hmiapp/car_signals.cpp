@@ -8,6 +8,8 @@
 #include "../platform/service_contract.hpp"
 #include "../platform/tmp_file.hpp"
 #include "app_log.hpp"
+#include "car_coding.hpp"
+#include "car_identity.hpp"
 #include "cds_parse.hpp"
 #include "mono_clock.hpp"
 #include "service_link.hpp"
@@ -153,10 +155,79 @@ bool onDriveMode1(void*, const bmw::BasicString<unsigned short>& v) {
     return onDriveMode(1, v);
 }
 
+// ---- what the car says about itself, for Flare Drive (car_identity.hpp) --------------------------------------------
+CarFacts g_facts;
+bmw::PluginApp* g_app = nullptr;
+AppRunnable g_codingRunnable;
+int g_codingTries = 0;
+const int kCodingTries = 12;  // one a few seconds apart: the coding is normally loaded long before the app runs
+const unsigned kCodingRetryMs = 5000;
+
+void writeCarFile() {
+    const std::string text = carFileText(g_facts);
+    char tmp[64];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", contract::kCarFile);
+    const int fd = replaceTmpFile(tmp, 0644);
+    if (fd < 0) {
+        return;
+    }
+    const bool written = write(fd, text.data(), text.size()) == static_cast<ssize_t>(text.size());
+    close(fd);
+    if (written) {
+        rename(tmp, contract::kCarFile);
+    }
+}
+
+void readCodingRun(void*) {
+    ++g_codingTries;
+    if (readCarCoding(g_facts)) {
+        writeCarFile();
+    } else if (g_codingTries < kCodingTries && g_app) {
+        postRunnable(g_app, g_codingRunnable, kCodingRetryMs);
+    } else {
+        alog("car coding: not read after %d tries", g_codingTries);
+        writeCarFile();  // the VIN's id, if any: the file says the app has looked
+    }
+}
+
+// The VIN is never logged whole: its length, and its first ten characters (maker, type, model year) at most.
+const char* const kVinProperty = "vehicle.VIN";
+bool onVinChanged(void*, const bmw::BasicString<unsigned short>& value) {
+    char text[160], shown[160], vin[18];
+    narrow(value, text, sizeof(text));
+    maskForLog(text, shown, sizeof(shown));
+    const bool full = vinInText(text, vin);
+    char id[37] = "";
+    if (full) {
+        vehicleIdOfVin(vin, id);
+    }
+    if (g_facts.vehicleId != id || !full) {
+        alog("CDS %s = '%s' -> %s", kVinProperty, shown, full ? "a full VIN: vehicle id from it" : "no full VIN");
+    }
+    g_facts.vehicleId = id;
+    writeCarFile();
+    return true;
+}
+
+const char* const kVehicleTypeProperty = "vehicle.type";
+bool onVehicleType(void*, const bmw::BasicString<unsigned short>& value) {
+    char text[200], shown[200];
+    narrow(value, text, sizeof(text));
+    maskForLog(text, shown, sizeof(shown));
+    alog("CDS %s = '%s'", kVehicleTypeProperty, shown);
+    return true;
+}
+
 }  // namespace
 
 void subscribeCarSignals(bmw::PluginApp* app, HoldMachine& hold) {
     g_hold = &hold;
+    g_app = app;
+    makeRunnable(g_codingRunnable, &readCodingRun);
+    readCodingRun(nullptr);
+    addCdsHandler(app, kVinProperty, &onVinChanged);
+    addCdsHandler(app, kVehicleTypeProperty, &onVehicleType);
+    alog("CDS handlers for %s and %s registered", kVinProperty, kVehicleTypeProperty);
     addCdsHandler(app, kGearProperty, &onGearChanged);
     alog("CDS handler for %s registered", kGearProperty);
     for (int i = 0; i < 2; ++i) {

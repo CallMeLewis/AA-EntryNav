@@ -7,6 +7,9 @@
 //   driving.mode / driving.mode35up  a real change between two valid modes only: the hold machine sends "drivemode"
 //                                    if iDrive's driving mode display then covers our state (popup_peek.hpp)
 //   driving.speedActual              kept for the Flare Drive page, which hides its QR code while the car moves
+//   vehicle.VIN                      a full VIN gives the vehicle id written to contract::kCarFile (car_identity.hpp)
+//   vehicle.type                     logged only, to learn its layout
+// They also read the car's coding (car_coding.hpp) once, and write what they found to contract::kCarFile.
 // Every handler runs on the app thread.
 #ifndef AA_ENTRYNAV_HMIAPP_CAR_SIGNALS_HPP
 #define AA_ENTRYNAV_HMIAPP_CAR_SIGNALS_HPP

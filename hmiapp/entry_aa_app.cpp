@@ -37,6 +37,7 @@
 #include "bmw_framework.hpp"
 #include "bt_audio.hpp"
 #include "bt_audio_plan.hpp"
+#include "car_coding.hpp"
 #include "car_signals.hpp"
 #include "flare_page.hpp"
 #include "hold_machine.hpp"
@@ -388,6 +389,7 @@ bmw::PluginApp* createApp(bmw::IDispatcher& dispatcher, const char* name, const 
     }
     // HmiMain3D's own thread: the only one where its event queue can be looked up (bt_audio.hpp).
     captureHmiQueue();
+    captureVariantServer();  // the same: the plugin cache it comes from is per thread (car_coding.hpp)
     const PluginAppHooks hooks = {&appOnInit, &appOnError, &appOnFinalize};
     void* base = nullptr;
     bmw::PluginApp* app = newPluginApp(dispatcher, name, params, config, hooks, &base);
