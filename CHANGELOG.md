@@ -9,11 +9,24 @@ Each version links to the commit its archive was built from.
 
 ## [Unreleased]
 
+## [0.1.6-test.2] - 2026-11-15 · Unverified
+
+<!-- Flare Drive:
+Your phone can show the car as "1 Series (F20)": set its series under Vehicle in Flare Drive 2.1.5. The iDrive app
+also starts reading the car's series, driver's side and fuel, for a later Flare Drive to offer.
+-->
+
+The phone can show the car's series, and the iDrive app reads the car's own details. The service and the iDrive app
+both change. This version is unverified.
+
 ### Added
 
-- **The phone can show the car's series.** A `series=F20` line in the `vehicle` file makes the phone show "1 Series
-  (F20)", or "M140i (F20)" with `model=M140i`. It also sets the make for MINI, Rolls-Royce and the Toyota Supra. Every
-  series code iDrive knows is covered. Unverified.
+- **The phone can show the car's series.** Set it under Vehicle in Flare Drive 2.1.5, or with a `series=F20` line in
+  the `vehicle` file, and the phone shows "1 Series (F20)", or "M140i (F20)" when the model is M140i. MINIs,
+  Rolls-Royces and the Toyota Supra show their own make. Every series code iDrive knows is covered. Unverified.
+- **The iDrive app reads the car's series, driver's side and fuel.** It reads them from iDrive's own settings when
+  the head unit starts and keeps them on the head unit, for a later Flare Drive to offer under Vehicle. Nothing the
+  phone is told changes until you choose. Unverified.
 
 ## [0.1.6-test.1] - 2026-11-15 · Unverified
 
@@ -264,7 +277,7 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 - **Changing the car's clock no longer upsets Android Auto's timing.** When GPS corrected the clock while driving, a
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
-[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.6-test.1...HEAD
+[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.6-test.2...HEAD
 [0.1.6-test.1]: https://github.com/CallMeLewis/AA-EntryNav/tree/e2bde66ac3b3ba7c417f7a85784790d7c6bf2716
 [0.1.5]: https://github.com/CallMeLewis/AA-EntryNav/tree/2b475f0c2594c6b7b4849ddca0093c84648b9385
 [0.1.4]: https://github.com/CallMeLewis/AA-EntryNav/tree/6d271b999ed2f2d4d23ee61f7d7cbfa5cda2a43b
