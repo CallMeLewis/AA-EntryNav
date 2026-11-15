@@ -5,6 +5,7 @@
   <p>
     <a href="https://github.com/CallMeLewis/AA-EntryNav/releases"><img src="https://img.shields.io/github/v/release/CallMeLewis/AA-EntryNav?include_prereleases&amp;display_name=tag&amp;sort=semver" alt="Latest release"></a>
     <a href="https://github.com/CallMeLewis/AA-EntryNav/actions/workflows/ci.yml"><img src="https://github.com/CallMeLewis/AA-EntryNav/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+    <a href="LICENSE.md"><img src="https://img.shields.io/badge/licence-PolyForm%20Noncommercial%201.0.0-blue" alt="Licence: PolyForm Noncommercial 1.0.0"></a>
   </p>
 </div>
 
@@ -53,7 +54,10 @@ then runs over that Wi-Fi and fills iDrive's screen.
 - It answers to the car's own controls: the iDrive controller and its buttons, the touch screen, the steering wheel
   buttons and the voice button.
 - Calls and the Assistant hear you through the car's microphone, and maps take their position from the car's GPS.
-- Android Auto's next turn also shows in the instrument cluster and the head-up display.
+- Android Auto's next turn also shows in the instrument cluster and the head-up display, on cars whose cluster takes
+  it over the car's network, such as the G20 and the X3 G01. F-series clusters don't show it yet.
+- The phone is told the car's model and year, and which side the driver sits, from the `vehicle` file in the
+  [settings guide](docs/MAINTENANCE.md).
 
 ### Experimental, off until you switch it on
 
@@ -65,7 +69,7 @@ Each one is a switch in Flare Drive, or a file in `/var/local/data/AA` on the he
 | Android Auto over a **USB cable**, with sound and calls on the car's Bluetooth | `usb` |
 | **Wireless off**, so only the cable works and the car's Bluetooth and Wi-Fi are left alone | `wireless-off` |
 | iDrive **switches to Bluetooth audio** as the phone connects | `select-bt-audio` |
-| **Sound over Wi-Fi** instead of Bluetooth | `audio-wifi` |
+| **Sound over Wi-Fi** instead of Bluetooth: music on the car's speakers with the volume knob, and announcements over the radio turn it down rather than stop it | `audio-wifi` |
 
 ## Building it yourself
 
@@ -81,14 +85,15 @@ You need Docker. The build links the ARM programs against a copy of the car's sy
 | `python3 tools/package_release.py` | The release archive, after `verify_arm.py` |
 
 CI can't hold the copy of the car's system, so it runs only `make check`. The pre-push hook runs `verify_arm.py` on
-each commit pushed to `main`, and `tools/verify_tests.py` makes sure every test runs in one or the other.
+the commit pushed to `main`, and `tools/verify_tests.py` makes sure every test runs in one or the other.
 
 [ARCHITECTURE.md](docs/ARCHITECTURE.md) shows how the programs fit together, and [CONTRIBUTING.md](CONTRIBUTING.md)
 says what a change needs.
 
 ## Credits and licence
 
-AA-EntryNav started from [entry-aad](https://github.com/Jiraiya43/entry-aad) by Jiraiya43, a port of
+AA-EntryNav started from entry-aad by Jiraiya43, now
+[EntryNav2-Android-Auto](https://github.com/Jiraiya43/EntryNav2-Android-Auto), a port of
 [Supra-iDrive6-Android-Auto](https://github.com/Sq00ky/Supra-iDrive6-Android-Auto) by Sq00ky. [NOTICE.md](NOTICE.md)
 says which files hold their code.
 
