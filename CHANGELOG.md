@@ -9,6 +9,18 @@ Each version links to the commit its archive was built from.
 
 ## [Unreleased]
 
+## [0.1.6-test.1] - 2026-11-15 · Unverified
+
+<!-- Flare Drive:
+Announcements over Wi-Fi now turn the radio down instead of stopping it. On the cable, Android Auto's first-time prompt
+on the phone can now be accepted, and the phone is told when Android Auto stops. A frozen picture now reconnects by
+itself, and the volume bar no longer pops up for announcements.
+-->
+
+Announcements that lower the radio instead of stopping it, first-time setup over the cable, and fixes for a frozen
+picture, the car's GPS speed, the volume bar and the cluster's arrows. Only the service changes. This version is
+unverified.
+
 ### Added
 
 - **Right-hand drive and diesel cars can say so.** A `side=right` line in the `vehicle` file tells Android Auto the
@@ -246,7 +258,7 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 - **Changing the car's clock no longer upsets Android Auto's timing.** When GPS corrected the clock while driving, a
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
-[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.6-test.1...HEAD
 [0.1.5]: https://github.com/CallMeLewis/AA-EntryNav/tree/2b475f0c2594c6b7b4849ddca0093c84648b9385
 [0.1.4]: https://github.com/CallMeLewis/AA-EntryNav/tree/6d271b999ed2f2d4d23ee61f7d7cbfa5cda2a43b
 [0.1.3]: https://github.com/CallMeLewis/AA-EntryNav/tree/e3c28334465d6d86722a260685ef76a23a1a5f67
