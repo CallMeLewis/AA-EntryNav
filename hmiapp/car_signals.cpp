@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "../platform/service_contract.hpp"
 #include "../platform/tmp_file.hpp"
@@ -190,19 +191,19 @@ void readCodingRun(void*) {
     }
 }
 
-// The VIN is never logged whole: its length, and its first ten characters (maker, type, model year) at most.
+// The VIN, or any part of it, is never logged: only how long the text is and whether a serial number was found.
 const char* const kVinProperty = "vehicle.VIN";
 bool onVinChanged(void*, const bmw::BasicString<unsigned short>& value) {
-    char text[160], shown[160], vin[18];
+    char text[160], serial[8];
     narrow(value, text, sizeof(text));
-    maskForLog(text, shown, sizeof(shown));
-    const bool full = vinInText(text, vin);
+    const bool found = vinSerialInText(text, serial);
     char id[37] = "";
-    if (full) {
-        vehicleIdOfVin(vin, id);
+    if (found) {
+        vehicleIdOfSerial(serial, id);
     }
-    if (g_facts.vehicleId != id || !full) {
-        alog("CDS %s = '%s' -> %s", kVinProperty, shown, full ? "a full VIN: vehicle id from it" : "no full VIN");
+    if (g_facts.vehicleId != id) {
+        alog("CDS %s: %u characters -> %s", kVinProperty, static_cast<unsigned>(strlen(text)),
+             found ? "vehicle id from its serial number" : "no serial number");
     }
     g_facts.vehicleId = id;
     writeCarFile();

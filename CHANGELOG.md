@@ -9,6 +9,22 @@ Each version links to the commit its archive was built from.
 
 ## [Unreleased]
 
+### Added
+
+- **Flare Drive can fill in the car's details for you.** The iDrive app now also gives the car an ID made from its
+  VIN, so a phone used in two cars keeps them apart, and Fill in from the car in Flare Drive 2.1.6 puts the series,
+  driver's side and ID in for you. Unverified.
+
+### Changed
+
+- **The fuel is no longer read from the car.** iDrive's fuel setting is the one its navigation uses to find filling
+  stations, often "all fuels", not the engine's. Set the fuel in Flare Drive under Vehicle. Unverified.
+
+### Fixed
+
+- **The log no longer shows part of the VIN.** 0.1.6-test.2 wrote the last 7 characters of the VIN to the iDrive
+  app's log, and so to Flare Drive's reports. Unverified.
+
 ## [0.1.6-test.2] - 2026-11-15 · Unverified
 
 <!-- Flare Drive:

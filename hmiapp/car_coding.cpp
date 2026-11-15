@@ -94,10 +94,9 @@ bool readCarCoding(CarFacts& facts) {
     const char* code = seriesRead ? seriesOfCoding(series) : nullptr;
     facts.series = code ? code : "";
 
+    // Logged only: the navigation's fuel, not the engine's (car_identity.hpp).
     unsigned char fuel = 0;
     const bool fuelRead = named(kFuelValue, "TYPE_OF_FUEL") && value(g_server, kFuelValue, fuel);
-    const char* fuelName = fuelRead ? fuelOfCoding(fuel) : nullptr;
-    facts.fuel = fuelName ? fuelName : "";
 
     const bool sideNamed = named(kLeftHand, "TYP_LENKUNG") && named(kRightHand, "TYP_LENKUNG");
     const bool left = sideNamed && isSet(g_server, kLeftHand);
@@ -112,11 +111,11 @@ bool readCarCoding(CarFacts& facts) {
     const int year = reinterpret_cast<GetProductionYear>(slot(kSlotGetProductionYear))(g_server);
 
     alog(
-        "car coding: series %s 0x%02x -> %s; fuel %s %u -> %s; steering %s left %d right %d -> %s; production year %d;"
-        " vehicle spec '%s' '%s'",
-        seriesRead ? "read" : "NOT read", series, code ? code : "unknown", fuelRead ? "read" : "NOT read", fuel,
-        fuelName ? fuelName : "none", sideNamed ? "read" : "NOT read", left, right,
-        facts.side.empty() ? "unknown" : facts.side.c_str(), year, shown1, shown2);
+        "car coding: series %s 0x%02x -> %s; steering %s left %d right %d -> %s; navigation fuel %s %u; production year"
+        " %d; vehicle spec '%s' '%s'",
+        seriesRead ? "read" : "NOT read", series, code ? code : "unknown", sideNamed ? "read" : "NOT read", left, right,
+        facts.side.empty() ? "unknown" : facts.side.c_str(), fuelRead ? "read" : "NOT read", fuel, year, shown1,
+        shown2);
     return true;
 }
 
