@@ -21,6 +21,9 @@
 //     refused for good: it is asked again a few times, kUsbQuickRetryMs apart, before it is left alone for
 //     kUsbRefusedMs. Seen on the car on 13 November 2026: a phone plugged in refused once, then took the request
 //     30 s later.
+//   - A phone can take accessory mode and still not answer, while Android Auto starts or shows its first-time prompt.
+//     It is given time on the same accessory before a reset, which would close the prompt, and only a few resets
+//     before it is left alone (kUsbSilentRetryMs and the rest below).
 //   - A phone left alone and then unplugged and plugged in again is asked at once: the driver did that on purpose. A
 //     port that empties within kUsbModeChangeMs of a request or reset is the phone changing mode, not a plug-in.
 #ifndef AA_ENTRYNAV_PLATFORM_USB_LINK_HPP
@@ -84,6 +87,15 @@ const unsigned kUsbRefusedMs = 30000;    // a phone that refused is left alone t
 const unsigned kUsbAttempts = 3;         // rounds of "reset and ask again" in one connect()
 const unsigned kUsbQuickRetries = 3;     // after a plug-in or a session on the cable: refusals retried soon
 const unsigned kUsbQuickRetryMs = 2000;  // how soon
+// A phone in accessory mode for us whose Android Auto doesn't answer may be starting it, or showing its first-time
+// prompt: a reset would close the prompt. It is asked again on the same accessory kUsbSilentRetryMs later, and reset
+// only after kUsbSilentBeforeReset silences in a row. At most kUsbSilentResets such resets in kUsbSilentWindowMs: then
+// the phone is left alone that long, unless it is unplugged and plugged in again. Before this, a phone that stayed
+// silent was reset and asked again every few seconds, for as long as it was plugged in.
+const unsigned kUsbSilentRetryMs = 4000;
+const unsigned kUsbSilentBeforeReset = 3;
+const unsigned kUsbSilentResets = 2;
+const unsigned kUsbSilentWindowMs = 120000;
 
 class UsbLink {
 public:
@@ -118,6 +130,11 @@ private:
     int openAccessory(const UsbDeviceInfo& device);  // the socket, or -1
     bool hello(int socket, const std::atomic<bool>& quit);
     bool refusedLately(const std::string& port);
+    // A pause during which the phone on port is not looked at, accessory or not.
+    void rest(const std::string& port, unsigned ms);
+    bool resting(const std::string& port);
+    // Android Auto didn't answer on port's accessory: -1 for connect() to return, 0 to go on with a reset.
+    int silent(const std::string& port);
 
     UsbBus& bus_;
     Log log_;
@@ -140,7 +157,13 @@ private:
     std::string quickPort_;  // where refusals are still retried soon, since when, and why
     uint32_t quickFromMs_;
     const char* quickWhy_;
-    unsigned quickRetries_;  // how many (kUsbQuickRetries)
+    unsigned quickRetries_;   // how many (kUsbQuickRetries)
+    std::string silentPort_;  // where Android Auto didn't answer: silences in a row, resets spent in the window
+    unsigned silences_, silentResets_;
+    uint32_t silentResetsFromMs_;
+    std::string restPort_;  // a pause: where, since when, how long
+    uint32_t restFromMs_, restForMs_;
+    bool resting_;
 };
 
 }  // namespace evo

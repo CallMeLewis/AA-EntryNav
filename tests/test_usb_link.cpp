@@ -41,6 +41,7 @@ struct World {
           device(2),
           allows(true),
           knowsProtocol(true),
+          quiet(false),
           rivalDelayMs(-1),
           backAt(0),
           backAs(kNormal),
@@ -60,6 +61,7 @@ struct World {
     Mode mode;
     unsigned device;
     bool allows, knowsProtocol;
+    bool quiet;        // Android Auto is behind the accessory but doesn't answer yet (its first-time prompt)
     int rivalDelayMs;  // -1: no rival. Else it asks this long after the phone shows in its normal mode.
     std::string texts[6], identity;
     uint32_t backAt;
@@ -203,7 +205,7 @@ public:
         } else {
             // Android Auto answers its version request, when it is the app behind the accessory.
             if (t.length == 10 && t.data[5] == 1 && w_.mode == World::kAccessory && w_.identity == kAndroidAuto &&
-                !w_.broken) {
+                !w_.broken && !w_.quiet) {
                 static const char answer[] = {0, 3, 0, 8, 0, 2, 0, 1, 0, 7, 0, 0};
                 toHost_.push_back(std::string(answer, sizeof(answer)) + w_.extra);
                 w_.extra.clear();
@@ -578,6 +580,59 @@ int main() {
         bool present = false;
         CHECK(!link.phoneWaiting(&present) && present && !said("plugged in again"));
     }
+    {  // Android Auto silent at first (its first-time prompt): asked again on the same accessory, never reset
+        World world;
+        world.quiet = true;
+        FakeBus bus(world);
+        evo::UsbLink link(bus, keep, nullptr);
+        g_lines.clear();
+        CHECK(link.connect(quit) == -1 && world.resets == 0 && world.starts == 1 && said("does not answer yet"));
+        bool present = false;
+        CHECK(!link.phoneWaiting(&present) && present);  // a pause, the phone left as it is
+        bus.step(evo::kUsbSilentRetryMs + 100);
+        CHECK(link.phoneWaiting());
+        CHECK(link.connect(quit) == -1 && world.resets == 0 && world.starts == 1);  // still silent, still no reset
+        bus.step(evo::kUsbSilentRetryMs + 100);
+        pthread_mutex_lock(&world.mu);
+        world.quiet = false;  // the driver accepted the prompt
+        pthread_mutex_unlock(&world.mu);
+        const int socket = link.connect(quit);
+        CHECK(socket >= 0 && world.resets == 0 && world.starts == 1 && sessionSpeaks(socket));
+        close(socket);
+        link.close();
+    }
+    {  // Android Auto never answers: reset after a few silences, a few times, then left alone; plugged in again: asked
+        World world;
+        world.quiet = true;
+        FakeBus bus(world);
+        evo::UsbLink link(bus, keep, nullptr);
+        g_lines.clear();
+        int connects = 0;
+        while (!said("still does not answer") && connects < 40) {
+            CHECK(link.connect(quit) == -1);
+            ++connects;
+            bus.step(evo::kUsbSilentRetryMs + 100);
+        }
+        CHECK(said("still does not answer") && said("left alone for 120 s"));
+        CHECK(world.resets == static_cast<int>(evo::kUsbSilentResets));
+        CHECK(connects == static_cast<int>(evo::kUsbSilentBeforeReset * (evo::kUsbSilentResets + 1)) - 2);
+        bool present = false;
+        CHECK(!link.phoneWaiting(&present) && present);
+        bus.step(evo::kUsbSilentWindowMs / 2);
+        CHECK(!link.phoneWaiting());  // still left alone
+        // Unplugged and plugged in again: asked at once, Android Auto now answers.
+        world.mode = World::kUnplugged;
+        CHECK(!link.phoneWaiting());
+        world.mode = World::kNormal;
+        ++world.device;
+        world.quiet = false;
+        g_lines.clear();
+        CHECK(link.phoneWaiting() && said("plugged in again"));
+        const int socket = link.connect(quit);
+        CHECK(socket >= 0);
+        close(socket);
+        link.close();
+    }
     {  // not a phone that does Android Auto: one question, nothing started
         World world;
         world.knowsProtocol = false;
@@ -654,6 +709,7 @@ int main() {
         "a session retried soon then left alone, a rival that asked first "
         "(reset, asked again), a rival that always wins (given up after 3 rounds), an interface taken back, a phone "
         "that refuses retried soon after its plug-in then left alone, plugged in again and asked at once, a mode "
-        "change not taken for a plug-in, not a phone, unplugged, stop; the udev rule written whole and removed");
+        "change not taken for a plug-in, Android Auto silent at first (asked again without a reset) or for good (a few "
+        "resets, then left alone), not a phone, unplugged, stop; the udev rule written whole and removed");
     return 0;
 }

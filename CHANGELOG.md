@@ -37,6 +37,10 @@ Each version links to the commit its archive was built from.
   can come before its own distance. The cluster now waits up to 3 s for that distance, so a turn that is still far off
   stays hidden. Unverified.
 - **Roundabout exit numbers in the cluster from phones that send only the older turn message.** Unverified.
+- **A phone on the cable that doesn't answer yet is given time.** Android Auto's first-time prompt on the phone could
+  never be accepted over the cable, because the phone was reset and asked again every few seconds, which closed the
+  prompt. Now the car waits for it, and after a few tries leaves the phone alone for two minutes, or until it's
+  plugged in again. Unverified.
 - **A phone on the cable is told when Android Auto stops.** It used to be left waiting on a connection nobody read.
   Now it ends its Android Auto session cleanly. Unverified.
 - **The volume bar over Android Auto shows only the music volume.** A navigation prompt, a call or a chime could make

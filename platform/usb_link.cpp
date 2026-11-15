@@ -116,7 +116,13 @@ UsbLink::UsbLink(UsbBus& bus, Log log, void* user)
       touched_(false),
       quickFromMs_(0),
       quickWhy_(""),
-      quickRetries_(0) {}
+      quickRetries_(0),
+      silences_(0),
+      silentResets_(0),
+      silentResetsFromMs_(0),
+      restFromMs_(0),
+      restForMs_(0),
+      resting_(false) {}
 
 UsbLink::~UsbLink() {
     close();
@@ -154,9 +160,14 @@ void UsbLink::close() {
 }
 
 void UsbLink::plugged(const std::string& port) {
-    if (refused_ && refusedPort_ == port) {
+    const bool rested = resting_ && restPort_ == port;
+    if ((refused_ && refusedPort_ == port) || rested) {
         refused_ = false;
+        resting_ = resting_ && !rested;
         say("%s: plugged in again: asked at once", port.c_str());
+    }
+    if (silentPort_ == port) {
+        silences_ = silentResets_ = 0;
     }
     quickPort_ = port;
     quickFromMs_ = bus_.nowMs();
@@ -175,6 +186,59 @@ bool UsbLink::refusedLately(const std::string& port) {
         refused_ = false;
     }
     return refused_ && refusedPort_ == port;
+}
+
+void UsbLink::rest(const std::string& port, unsigned ms) {
+    resting_ = true;
+    restPort_ = port;
+    restFromMs_ = bus_.nowMs();
+    restForMs_ = ms;
+}
+
+bool UsbLink::resting(const std::string& port) {
+    if (resting_ && bus_.nowMs() - restFromMs_ >= restForMs_) {
+        resting_ = false;
+    }
+    return resting_ && restPort_ == port;
+}
+
+int UsbLink::silent(const std::string& port) {
+    const uint32_t now = bus_.nowMs();
+    if (silentPort_ != port) {
+        silentPort_ = port;
+        silences_ = silentResets_ = 0;
+    }
+    if (++silences_ < kUsbSilentBeforeReset) {
+        // Still ours: the next connect() opens the same accessory again, without a reset that would close a prompt.
+        asked_ = true;
+        askedPort_ = port;
+        askedMs_ = now;
+        rest(port, kUsbSilentRetryMs);
+        say("%s: in accessory mode, but Android Auto does not answer yet (still starting, or a prompt on the phone?): "
+            "asked again in %u s, without a reset",
+            port.c_str(), kUsbSilentRetryMs / 1000);
+        return -1;
+    }
+    silences_ = 0;
+    asked_ = false;
+    if (silentResets_ && now - silentResetsFromMs_ >= kUsbSilentWindowMs) {
+        silentResets_ = 0;
+    }
+    if (silentResets_ >= kUsbSilentResets) {
+        rest(port, kUsbSilentWindowMs);
+        say("%s: Android Auto still does not answer after %u resets: left alone for %u s (unplug and plug in the "
+            "phone to try again at once)",
+            port.c_str(), kUsbSilentResets, kUsbSilentWindowMs / 1000);
+        return -1;
+    }
+    if (!silentResets_) {
+        silentResetsFromMs_ = now;
+    }
+    ++silentResets_;
+    say("%s: in accessory mode, but Android Auto does not answer (another program asked first?): reset and asked "
+        "again",
+        port.c_str());
+    return 0;
 }
 
 unsigned UsbLink::leaveAlone(const std::string& port, bool soon) {
@@ -225,18 +289,21 @@ bool UsbLink::pick(UsbDeviceInfo& out, bool& accessory, bool* present) {
             continue;
         }
         if (isAccessoryId(d.vendor, d.product) && hasAccessoryInterface(d.product)) {
-            out = d;  // a phone already in accessory mode comes first
-            accessory = true;
             if (present) {
                 *present = true;
             }
+            if (resting(d.name)) {
+                continue;
+            }
+            out = d;  // a phone already in accessory mode comes first
+            accessory = true;
             return true;
         }
         if (worthAskingForAccessory(d.vendor, &d.descriptors[0], d.descriptors.size())) {
             if (present) {
                 *present = true;
             }
-            if (!found && !refusedLately(d.name)) {
+            if (!found && !refusedLately(d.name) && !resting(d.name)) {
                 out = d;
                 accessory = false;
                 found = true;
@@ -430,13 +497,15 @@ int UsbLink::connect(const std::atomic<bool>& quit) {
             carrying_ = true;
             carriedPort_ = device.name;
             quickRetries_ = 0;
+            silences_ = silentResets_ = 0;
             return socket;
         }
-        say("%s: in accessory mode, but Android Auto does not answer (another program asked first?)",
-            device.name.c_str());
         ::close(socket);
         close();
-        asked_ = false;  // the next round resets the phone and asks again
+        if (silent(device.name) < 0) {
+            return -1;
+        }
+        // asked_ is false: the next round resets the phone and asks again.
     }
     return -1;
 }
