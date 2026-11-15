@@ -46,7 +46,7 @@ Each version links to the commit its archive was built from.
 - **The volume bar over Android Auto shows only the music volume.** A navigation prompt, a call or a chime could make
   it pop up with that sound's own level. Unverified.
 
-## [0.1.5] - 2026-11-14 · Unverified
+## [0.1.5] - 2026-11-14 · Verified
 
 <!-- Flare Drive:
 Android Auto's music can now come over Wi-Fi and play on the car's speakers, with the volume knob, like CarPlay's. The
@@ -55,8 +55,8 @@ in. It also waits for iDrive before it shows and stays connected when your phone
 -->
 
 Music over Wi-Fi on the car's speakers, a smoother wireless picture, a sharper one over the cable, and fixes for
-Bluetooth, My BMW and the wait for iDrive. This sums up every 0.1.5 test build. The service, the supervisor, the iDrive
-app and the installer change. This version is unverified.
+Bluetooth, My BMW and the wait for iDrive. The service, the supervisor, the iDrive app and the installer change. This
+version is verified.
 
 ### Added
 
@@ -120,177 +120,6 @@ app and the installer change. This version is unverified.
   Verified on a G20 with the older controller.
 - **The compatibility check looks at the right Bluetooth slot.** Before installing, it checked the slot My BMW uses,
   so it warned when My BMW was connected and missed a busy Android Auto slot. Unverified.
-
-## [0.1.5-test.7] - 2026-11-14 · Unverified
-
-<!-- Flare Drive:
-Sound over Wi-Fi now plays on the car's speakers, with the volume knob, and Bluetooth only carries calls. With a phone
-on the cable, Bluetooth pairs and reconnects normally again.
--->
-
-Music over Wi-Fi, and Bluetooth fixes for the cable, to try before 0.1.5. Turn on sound over Wi-Fi in Flare Drive to
-hear Android Auto through the car as CarPlay plays. Only the service changes. This version is unverified.
-
-### Added
-
-- **Music over Wi-Fi plays on the car's speakers.** With sound over Wi-Fi switched on in Flare Drive, Android Auto's
-  music and announcements come over Wi-Fi instead of Bluetooth, and the car plays them as it plays CarPlay's: Android
-  Auto asks the car for CarPlay's music route before it plays, and the volume knob sets the level. Before, the switch
-  left you with no sound. Bluetooth no longer streams music while it's on, which may also help the wireless picture.
-  Calls stay on Bluetooth. Unverified.
-
-### Fixed
-
-- **Bluetooth pairs and reconnects with a phone on the cable.** Android Auto told the phone the car's Bluetooth
-  address, which made the phone hide its own pairing code and wait for one from the car that never came, and stopped
-  it reconnecting after its Bluetooth dropped. The phone now pairs through iDrive's new device screen with its own code,
-  and reconnects by itself, as it does without the cable. Unverified.
-
-## [0.1.5-test.6] - 2026-11-14 · Unverified
-
-<!-- Flare Drive:
-Wireless Android Auto reconnects after a quick ignition cycle, instead of staying on Connecting. Android Auto also
-starts again if it was stopped while your phone was reconnecting.
--->
-
-Two fixes for reconnecting, to try before 0.1.5. Android Auto reconnects after a quick ignition cycle, and starts again
-after stopping while your phone was reconnecting. The service and the supervisor change. This version is unverified.
-
-### Fixed
-
-- **Android Auto reconnects after a quick ignition cycle.** When your phone's Bluetooth came back during a session,
-  the car sent it the Wi-Fi details again. The phone then dropped its session to start a new one, and the car turned
-  the new one away, so iDrive stayed on Connecting. The car now ends the old session and takes the new one. Unverified.
-- **Android Auto starts again after it stops while your phone is reconnecting.** On stopping, Android Auto hands its
-  Bluetooth slot back to the car. A phone trying to reconnect got there first every time, so the handover never
-  finished and Android Auto refused to start until the head unit restarted. It now waits for the slot to come free and
-  tries again. Unverified.
-
-## [0.1.5-test.5] - 2026-11-14 · Unverified
-
-<!-- Flare Drive:
-A smoother wireless picture, without a slower response to touch. Wireless Android Auto also no longer drops when the
-car connects to the My BMW app.
--->
-
-Two fixes for wireless Android Auto, to try before 0.1.5: a smoother picture, and no more drops when the car connects
-to My BMW. Only the service changes. This version is unverified.
-
-### Fixed
-
-- **A smoother wireless picture.** Over Wi-Fi the phone's frames often arrive in pairs, and the screen showed only the
-  second of each, so about a quarter of them were lost and the picture judders. A frame that arrives right behind
-  another now waits up to 25 ms, so both are shown. Frames that arrive evenly aren't held, so touch and the iDrive
-  controller respond as before. Unverified.
-- **Wireless Android Auto no longer drops when My BMW connects.** When the car connects to the My BMW app, Android
-  Auto's Bluetooth link to the phone drops with it. The phone opened it again and waited for the car, which said
-  nothing, so it closed it every 12 seconds, and sometimes the whole session ended. The car now answers that link with
-  the Wi-Fi the phone is already on. Unverified.
-
-## [0.1.5-test.4] - 2026-11-14 · Unverified
-
-<!-- Flare Drive:
-Wireless Android Auto connects again. Since 0.1.5-test.1 a phone on Wi-Fi hung up a few seconds after connecting, and
-iDrive kept saying Connecting. The sharper picture now stays on the cable.
--->
-
-A fix for wireless Android Auto, to try before 0.1.5. A phone on Wi-Fi gets the 1280x720 picture again, and the
-1920x1080 one stays on the cable. The service and the installer change. This version is unverified.
-
-### Changed
-
-- **Android Auto installs on any iDrive software version.** The installer no longer stops on a version it hasn't
-  been tried on. It still checks that the car has what Android Auto needs, and stops if it doesn't. Installing on any
-  car is at your own risk. Unverified.
-
-### Fixed
-
-- **Wireless Android Auto connects again.** Since 0.1.5-test.1, a phone on Wi-Fi connected, then hung up within a few
-  seconds without showing a picture, and iDrive kept saying Connecting. The sharper 1920x1080 picture now stays on the
-  cable, and a phone on Wi-Fi gets the 1280x720 picture it had before. Unverified.
-
-## [0.1.5-test.3] - 2026-11-13 · Unverified
-
-<!-- Flare Drive:
-Fixes for the wait for iDrive in the last test. Android Auto can no longer stay hidden for a whole drive, and no empty
-window is left over a call or the reversing camera.
--->
-
-Fixes for the last test's wait for iDrive, to try before 0.1.5. The service, the supervisor and the iDrive app change.
-This version is unverified.
-
-### Fixed
-
-- **Android Auto no longer stays hidden.** If the iDrive app never told it to come up, Android Auto could stay hidden
-  for the rest of the drive while your phone stayed connected. It now comes up by itself after 15 seconds at the
-  latest. Time on a call or in reverse doesn't count. Unverified.
-- **No empty window over a call or the reversing camera.** If a call came in or you selected reverse while Android
-  Auto was waiting for iDrive, an empty window could stay over iDrive's call screen or the camera and take the
-  controller until the call or reverse ended. It now closes at once. Unverified.
-- **iDrive's menu comes back if your phone leaves at the wrong moment.** If your phone disconnected just before
-  Android Auto came up, iDrive could stay on a blank screen until you pressed a button. It now goes back to the
-  Android Auto menu after 3 seconds. Unverified.
-- **iDrive's messages show over Android Auto again.** After a session that ended before Android Auto came up, iDrive's
-  own messages, such as Check Control warnings, could stay hidden behind Android Auto in the next session. Unverified.
-- **The compatibility check looks at the right Bluetooth slot.** Before installing, it checked the slot My BMW uses,
-  so it warned when My BMW was connected and missed a busy Android Auto slot. Unverified.
-
-## [0.1.5-test.2] - 2026-11-13 · Unverified
-
-<!-- Flare Drive:
-A test of fixes from the original project. Android Auto no longer takes the My BMW app's Bluetooth slot, which may
-make wireless faster, and it stays connected when your phone goes quiet. It also waits for iDrive before it shows, and
-MENU leaves it straight after BACK.
--->
-
-A test of fixes from the original project, to try before 0.1.5: Android Auto leaves My BMW's Bluetooth slot alone,
-keeps a quiet phone connected and waits for iDrive before it shows. The service, the supervisor and the iDrive app
-change. This version is unverified.
-
-### Added
-
-- **Turn arrows on the X3 G01's instrument cluster.** Its cluster refuses the full route Android Auto sends, so no
-  arrows appeared. Create `/var/local/data/AA/kombi-single-maneuver` over SSH and restart Android Auto, and only the
-  next turn is sent. Cars without the file are unchanged. Unverified.
-- **More detail in the service's log**, when logs are on: which Bluetooth device connects or disconnects (the phone
-  or another device, never its address), why a Bluetooth link closed, and the phone's longest silence every 10
-  seconds of a session. Unverified.
-
-### Fixed
-
-- **Android Auto leaves My BMW's Bluetooth slot alone.** It used to take over the slot the My BMW app connects to.
-  While it ran, My BMW couldn't find the car, and BMW's own service treated Android Auto's Bluetooth link as its own,
-  which may be what made wireless Android Auto slow for some drivers. Android Auto now takes a spare slot, and falls
-  back to the old one only on a car that doesn't have it. Unverified.
-- **Android Auto stays connected when your phone goes quiet.** Some phones stop sending anything while iDrive has the
-  screen and no music plays, and the car ended the session 5 seconds after you pressed MENU or MAP. The car now checks
-  on a quiet phone itself and ends the session only if the phone doesn't answer. Unverified.
-- **Android Auto waits for iDrive before it shows.** When your phone connected while one of iDrive's own windows was
-  on top, such as right after unlocking the car, Android Auto came up, couldn't hold the screen and left after about
-  4 seconds. It now waits until iDrive is ready, then comes up. Unverified.
-- **MENU and MAP leave Android Auto straight after BACK.** Pressed within 2 seconds of BACK or a left tilt, they could
-  leave you in Android Auto. Unverified.
-- **The iDrive controller works on cars with the older controller, such as the i3.** It did nothing in Android Auto
-  there, because one stray message from the car stopped Android Auto from trying the older controller's protocol.
-  Unverified.
-
-## [0.1.5-test.1] - 2026-11-13 · Verified
-
-<!-- Flare Drive:
-A test of a sharper Android Auto picture. Your phone now draws it at 1920x1080 and the head unit shrinks it onto the
-screen, so the map arrow, roads and text have smoother edges. If the head unit can't play the larger picture, it goes
-back to the old one by itself.
--->
-
-A sharper Android Auto picture, to try before 0.1.5. Only the service changes. This version is verified.
-
-### Changed
-
-- **A sharper Android Auto picture.** Your phone now draws Android Auto at 1920x1080 instead of 1280x720, and the
-  head unit shrinks it onto the screen. The map arrow, roads, icons and text have smoother edges, and thin coloured
-  lines lose the fringe around them. Buttons and text keep their size. If the head unit can't decode the larger
-  picture, Android Auto goes back to the old one by itself. To go back by hand, create `/var/local/data/AA/video-720`
-  over SSH and restart Android Auto. Verified.
 
 ## [0.1.4] - 2026-11-13 · Verified
 
@@ -383,19 +212,19 @@ Two improvements for Android Auto over a USB cable. The service and the iDrive a
 - **Android Auto over a USB cable reconnects by itself.** If it dropped just after the Android Auto logo appeared on
   the phone, it could stay stuck until you stopped it. It now tries again within a few seconds. Verified.
 
-## [0.1.1] - 2026-11-12 · Unverified
+## [0.1.1] - 2026-11-12 · Verified
 
 <!-- Flare Drive:
 Android Auto's entry in the iDrive menu now shows the colour Android Auto logo.
 -->
 
 The colour Android Auto logo in iDrive. Only the iDrive app's images (`AAEntryNav_ALL_Images.zip`) change. This version
-is unverified.
+is verified.
 
 ### Changed
 
 - **The colour Android Auto logo in iDrive.** Android Auto's entry in the iDrive menu, and the Start Android Auto
-  button on its page, show the colour Android Auto logo instead of a white outline. Unverified.
+  button on its page, show the colour Android Auto logo instead of a white outline. Verified.
 
 ## [0.1.0] - 2026-11-12 · Verified
 
@@ -419,13 +248,6 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 
 [Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.5...HEAD
 [0.1.5]: https://github.com/CallMeLewis/AA-EntryNav/tree/2b475f0c2594c6b7b4849ddca0093c84648b9385
-[0.1.5-test.7]: https://github.com/CallMeLewis/AA-EntryNav/tree/ebed937651e3926b79259f89796567fa83e0ff89
-[0.1.5-test.6]: https://github.com/CallMeLewis/AA-EntryNav/tree/28ea2fa85eec44b439ace26c9bff01fdd0d26ab5
-[0.1.5-test.5]: https://github.com/CallMeLewis/AA-EntryNav/tree/44dd960247e64cc8729d9613e594f2f29c092f1a
-[0.1.5-test.4]: https://github.com/CallMeLewis/AA-EntryNav/tree/9ffd01a68f190c4d024332e91474af6f195378dc
-[0.1.5-test.3]: https://github.com/CallMeLewis/AA-EntryNav/tree/1e5dd83343c90c716cc8d24d1b0396bac86ced87
-[0.1.5-test.2]: https://github.com/CallMeLewis/AA-EntryNav/tree/aea35095080027157d7f2f218fd21e341f48cf71
-[0.1.5-test.1]: https://github.com/CallMeLewis/AA-EntryNav/tree/f6405a09a8a38f02b0d4c968b6df5acbbf03c376
 [0.1.4]: https://github.com/CallMeLewis/AA-EntryNav/tree/6d271b999ed2f2d4d23ee61f7d7cbfa5cda2a43b
 [0.1.3]: https://github.com/CallMeLewis/AA-EntryNav/tree/e3c28334465d6d86722a260685ef76a23a1a5f67
 [0.1.2]: https://github.com/CallMeLewis/AA-EntryNav/tree/52fa9b73ff0f92cd267796a14ddc6d2232a0140a
