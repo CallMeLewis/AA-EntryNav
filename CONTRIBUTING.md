@@ -115,7 +115,9 @@ A file that holds entry-aad's code keeps its original header, `Copyright (c) 202
    dated today and linked to the `vX.Y.Z` tag, and commits it with `VERSION` as `Release X.Y.Z: <summary>`. `preview`
    shows the Flare Drive note and the GitHub Release's text.
 3. Push the commit. The pre-push hook builds it for ARM and runs the QEMU tests. Wait for CI to pass as well.
-4. The same day, run `tools/publish_release.py publish`. It builds and tests the commit again and adds it to Flare
-   Drive's release list with its note. It also tags it `vX.Y.Z` and creates a GitHub Release with the archive, its
-   `.sha256` and the text from the CHANGELOG section. It changes nothing in the repository, so there is nothing to
-   commit afterwards.
+4. The same day, run `tools/publish_release.py publish`. It builds and tests the commit again, then sends it with its
+   note to Flare Drive's plugin catalog through `flare-publish`, which also updates the release list older Flare Drive
+   versions read. It also tags it `vX.Y.Z` and creates a GitHub Release with the archive, its `.sha256` and the text
+   from the CHANGELOG section. It changes nothing in the repository, so there is nothing to commit afterwards.
+   `flare-publish` is in Flare Drive's repo, which must be cloned beside this one (or set `FLARE_DRIVE_REPO`), and
+   needs the publishing service token on this PC. Flare Drive's `docs/publishing.md` describes the process.

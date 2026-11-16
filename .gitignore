@@ -24,6 +24,7 @@
 !/docs/
 !/hmiapp/
 !/platform/
+!/plugins/
 !/pyproject.toml
 !/requirements-dev.txt
 !/tests/

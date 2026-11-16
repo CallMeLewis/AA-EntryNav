@@ -1,0 +1,9 @@
+# Android Auto in Flare Drive's plugin catalog (Flare Drive's design/dynamic-plugins.md, Plugin manifest).
+# tools/publish_release.py sends it with every release. The catalog already has this plugin, so name, summary,
+# description and order here are only checked; they are edited on the publishing page (publish.darkzone.dev).
+id = "aa-entrynav"
+name = "Android Auto"
+summary = ""
+description = ""
+contract = "aa-entrynav/1"
+order = 0

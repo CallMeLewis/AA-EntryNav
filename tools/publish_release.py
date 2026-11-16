@@ -9,7 +9,7 @@
   uv run --no-project --with cryptography python tools/publish_release.py publish [--stable]
   uv run --no-project --with cryptography python tools/publish_release.py notes VERSION...   resync their texts
   uv run --no-project --with cryptography python tools/publish_release.py stability VERSION stable|experimental
-  uv run --no-project --with cryptography python tools/publish_release.py retire VERSION... [--delete-archives]
+  uv run --no-project --with cryptography python tools/publish_release.py retire VERSION...   refused, see below
   uv run --no-project --with cryptography python tools/publish_release.py tags     tag releases, with GitHub Releases
 
 A release's texts come from its section of CHANGELOG.md (docs/release-notes.md): the Flare Drive note, written in it as
@@ -23,25 +23,23 @@ to the tag v<version>, and commits both as `Release VERSION: SUMMARY`. Push that
 same day. `publish` changes nothing in the repository: it refuses a section dated another day.
 
 Each release carries the owner's label, stable or experimental (experimental unless --stable), shown as a pill in Flare
-Drive. `stability` changes it later: the list is signed again, the archive stays as it is. Whether a release has run in
-a car (verified or unverified) is recorded in CHANGELOG.md only, not in the list.
+Drive. `stability` changes it later in the catalog, and the list is rebuilt from it; the archive stays as it is.
+Whether a release has run in a car (verified or unverified) is recorded in CHANGELOG.md only, not in the list.
 
 A version is X.Y.Z, or X.Y.Z-beta.N or X.Y.Z-test.N for a build to try before X.Y.Z (tools/release_version.py). Its
 stable build X.Y.Z is always above them, in Flare Drive too: whoever installed 0.1.4-beta.2 is offered 0.1.4 as an
 update. A beta or test build is always experimental (--stable and `stability ... stable` refuse it), and its GitHub
 Release is a pre-release, never Latest.
 
-`retire` takes releases off the list, which is signed again; Flare Drive stops offering them at its next check, and a
-head unit that has one installed keeps it. With --delete-archives their archives are then deleted from the bucket and
-purged from Cloudflare's cache, which would otherwise serve them for up to a year (they are uploaded as immutable), and
-each download link is checked to answer 404. The purge uses a Cloudflare API token with the Cache Purge permission on
-the darkzone.dev zone, kept on this PC (~/.flare-drive/cloudflare-purge-token, or FLARE_DRIVE_PURGE_TOKEN); it is read
-before anything changes.
+`retire` is refused: the catalog would keep listing a release taken off the list, and the publishing Worker can't take
+one off yet. Flare Drive's docs/publishing.md says what to do instead.
 
 `publish` builds what CI tested: it refuses a dirty tree, a HEAD whose CI has not passed, a version already published,
 and a version whose CHANGELOG.md section, Flare Drive note, link or today's date is missing. It then builds the ARM
-programs, runs the QEMU tests, validates and packages (README.md, Building), in Docker when not on Linux, uploads the
-archive, and only then the signed index, so Flare Drive never sees an entry whose archive is missing.
+programs, runs the QEMU tests, validates and packages (README.md, Building), in Docker when not on Linux, and sends
+the archive to Flare Drive's plugin catalog with flare-publish (plugins/aa-entrynav.toml is its manifest). The
+publishing Worker checks it, stores it, adds it to the catalog and signs it; flare-publish then rebuilds this per-plugin
+list from the catalog for Flare Drive 2.2.1 and earlier. A refused archive changes neither.
 
 Once the index lists a release, `publish` tags it v<version> on GitHub, at the commit its archive was built
 from (the index's sourceCommit), push the tag, and give it a GitHub Release with the published archive and its SHA-256
@@ -49,11 +47,11 @@ from (the index's sourceCommit), push the tag, and give it a GitHub Release with
 without a tag or a Release, taking each one's text from CHANGELOG.md, or its Flare Drive note when CHANGELOG.md has no
 section for it.
 
-The index is signed with Ed25519 by a key that never leaves this PC (~/.flare-drive/release-signing-key, or
-FLARE_DRIVE_SIGNING_KEY). Flare Drive accepts an index only if its signature matches one of the public keys it was
-built with (flare.releasePublicKeys). Back the key up: without it, no further release can be published.
-Uploads use Wrangler, signed in with `wrangler login` (the Flare apps' shared account). design/release-updates.md in
-Flare Drive describes the index.
+flare-publish is Flare Drive's tools/flare_publish.py, in its repo beside this one (or FLARE_DRIVE_REPO). It uses the
+publishing service token (~/.config/flare-publish/token.json). The per-plugin list it rebuilds is signed with Ed25519 by
+a key that never leaves this PC (~/.flare-drive/release-signing-key, or FLARE_DRIVE_SIGNING_KEY), which Flare Drive
+2.2.1 and earlier check (flare.releasePublicKeys). Back the key up. Flare Drive's docs/publishing.md describes the
+whole process, and design/dynamic-plugins.md the catalog.
 """
 
 import argparse
@@ -67,7 +65,6 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -83,10 +80,14 @@ import verify_arm  # noqa: E402
 
 BUCKET = "darkzone-updates"
 FEED = "aa-entrynav"
+# Releases reach Flare Drive through its plugin catalog, which only the publishing Worker writes. flare-publish, in
+# Flare Drive's repo beside this one (or FLARE_DRIVE_REPO), sends them there; Flare Drive's docs/publishing.md says how.
+FLARE_DRIVE = Path(os.environ.get("FLARE_DRIVE_REPO", Path(__file__).resolve().parents[2] / "flare-drive"))
+FLARE_PUBLISH = FLARE_DRIVE / "tools" / "flare_publish.py"
+MANIFEST = ROOT / "plugins" / f"{FEED}.toml"
 FEED_URL = f"https://updates.darkzone.dev/{FEED}"
 WRANGLER = "wrangler@4.146.0"  # the version the Flare apps pin
 REPO = "CallMeLewis/AA-EntryNav"
-ZONE_ID = "b2b2305591d3edbf29a4ffb14bc274a0"  # darkzone.dev, which serves updates.darkzone.dev
 # Only for Flare Drive versions that still limit installing to two firmware: they install on 202306092158 only when the
 # index lists it. Releases install on any firmware; later Flare Drive versions ignore this list.
 FIRMWARE = ["202111011321", "202306092158"]
@@ -109,70 +110,6 @@ def load_key():
     if not path.is_file():
         sys.exit(f"FAIL: no signing key at {path}. Run keygen first, or set FLARE_DRIVE_SIGNING_KEY.")
     return Ed25519PrivateKey.from_private_bytes(base64.b64decode(path.read_text().strip()))
-
-
-def purge_token_path():
-    return Path(os.environ.get("FLARE_DRIVE_PURGE_TOKEN", Path.home() / ".flare-drive" / "cloudflare-purge-token"))
-
-
-def load_purge_token():
-    path = purge_token_path()
-    token = path.read_text().strip() if path.is_file() else ""
-    if not token:
-        sys.exit(
-            f"FAIL: no Cloudflare API token at {path}, needed to purge deleted archives from the cache. Create one "
-            "with Zone > Cache Purge on darkzone.dev and save it there, or set FLARE_DRIVE_PURGE_TOKEN. Nothing was "
-            "changed."
-        )
-    return token
-
-
-def purge_cache(token, urls):
-    """Purges urls from Cloudflare's cache, then checks each one answers 404. False, with the reason printed, if not."""
-    request = urllib.request.Request(
-        f"https://api.cloudflare.com/client/v4/zones/{ZONE_ID}/purge_cache",
-        data=json.dumps({"files": urls}).encode(),
-        method="POST",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "User-Agent": "FlareDrivePublish",
-        },
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            result = json.load(response)
-    except urllib.error.HTTPError as error:
-        detail = error.read().decode(errors="replace")[:300]
-        print(f"FAIL: Cloudflare refused the cache purge (HTTP {error.code}): {detail}")
-        return False
-    except (urllib.error.URLError, OSError) as error:
-        print(f"FAIL: the cache purge did not reach Cloudflare: {error}")
-        return False
-    if not result.get("success"):
-        print(f"FAIL: the cache purge failed: {result.get('errors')}")
-        return False
-    # A purge reaches every data centre within seconds.
-    left = list(urls)
-    for _ in range(10):
-        left = [url for url in left if not answers_404(url)]
-        if not left:
-            print(f"Purged {len(urls)} archive(s) from Cloudflare's cache; each link answers 404.")
-            return True
-        time.sleep(3)
-    print("FAIL: still downloadable after the purge: " + ", ".join(left))
-    return False
-
-
-def answers_404(url):
-    request = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "FlareDrivePublish"})
-    try:
-        urllib.request.urlopen(request, timeout=30).close()
-    except urllib.error.HTTPError as error:
-        return error.code == 404
-    except (urllib.error.URLError, OSError):
-        return False
-    return False
 
 
 def public_b64(key):
@@ -449,6 +386,25 @@ def verify(_):
         print("  (no releases yet)")
 
 
+def flare_publish(*args):
+    """Runs flare-publish with this Python, which has cryptography for the per-plugin list's signature. Stops on any
+    failure, which flare-publish has already explained."""
+    if not FLARE_PUBLISH.is_file():
+        sys.exit(
+            f"FAIL: no flare-publish at {FLARE_PUBLISH}. Clone Flare Drive beside this repo, or set FLARE_DRIVE_REPO."
+        )
+    if subprocess.run([sys.executable, str(FLARE_PUBLISH), *args], cwd=FLARE_DRIVE).returncode:
+        sys.exit(f"FAIL: flare-publish {args[0]} failed, above.")
+
+
+def text_files(folder, note, body):
+    """The Flare Drive note and the release's text as files for flare-publish, with plain newlines."""
+    notes_file, changes_file = Path(folder) / "notes.txt", Path(folder) / "changes.md"
+    notes_file.write_text(note, encoding="utf-8", newline="\n")
+    changes_file.write_text(body, encoding="utf-8", newline="\n")
+    return str(notes_file), str(changes_file)
+
+
 def require_ready():
     if output("git", "status", "--porcelain"):
         sys.exit("FAIL: the working tree has changes. Publish only what is committed.")
@@ -509,17 +465,21 @@ def notes(args):
     for version in args.versions:
         text = section(version)
         texts[version] = (flare_drive_note(version, text), release_body(text))
-    changed = []
-    for entry in index["releases"]:
-        if entry["version"] not in texts:
-            continue
-        note, body = texts[entry["version"]]
-        if entry.get("notes") != note or entry.get("changes") != body:
-            entry["notes"], entry["changes"] = note, body
-            changed.append(entry["version"])
+    changed = [
+        e["version"]
+        for e in index["releases"]
+        if e["version"] in texts and (e.get("notes"), e.get("changes")) != texts[e["version"]]
+    ]
+    # Through the catalog, then the per-plugin list rebuilt from it once (Flare Drive's docs/publishing.md).
+    with tempfile.TemporaryDirectory() as folder:
+        for version in changed:
+            notes_file, changes_file = text_files(folder, *texts[version])
+            flare_publish(
+                "edit-release", FEED, version, "--notes-file", notes_file, "--changes-file", changes_file, "--no-sync"
+            )
     if changed:
-        publish_index(key, {**index, "published": now()})
-        print(f"List updated for {', '.join(changed)}.")
+        flare_publish("sync-legacy", FEED)
+        print(f"Catalog and list updated for {', '.join(changed)}.")
     else:
         print("The list already matches CHANGELOG.md.")
     for version in args.versions:
@@ -550,41 +510,24 @@ def stability(args):
         sys.exit(
             f"FAIL: {args.version} is a beta or test build: it stays experimental. Publish X.Y.Z as stable instead."
         )
-    entries[0]["stability"] = args.label
-    publish_index(key, {**index, "published": now()})
+    # Through the catalog, then the per-plugin list rebuilt from it.
+    flare_publish("edit-release", FEED, args.version, "--stability", args.label)
     verify(None)
 
 
 def retire(args):
-    """Takes releases off the live index and signs it again. With --delete-archives, deletes their archives from the
-    bucket afterwards, so no list ever names an archive that is gone."""
-    key = load_key()
-    index = live_index(key)
-    if index is None:
-        sys.exit("FAIL: no index is published yet.")
-    missing = sorted(set(args.versions) - {r["version"] for r in index["releases"]})
-    if missing:
-        sys.exit(f"FAIL: not published: {', '.join(missing)}. Nothing was changed.")
-    token = load_purge_token() if args.delete_archives else None
-    gone = [r for r in index["releases"] if r["version"] in args.versions]
-    kept = [r for r in index["releases"] if r["version"] not in args.versions]
-    publish_index(key, {**index, "published": now(), "releases": kept})
-    print(f"Retired {', '.join(r['version'] for r in gone)}.")
-    purged = True
-    if args.delete_archives:
-        for entry in gone:
-            wrangler_object("delete", entry["file"])
-        purged = purge_cache(token, [f"{FEED_URL}/{entry['file']}" for entry in gone])
-    verify(None)
-    if not purged:
-        sys.exit(
-            "FAIL: the archives are deleted from the bucket but may still download from the cache. Purge them by "
-            "URL in Cloudflare's dashboard (Caching > Configuration > Custom Purge)."
-        )
+    """Refuses: releases come from Flare Drive's catalog, which would keep listing a release taken off this list, and
+    its next rebuild of the list would put it back. The publishing Worker can't take a release off yet; Flare Drive's
+    docs/publishing.md says what to do instead."""
+    sys.exit(
+        "FAIL: retire isn't available now releases come from Flare Drive's catalog, which would keep listing "
+        f"{', '.join(args.versions)}. See docs/publishing.md in Flare Drive. Nothing was changed."
+    )
 
 
 def upload(key, index, archive, version, commit, stable, note, body):
-    """Uploads the archive, reads it back, then signs and uploads the index with its entry added."""
+    """Sends the archive to Flare Drive's catalog with flare-publish, which also rebuilds and signs the per-plugin list,
+    then reads the archive back from the bucket."""
     data = archive.read_bytes()
     with tarfile.open(archive) as tar:
         recorded = tar.extractfile(f"aa-entrynav-{version}/opt/aa/VERSION").read().decode().strip()
@@ -604,10 +547,28 @@ def upload(key, index, archive, version, commit, stable, note, body):
         "notes": note,
         "changes": body,
     }
-    wrangler_put(entry["file"], archive, "application/x-tar", "public, max-age=31536000, immutable")
+    # The Worker checks the archive, stores it, adds it to the catalog and signs it; flare-publish then rebuilds this
+    # list from the catalog and signs it with the release key. Both or neither: a refused archive changes nothing.
+    with tempfile.TemporaryDirectory() as folder:
+        notes_file, changes_file = text_files(folder, note, body)
+        flare_publish(
+            "release",
+            str(archive),
+            "--manifest",
+            str(MANIFEST),
+            "--stability",
+            entry["stability"],
+            "--notes-file",
+            notes_file,
+            "--changes-file",
+            changes_file,
+            "--source-commit",
+            commit,
+            "--min-app",
+            str(MIN_APP),
+        )
     if fetch(entry["file"]) != data:
-        sys.exit("FAIL: the uploaded archive doesn't read back the same. The index was not changed.")
-    publish_index(key, {"schema": 1, "published": now(), "releases": index["releases"] + [entry]})
+        sys.exit(f"FAIL: the published archive doesn't read back as {archive.name}. Check with flare-publish verify.")
     print(f"Published {version} ({entry['sha256'][:12]}…) from {commit[:7]}.")
     if tag_release(entry):
         github_release(entry, body, latest=newest_stable(index["releases"], version))
