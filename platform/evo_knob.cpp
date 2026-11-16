@@ -19,7 +19,7 @@ static const uint8_t kInstances[] = {0x01, 0x03, 0x05};  // NavStartup 01, HmiMa
 
 bool decodeVolumeLevel(const VmostMsgView& m, VolumeLevel& out) {
     if (m.fblock != kAudioMasterFblock || m.fkt != kVolumeLevelFkt || m.op != 0xC || !m.data || m.len < 5 ||
-        m.data[0] != kEntertainmentVolume) {
+        !isEntertainmentVolume(m.data[0])) {
         return false;
     }
     const unsigned value = m.data[2], min = m.data[3], max = m.data[4];
@@ -283,14 +283,15 @@ void EvoKnob::onMessage(const VmostMsgView& m) {
         VolumeLevel level;
         if (decodeVolumeLevel(m, level)) {
             if (++levels_ <= 50) {
-                ELOG("Knob", "volume level: %u (%u to %u)", level.value, level.min, level.max);
+                ELOG("Knob", "volume level: %u (%u to %u), %s", level.value, level.min, level.max,
+                     m.data[0] == kWholeVolumeArray ? "all volumes" : "music volume alone");
             }
             if (levelCb_) {
                 levelCb_(level, levelUser_);
             }
         } else if (levels_ < 50 && m.fkt == kVolumeLevelFkt) {
             ++levels_;
-            if (m.op == 0xC && m.data && m.len >= 5 && m.data[0] != kEntertainmentVolume) {
+            if (m.op == 0xC && m.data && m.len >= 5 && !isEntertainmentVolume(m.data[0])) {
                 ELOG("Knob", "volume level of volume %u: %u (%u to %u), not the music's: no pill", m.data[0], m.data[2],
                      m.data[3], m.data[4]);
             } else {

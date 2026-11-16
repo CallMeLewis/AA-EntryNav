@@ -9,6 +9,12 @@ Each version links to the commit its archive was built from.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The volume pill shows again over Android Auto.** Since 0.1.6-test.1 the volume knob dimmed the picture and showed
+  iDrive's own volume bar through it. A navigation prompt's or a call's own level still doesn't show in it.
+  Unverified.
+
 ## [0.1.6-test.3] - 2026-11-15 · Unverified
 
 <!-- Flare Drive:

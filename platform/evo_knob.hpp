@@ -85,14 +85,20 @@ const uint16_t kVolumeCsFkt = 0xC01, kVolumeMflFkt = 0x401;
 int decodeVolumeButton(const VmostMsgView& m, unsigned* steps);
 
 // Volume level, read where HmiMain3D's own volume bar reads it: CHmiVolumeIndicatorService watches CPxyAudioMaster
-// instance 0, whose init binds fkt 0xC08 (libhmil6services). Array property, record 0: Status = PosX, PosY, value,
-// min, max, one byte each (e.g. 01 00 LEVEL 00 MAX). Our copy needs vmostd's filter opened by one Get, as for E5:
-// nothing is ever set on the AudioMaster. PosX is which volume: 1 entertainment, 2 navigation prompts, 3 telephone,
-// 6 gong (upstream, Sq00ky #166, from NBT Evo). Only the entertainment volume is decoded: the car reports the prompt's
-// own level when a navigation prompt starts, and the pill would show it as the music's.
+// instance 0, whose init binds fkt 0xC08 (libhmil6services). Array property: Status = PosX, PosY, then records of
+// value, min, max, one byte each. Our copy needs vmostd's filter opened by one Get, as for E5: nothing is ever set on
+// the AudioMaster. CVisibleVolumeIndicator::onIncomingMessage (libhmil6services 0x310d3c) reads PosX 0 as the whole
+// array, record 0 first, and PosX N as the one record N-1. HmiMain3D's CHmiVolumeIndicatorService reads record 0 as
+// the entertainment volume and 1 or 2 as a navigation prompt's or a call's (0x25da250); upstream (Sq00ky #166, NBT
+// Evo) has PosX 1 entertainment, 2 navigation prompts, 3 telephone, 6 gong. So the music's level is in bytes 2 to 4
+// when PosX is 0 or 1. Any other PosX is another volume: the car reports a prompt's own level when a navigation
+// prompt starts, and the pill would show it as the music's.
 const uint8_t kAudioMasterFblock = 0x20, kAudioMasterInstance = 0x00;
 const uint16_t kVolumeLevelFkt = 0xC08;
-const uint8_t kEntertainmentVolume = 0x01;
+const uint8_t kWholeVolumeArray = 0x00, kEntertainmentVolume = 0x01;  // PosX that start with the music's level
+inline bool isEntertainmentVolume(uint8_t posX) {
+    return posX == kWholeVolumeArray || posX == kEntertainmentVolume;
+}
 struct VolumeLevel {
     unsigned value, min, max;
 };

@@ -477,6 +477,13 @@ int main() {
         CHECK(!evo::decodeVolumeLevel(lv, level));
         lv.data = gong;
         CHECK(!evo::decodeVolumeLevel(lv, level));
+        // PosX 0: the whole array, the music's record first, then the prompt's and the call's.
+        uint8_t all[11] = {0x00, 0x00, 23, 0, 40, 12, 5, 40, 18, 5, 40};
+        lv.data = all;
+        lv.len = 11;
+        CHECK(evo::decodeVolumeLevel(lv, level) && level.value == 23 && level.min == 0 && level.max == 40);
+        lv.len = 5;
+        CHECK(evo::decodeVolumeLevel(lv, level) && level.value == 23);  // the music's record alone
         lv.data = ok;
         lv.len = 4;
         CHECK(!evo::decodeVolumeLevel(lv, level));  // cut short
@@ -511,6 +518,10 @@ int main() {
         lv.data = prompt;
         lk.onMessage(lv);
         CHECK(sink.n == 1);  // a navigation prompt's volume shows no pill
+        lv.data = all;
+        lv.len = 11;
+        lk.onMessage(lv);
+        CHECK(sink.n == 2 && sink.last == 23);  // the whole array shows the music's level
     }
     // Volume buttons (HmiMain3D CDevVolumeControl): CECenterStack 15.0C.C01 [AudioVolume, Steps],
     // ControlElementsMFL 15.02.401 [UWord, AudioVolume, Steps]; AudioVolume 1/2 = a step, 0/3 = nothing.
