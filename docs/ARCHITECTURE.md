@@ -135,7 +135,7 @@ the same session over USB.
 - **On the PC.** `backup_headunit.sh` copies the car's system and only reads on the car. `pc_headunit.cpp` runs the
   real session against a phone's head unit server over `adb`, with no car at all.
 - **Releases.** `package_release.py` builds the archive ([installation](INSTALLATION.md)). `publish_release.py`
-  publishes it for Flare Drive and GitHub, and `release_version.py` defines which version numbers it accepts and their
+  publishes it to Flare Drive's plugin catalog (through Flare Drive's `flare-publish`) and to GitHub, and `release_version.py` defines which version numbers it accepts and their
   order.
 - **Checks.** `verify_arm.py` builds the ARM programs and runs everything that needs the copy of the car's system.
   `verify_binary.py` and `verify_wireless.py` check the ARM programs against the car's libraries and the approved

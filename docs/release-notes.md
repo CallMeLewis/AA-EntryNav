@@ -16,7 +16,7 @@ Everything is written in one place: the release's section of [CHANGELOG.md](../C
 - **The GitHub Release's text**, which `publish` makes from the section: an `Action needed:` paragraph becomes a
   `> [!IMPORTANT]` callout, `###` headings become `##`, the verified or unverified wording is left out, and each
   paragraph or bullet goes on one line, since GitHub shows hard line breaks. `publish` also puts it in Flare Drive's
-  release list as the release's full notes, which Flare Drive opens from View release notes. Flare Drive shows the
+  catalog as the release's full notes, which Flare Drive opens from View release notes. Flare Drive shows the
   callout, `##` headings, bullets, bold and inline code; a link shows as its text only.
 
 `publish_release.py preview` shows the Flare Drive note and the GitHub Release's text as `publish` will use them.
@@ -81,7 +81,7 @@ service's log can no longer fill the head unit's memory.
 - Whether it is stable or experimental is not part of the note: `publish` records it (`--stable`) and Flare Drive
   shows it. Whether it is verified is not part of the note either: only the CHANGELOG records that.
 - To change a published release's texts, edit its CHANGELOG section, then run `publish_release.py notes X.Y.Z` (several
-  versions at once are fine): it updates the note and full notes in Flare Drive's release list and the GitHub Release's
+  versions at once are fine): it updates the note and full notes in Flare Drive's catalog and the GitHub Release's
   text. `stability` changes the label.
 
 ## Writing them

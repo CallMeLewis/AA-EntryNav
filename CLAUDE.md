@@ -4,10 +4,10 @@ Write commit messages following [docs/commit-messages.md](docs/commit-messages.m
 
 ## Publishing
 
-`tools/publish_release.py publish` sends each release to Flare Drive's plugin catalog through `flare-publish` (Flare Drive's `tools/flare_publish.py`, in the repo beside this one). The publishing Worker checks and stores it, and the per-plugin list for Flare Drive 2.2.1 and earlier is rebuilt from the catalog. `notes` and `stability` change the catalog the same way. Flare Drive's `docs/publishing.md` describes the whole process, and its `CLAUDE.md` asks to keep that guide current.
+`tools/publish_release.py publish` sends each release to Flare Drive's plugin catalog through `flare-publish` (Flare Drive's `tools/flare_publish.py`, in the repo beside this one). The publishing Worker checks and stores it, and the per-plugin list for Flare Drive 2.2.1 and earlier is rebuilt from the catalog. `notes` and `stability` change the catalog the same way. Read [Flare Drive's docs/publishing.md](../flare-drive/docs/publishing.md) (https://github.com/CallMeLewis/flare-drive/blob/main/docs/publishing.md) before publishing or changing a release: it describes the whole process, and Flare Drive's `CLAUDE.md` asks to keep it current.
 
 * Never upload an archive or `index.json` to the bucket any other way, for example with Wrangler. Flare Drive 2.2.2 and later read only the catalog, so they would never see it.
-* `retire` is refused: the catalog would keep listing the release. Hide the plugin or change a release on the publishing page (`publish.darkzone.dev`) instead, as `docs/publishing.md` describes.
+* `retire` is refused: the catalog would keep listing the release. Hide the plugin or change a release on the publishing page (`publish.darkzone.dev`) instead, as that guide describes.
 * `plugins/aa-entrynav.toml` is the plugin's manifest. Its name, summary, description and order only describe a plugin new to the catalog; edit them on the publishing page.
 
 ## Tests

@@ -70,7 +70,7 @@ A release commit bumps `VERSION` and adds the release's section to [CHANGELOG.md
 Release 0.1.1: Bluetooth audio as the phone connects, a smaller log
 ```
 
-`tools/publish_release.py publish` then builds that commit, publishes it to Flare Drive's release list, tags it
+`tools/publish_release.py publish` then builds that commit, publishes it to Flare Drive's catalog, tags it
 `vX.Y.Z` and gives the tag a GitHub Release.
 
 ## Final check
