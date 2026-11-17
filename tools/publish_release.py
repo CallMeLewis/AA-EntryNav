@@ -317,9 +317,7 @@ def prepare(args):
         write_changelog(text)
         sys.exit(f"FAIL: could not commit the release: {(committed.stderr or committed.stdout).strip()}")
     print(f"Committed {output('git', 'rev-parse', '--short', 'HEAD')}: {subject}")
-    print(
-        f"{CHANGELOG.name}: [Unreleased] is now {version}'s section, dated {date} and linked to v{version}."
-    )
+    print(f"{CHANGELOG.name}: [Unreleased] is now {version}'s section, dated {date} and linked to v{version}.")
     if not NOTE.search(section(version)):
         print(f"WARN: {version}'s section has no Flare Drive note (<!-- Flare Drive: ... -->) yet. publish needs one.")
     print("Check both texts with preview, push the commit, wait for CI, then publish today, the section's date.")
