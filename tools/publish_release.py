@@ -24,7 +24,6 @@ same day. `publish` changes nothing in the repository: it refuses a section date
 
 Each release carries the owner's label, stable or experimental (experimental unless --stable), shown as a pill in Flare
 Drive. `stability` changes it later in the catalog, and the list is rebuilt from it; the archive stays as it is.
-Whether a release has run in a car (verified or unverified) is recorded in CHANGELOG.md only, not in the list.
 
 A version is X.Y.Z, or X.Y.Z-beta.N or X.Y.Z-test.N for a build to try before X.Y.Z (tools/release_version.py). Its
 stable build X.Y.Z is always above them, in Flare Drive too: whoever installed 0.1.4-beta.2 is offered 0.1.4 as an
@@ -230,19 +229,10 @@ def flare_drive_note(version, text):
     return note
 
 
-def without_verification(text):
-    """text without its verified or unverified wording: "This version is unverified." anywhere, and a closing sentence
-    that starts with Verified or Unverified. Only CHANGELOG.md records whether a release has run in a car."""
-    # After a sentence's end, which a bold opening sentence closes with "**" ("**It no longer sticks.** Unverified.").
-    end = r"(^|(?<=[.!?])|(?<=[.!?]\*\*))"
-    text = re.sub(end + r"\s*This version is (un)?verified\b[^.]*\.", "", text)
-    return re.sub(end + r"\s*(Unverified|Verified)\b[^.]*\.$", "", text).strip()
-
-
 def release_body(text):
     """The GitHub Release's text, made from a CHANGELOG.md section: its heading and Flare Drive note left out, an
-    "Action needed:" paragraph as an IMPORTANT callout, ### headings raised to ##, verified or unverified wording left
-    out, and each paragraph or bullet on one line, since GitHub shows hard line breaks."""
+    "Action needed:" paragraph as an IMPORTANT callout, ### headings raised to ##, and each paragraph or bullet on one
+    line, since GitHub shows hard line breaks."""
     blocks = []  # paragraphs, bullets and headings, unwrapped; "" for a blank line
     for line in NOTE.sub("", text).splitlines()[1:]:
         line = line.strip()
@@ -255,16 +245,8 @@ def release_body(text):
         if block.startswith("### "):
             block = block[1:]
         elif block.startswith("Action needed:"):
-            action = without_verification(block[len("Action needed:") :])
+            action = block[len("Action needed:") :].strip()
             block = f"> [!IMPORTANT]\n> {action[:1].upper()}{action[1:]}"
-        elif block.startswith("- "):
-            block = "- " + without_verification(block[2:])
-            if block == "- ":
-                continue
-        elif block:
-            block = without_verification(block)
-            if not block:
-                continue
         if block or (lines and lines[-1]):
             lines.append(block)
     return "\n".join(lines).strip() + "\n"
@@ -325,7 +307,7 @@ def prepare(args):
 
     heading_end = text.index("\n", unreleased[0]) + 1
     date = today()
-    released = text[:heading_end] + f"\n## [{version}] - {date} · Unverified\n" + text[heading_end:]
+    released = text[:heading_end] + f"\n## [{version}] - {date}\n" + text[heading_end:]
     (ROOT / "VERSION").write_text(version + "\n", newline="\n")
     published = [r["version"] for r in index["releases"]]
     write_changelog(with_links(released, published + [version], unreleased_from=version))
@@ -336,7 +318,7 @@ def prepare(args):
         sys.exit(f"FAIL: could not commit the release: {(committed.stderr or committed.stdout).strip()}")
     print(f"Committed {output('git', 'rev-parse', '--short', 'HEAD')}: {subject}")
     print(
-        f"{CHANGELOG.name}: [Unreleased] is now {version}'s section, unverified, dated {date} and linked to v{version}."
+        f"{CHANGELOG.name}: [Unreleased] is now {version}'s section, dated {date} and linked to v{version}."
     )
     if not NOTE.search(section(version)):
         print(f"WARN: {version}'s section has no Flare Drive note (<!-- Flare Drive: ... -->) yet. publish needs one.")

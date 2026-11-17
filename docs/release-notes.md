@@ -14,8 +14,8 @@ Everything is written in one place: the release's section of [CHANGELOG.md](../C
   Flare Drive 2.0.10 and earlier show it on the release's page. Later versions show it only for a release whose list
   entry has no full notes.
 - **The GitHub Release's text**, which `publish` makes from the section: an `Action needed:` paragraph becomes a
-  `> [!IMPORTANT]` callout, `###` headings become `##`, the verified or unverified wording is left out, and each
-  paragraph or bullet goes on one line, since GitHub shows hard line breaks. `publish` also puts it in Flare Drive's
+  `> [!IMPORTANT]` callout, `###` headings become `##`, and each paragraph or bullet goes on one line, since GitHub
+  shows hard line breaks. `publish` also puts it in Flare Drive's
   catalog as the release's full notes, which Flare Drive opens from View release notes. Flare Drive shows the
   callout, `##` headings, bullets, bold and inline code; a link shows as its text only.
 
@@ -27,7 +27,7 @@ the version's section and makes the release commit.
 ## The CHANGELOG section
 
 ```
-## [0.1.1] - 2026-11-11 · Unverified
+## [0.1.1] - 2026-11-11
 
 <!-- Flare Drive:
 As your phone connects, the iDrive can switch to Bluetooth audio by itself (a switch in Flare Drive 2.0.6). The
@@ -35,33 +35,34 @@ service's log can no longer fill the head unit's memory.
 -->
 
 The iDrive switches to Bluetooth audio as the phone connects, and the service's log can no longer fill the head unit's
-memory. Only the iDrive app (`libAAEntryNav.so`) changes. This version is unverified.
+memory. Only the iDrive app (`libAAEntryNav.so`) changes.
 
 ### Added
 
 - **The iDrive switches to Bluetooth audio as the phone connects**, with the `select-bt-audio` file, a switch in Flare
-  Drive. ... Unverified.
+  Drive. ...
 ```
 
-- Verified means this exact build has run in a car. Unverified means it has only been tested on PC and under QEMU.
-- The heading is `## [X.Y.Z]`, ` - `, the release date (YYYY-MM-DD), then ` · Unverified`, or ` · Verified` once this
-  exact build has run in a car. `prepare` writes it with today's date, so publish the same day: `publish` refuses a
-  section dated another day, and you then change the date and commit it before publishing.
+- The heading is `## [X.Y.Z]`, ` - `, then the release date (YYYY-MM-DD). `prepare` writes it with today's date, so
+  publish the same day: `publish` refuses a section dated another day, and you then change the date and commit it
+  before publishing.
+- The CHANGELOG doesn't say whether a release or a change has run in a car: no "Verified" or "Unverified" anywhere.
 - A build to try before X.Y.Z is `X.Y.Z-test.N` or `X.Y.Z-beta.N`, with a section of its own. Test builds come before
   beta builds, and X.Y.Z itself is above both, so Flare Drive offers it as an update over them
   (`tools/release_version.py`). A beta or test build is always experimental, and a pre-release on GitHub. X.Y.Z's
   section says everything that changed since the previous stable build, betas included: most people never saw them.
+  It leaves out fixes for bugs that only a test or beta build had.
+- Promoting X.Y.Z to stable means: write its section, `prepare`, then `publish --stable`. After that, take its test
+  and beta sections and their links out of the CHANGELOG, and delete their GitHub Releases and tags. Flare Drive's
+  catalog keeps them, as experimental releases below X.Y.Z, since the publishing Worker can't take a release off yet.
 - The Flare Drive note comes next, as `<!-- Flare Drive: ... -->` (see The Flare Drive note below).
-- Then a short paragraph: what the release does for someone in the car, which programs change, and whether it is
-  verified. Anything that needs the reader to act goes in a paragraph of its own before it (see Action needed below).
+- Then a short paragraph: what the release does for someone in the car, and which programs change. Anything that needs the reader to act goes in a paragraph of its own before it (see Action needed below).
 - Then [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) categories as `### ` headings, in this order, skipping
   empty ones: Added, Changed, Fixed, Removed, Security.
 - Each bullet opens with its point in bold, then the detail. Markdown is fine here: GitHub renders it.
-- Each bullet says whether that change is verified or unverified, in a closing sentence that starts with "Verified" or
-  "Unverified", which the GitHub Release leaves out. Nothing counts as working until a car has shown it.
 - A version links to its tag, `vX.Y.Z`, in the links at the end of the file. `prepare` writes the link into the release
   commit, and `publish` puts the tag on the commit the archive is built from, so publishing leaves nothing to commit.
-  Versions up to 0.1.6-test.3 link to their commit instead.
+  Versions up to 0.1.5 link to their commit instead.
 
 ## The Flare Drive note
 
@@ -79,7 +80,7 @@ service's log can no longer fill the head unit's memory.
 - Name the Flare Drive switch or screen, never the file behind it: "a switch in Flare Drive", not `select-bt-audio`.
 - Say which Flare Drive version a new switch needs, when an older one doesn't have it.
 - Whether it is stable or experimental is not part of the note: `publish` records it (`--stable`) and Flare Drive
-  shows it. Whether it is verified is not part of the note either: only the CHANGELOG records that.
+  shows it.
 - To change a published release's texts, edit its CHANGELOG section, then run `publish_release.py notes X.Y.Z` (several
   versions at once are fine): it updates the note and full notes in Flare Drive's catalog and the GitHub Release's
   text. `stability` changes the label.
@@ -130,7 +131,6 @@ reported or suggested it, and keep the credit when the change was reworked befor
 
 - Is every bullet something a person in the car can notice, in the car's and Flare Drive's own words?
 - Does every new feature say where to find it, and which Flare Drive version it needs?
-- Does every bullet, and the section's heading, say whether it is verified or unverified?
 - Is anything that needs the reader to act first, starting with "Action needed:"?
 - Is the Flare Drive note one plain paragraph, with no Markdown and no file names?
 - Is anything that identifies a car left out?
