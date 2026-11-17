@@ -7,6 +7,13 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A phone on the cable gets time to finish its old session before reconnecting.** After a session ends, the same
+  phone waits 5 seconds before another attempt. If the session could not start, it waits 10 seconds. During either
+  pause, unplugging and plugging it in again is noticed, and a phone can connect over Wi-Fi. Before, a session that
+  started and then ended could be retried immediately, while a failed start stopped USB polling for 10 seconds.
+
 ## [0.1.6] - 2026-11-17
 
 <!-- Flare Drive:

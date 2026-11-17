@@ -545,12 +545,19 @@ bool ServiceApp::startSession(int fd, void* user, bool cable) {
 }
 
 namespace {
-const unsigned kCableRetryAfterFailureMs = 10000;
-
 void usbLog(const char* line, void*) {
     ELOG("Usb", "%s", line);
 }
 }  // namespace
+
+bool ServiceApp::startCableSession(int socket) {
+    // Leaving the car's Bluetooth address out keeps pairing and reconnection in the phone and iDrive (reference
+    // car, 14 November 2026): told it, the phone hid its pairing dialog and waited for BMW's code exchange.
+    ELOG("Bluetooth",
+         "the phone is not told the car's Bluetooth address: pairing and reconnection stay "
+         "with the phone and iDrive");
+    return startSession(socket, this, true);
+}
 
 void* ServiceApp::usb(void* user) {
     ServiceApp* a = static_cast<ServiceApp*>(user);
@@ -567,44 +574,7 @@ void* ServiceApp::usb(void* user) {
     }
     bool carried = false;  // the cable carries the session that runs
     while (!a->usbStop) {
-        if (carried && !link.active()) {
-            const UsbBridge::Stats stats = link.stats();
-            ELOG("Usb", "cable session over: %llu bytes from the phone, %llu to it, ended with %d",
-                 static_cast<unsigned long long>(stats.fromPhone), static_cast<unsigned long long>(stats.toPhone),
-                 stats.error);
-            link.close();
-            carried = false;
-        }
-        // Only while nothing is connected or being prepared: a phone on Wi-Fi keeps its session.
-        bool present = carried;
-        if (!carried && !a->projectionBusy() && !a->stopRequested() && link.phoneWaiting(&present)) {
-            a->usbPhone = true;
-            a->usbBusy = true;  // the wireless side does not send this phone onto the Wi-Fi meanwhile
-            const int socket = link.connect(a->usbStop);
-            if (socket >= 0) {
-                carried = true;
-                // The phone is not told the car's Bluetooth address, as on Wi-Fi. Told it, Android Auto takes the
-                // phone's Bluetooth over: it hides the phone's own pairing dialog and waits for the car to send the
-                // code iDrive shows, which this service cannot read, and after a drop the phone's reconnection stayed
-                // "connecting" for good (reference car, 14 November 2026). Left out, the phone pairs through iDrive's
-                // new device screen with its own dialog and reconnects by itself, as without the cable.
-                ELOG("Bluetooth",
-                     "the phone is not told the car's Bluetooth address: pairing and reconnection stay "
-                     "with the phone and iDrive");
-                // Owns the socket from here, as with Wi-Fi. A session that could not start (the video above all) is
-                // not retried at once: each try resets the phone and asks it again, every second or so for as long as
-                // the failure lasts.
-                if (!startSession(socket, a, true)) {
-                    ELOG("Usb", "the session did not start: the cable is tried again in %u s",
-                         kCableRetryAfterFailureMs / 1000);
-                    for (unsigned waited = 0; waited < kCableRetryAfterFailureMs && !a->usbStop; waited += 50) {
-                        usleep(50000);
-                    }
-                }
-            }
-        }
-        a->usbBusy = carried;
-        a->usbPhone = present || carried;
+        pollUsbLink(link, carried, *a, a->usbStop);
         // A quarter of a second between looks: a phone just plugged in is asked before it has waited long.
         for (int i = 0; i < 5 && !a->usbStop; ++i) {
             usleep(50000);

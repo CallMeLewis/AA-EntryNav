@@ -140,7 +140,7 @@ void UsbLink::say(const char* format, ...) {
     log_(line, user_);
 }
 
-void UsbLink::close() {
+void UsbLink::close(unsigned retryMs) {
     bridge_.stop();
     if (io_) {
         io_->release(interface_);
@@ -156,6 +156,9 @@ void UsbLink::close() {
         quickFromMs_ = bus_.nowMs();
         quickWhy_ = "a session on the cable";
         quickRetries_ = kUsbQuickRetries;
+        rest(carriedPort_, retryMs);
+        say("cable session %s: next attempt in %u s", retryMs == kUsbStartFailureRetryMs ? "did not start" : "ended",
+            retryMs / 1000);
     }
 }
 
@@ -496,6 +499,7 @@ int UsbLink::connect(const std::atomic<bool>& quit) {
                 device.product, attempt + 1);
             carrying_ = true;
             carriedPort_ = device.name;
+            touched_ = false;  // accessory answered: its mode change is over; a disappearance now is an unplug
             quickRetries_ = 0;
             silences_ = silentResets_ = 0;
             return socket;

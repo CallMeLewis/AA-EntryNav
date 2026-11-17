@@ -84,6 +84,8 @@ the same session over USB.
 - **The USB cable.** `usb_io` handles one USB device through usbfs. `usb_aoa` asks the phone for accessory mode.
   `usb_link` runs the steps from "a phone is plugged in" to "Android Auto answers", including taking the phone back
   from BMW's media program. `usb_bridge` moves the session's bytes between a local socket and the phone's endpoints.
+  `usb_loop.hpp` polls the link for the service, keeping per-port retry pauses idle so wireless can connect and an
+  observed unplug/replug can cancel the wait. The fake-phone test exercises the same polling turn.
 - **Sound and microphone.** `evo_mic` feeds the car's microphone to the Assistant. For sound over Wi-Fi (the
   `audio-wifi` file), `evo_audio` receives the phone's two streams, `audio_mixer.hpp` mixes them, and `evo_alsa_out`
   plays the result through the car's own `libasound`.

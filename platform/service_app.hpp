@@ -27,6 +27,7 @@
 #include "kombi_nav.hpp"
 #include "peek_timing.hpp"
 #include "tcp_server.hpp"
+#include "usb_loop.hpp"
 #include "wireless_loop.hpp"
 #include "wireless_setup.hpp"
 
@@ -34,7 +35,7 @@ namespace evo {
 
 class SppSnapshotReader;
 
-class ServiceApp : public WirelessHost {
+class ServiceApp : public WirelessHost, public UsbHost {
 public:
     // What one turn of the main loop decided, for the inputs, the iDrive app and the loop itself.
     struct Turn {
@@ -103,6 +104,13 @@ public:
     bool wifiSessionRunning() override;
     void sppLinkOpened() override;
     void handshakeEnded(bool spoke, bool accepted) override;
+
+    // ---- UsbHost ----
+    void cableState(bool present, bool busy) override {
+        usbPhone = present;
+        usbBusy = busy;
+    }
+    bool startCableSession(int socket) override;
 
     // ---- components, wired by main() ----
     EvoKnob* knob;  // phone keys during a call; set by main() before the control thread starts

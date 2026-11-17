@@ -20,6 +20,7 @@
 
 #include "service_contract.hpp"
 #include "usb_link.hpp"
+#include "usb_loop.hpp"
 
 #define CHECK(c)                                                 \
     do {                                                         \
@@ -275,13 +276,13 @@ private:
 
 class FakeBus : public evo::UsbBus {
 public:
-    explicit FakeBus(World& world) : w(world) {}
+    explicit FakeBus(World& world) : w(world), tickMs(100), port("3-1") {}
     std::vector<evo::UsbDeviceInfo> list() override {
         std::vector<evo::UsbDeviceInfo> devices;
         pthread_mutex_lock(&w.mu);
         if (w.mode == World::kNormal || w.mode == World::kAccessory) {
             evo::UsbDeviceInfo d;
-            d.name = "3-1";
+            d.name = port;
             d.bus = 3;
             d.device = w.device;
             const bool accessory = w.mode == World::kAccessory;
@@ -331,7 +332,7 @@ public:
     }
     void sleepMs(unsigned ms) override { step(ms); }
     uint32_t nowMs() override {
-        step(100);  // time passes whenever it is looked at: no test waits for real
+        step(tickMs);  // time passes whenever it is looked at, unless a boundary test holds it still
         pthread_mutex_lock(&w.mu);
         const uint32_t now = w.now;
         pthread_mutex_unlock(&w.mu);
@@ -343,6 +344,8 @@ public:
         pthread_mutex_unlock(&w.mu);
     }
     World& w;
+    unsigned tickMs;
+    std::string port;
 };
 
 std::vector<std::string> g_lines;
@@ -369,10 +372,143 @@ bool sessionSpeaks(int socket) {
     return poll(&fd, 1, 2000) > 0 && recv(socket, answer, sizeof(answer), 0) == 12 && answer[5] == 2;
 }
 
+class FakeUsbHost : public evo::UsbHost {
+public:
+    FakeUsbHost() : present(false), busy(false), wifi(false), fail(true), starts(0), socket(-1), reserved(false) {}
+    bool projectionBusy() override { return wifi || socket >= 0; }
+    bool stopRequested() override { return false; }
+    void cableState(bool p, bool b) override {
+        present = p;
+        busy = b;
+    }
+    bool startCableSession(int fd) override {
+        reserved = present && busy;
+        ++starts;
+        if (fail) {
+            close(fd);
+            return false;
+        }
+        socket = fd;
+        return true;
+    }
+    bool present, busy, wifi, fail;
+    unsigned starts;
+    int socket;
+    bool reserved;
+};
+
 }  // namespace
 
 int main() {
     const std::atomic<bool> quit(false);
+    {  // the service's actual polling turn: failed startup, idle cooldown, Wi-Fi ownership, then session teardown
+        World world;
+        FakeBus bus(world);
+        evo::UsbLink link(bus, keep, nullptr);
+        FakeUsbHost host;
+        bool carried = false;
+        evo::pollUsbLink(link, carried, host, quit);
+        CHECK(host.starts == 1 && host.reserved && host.present && !host.busy && !carried);
+        bus.tickMs = 0;
+        const int resets = world.resets;
+        bus.step(evo::kUsbStartFailureRetryMs - 1);
+        evo::pollUsbLink(link, carried, host, quit);
+        CHECK(host.starts == 1 && world.resets == resets && host.present && !host.busy);
+        bus.step(1);
+        host.wifi = true;
+        evo::pollUsbLink(link, carried, host, quit);
+        CHECK(host.starts == 1 && world.resets == resets && !host.busy);
+        host.wifi = false;
+        host.fail = false;
+        bus.tickMs = 100;
+        evo::pollUsbLink(link, carried, host, quit);
+        CHECK(host.starts == 2 && host.reserved && host.busy && carried && sessionSpeaks(host.socket));
+        close(host.socket);
+        host.socket = -1;
+        for (int i = 0; i < 400 && link.active(); ++i) {
+            usleep(5000);
+        }
+        CHECK(!link.active());
+        bus.tickMs = 0;
+        evo::pollUsbLink(link, carried, host, quit);
+        CHECK(!carried && !host.busy && host.present && host.starts == 2);
+        bus.step(evo::kUsbSessionRetryMs - 1);
+        evo::pollUsbLink(link, carried, host, quit);
+        CHECK(host.starts == 2);
+        bus.step(1);
+        const std::atomic<bool> stop(true);
+        evo::pollUsbLink(link, carried, host, stop);
+        CHECK(host.starts == 2 && !host.busy);
+        bus.tickMs = 100;
+        evo::pollUsbLink(link, carried, host, quit);
+        CHECK(host.starts == 3 && carried && host.busy);
+        close(host.socket);
+        link.close();
+    }
+    for (unsigned failed = 0; failed < 2; ++failed) {
+        World world;
+        FakeBus bus(world);
+        evo::UsbLink link(bus, keep, nullptr);
+        const int socket = link.connect(quit);
+        CHECK(socket >= 0 && sessionSpeaks(socket));
+        close(socket);
+        bus.tickMs = 0;
+        // A deadline that crosses the monotonic clock's 32-bit wrap.
+        world.now = 0xfffffff0u;
+        const unsigned delay = failed ? evo::kUsbStartFailureRetryMs : evo::kUsbSessionRetryMs;
+        link.close(delay);
+        const int resets = world.resets, starts = world.starts;
+        bool present = false;
+        CHECK(!link.phoneWaiting(&present) && present);
+        bus.step(delay - 1);
+        link.close();  // repeated cleanup must neither shorten nor extend the deadline
+        CHECK(link.connect(quit) == -1 && !link.phoneWaiting(&present) && present);
+        CHECK(world.resets == resets && world.starts == starts);
+        bus.step(1);
+        CHECK(link.phoneWaiting());
+        const std::atomic<bool> stop(true);
+        CHECK(link.connect(stop) == -1 && world.resets == resets && world.starts == starts);
+        bus.tickMs = 100;
+        const int again = link.connect(quit);
+        CHECK(again >= 0 && sessionSpeaks(again));
+        close(again);
+        link.close();
+    }
+    {  // a real unplug/replug cancels the pause, even just after our accessory switch
+        World world;
+        FakeBus bus(world);
+        evo::UsbLink link(bus, keep, nullptr);
+        const int socket = link.connect(quit);
+        CHECK(socket >= 0);
+        close(socket);
+        link.close(evo::kUsbStartFailureRetryMs);
+        bus.tickMs = 0;
+        bool present = false;
+        CHECK(!link.phoneWaiting(&present) && present);
+        world.mode = World::kUnplugged;
+        CHECK(!link.phoneWaiting(&present) && !present);
+        world.becomeNormal();
+        CHECK(link.phoneWaiting(&present) && present);
+        bus.tickMs = 100;
+        const int again = link.connect(quit);
+        CHECK(again >= 0);
+        close(again);
+        link.close();
+    }
+    {  // another port does not inherit the wait; a device-number change on this one does
+        World world;
+        FakeBus bus(world);
+        evo::UsbLink link(bus, keep, nullptr);
+        const int socket = link.connect(quit);
+        CHECK(socket >= 0);
+        close(socket);
+        link.close();
+        bus.tickMs = 0;
+        ++world.device;
+        CHECK(!link.phoneWaiting());
+        bus.port = "3-2";
+        CHECK(link.phoneWaiting());
+    }
     {  // a phone in its normal mode: asked once, opened, Android Auto answers; its device file made root-only
         World world;
         FakeBus bus(world);
@@ -390,8 +526,10 @@ int main() {
         }
         CHECK(!link.active());
         link.close();
-        // Plugged in still, in accessory mode from the session that ended a moment ago: reset and asked again at once,
-        // as a fresh start, without opening the accessory first to wait for an answer that does not come.
+        // Plugged in still: let the phone finish its session, then reset and ask afresh.
+        bool present = false;
+        CHECK(!link.phoneWaiting(&present) && present && world.resets == 0);
+        bus.step(evo::kUsbSessionRetryMs);
         g_lines.clear();
         const int again = link.connect(quit);
         CHECK(again >= 0 && world.resets == 1 && world.starts == 2 && sessionSpeaks(again));
@@ -410,6 +548,7 @@ int main() {
             usleep(5000);
         }
         link.close();
+        bus.step(evo::kUsbSessionRetryMs);
         pthread_mutex_lock(&world.mu);
         world.allows = false;
         pthread_mutex_unlock(&world.mu);
@@ -705,7 +844,8 @@ int main() {
         rmdir(base);
     }
     puts(
-        "PASS usb link: a phone asked once and answering, a fresh start straight after a session, refusals just after "
+        "PASS usb link: a phone asked once and answering, per-port cooldown after a session or failed start, "
+        "repeated cleanup, clock wrap, stop, replug, a different port, refusals just after "
         "a session retried soon then left alone, a rival that asked first "
         "(reset, asked again), a rival that always wins (given up after 3 rounds), an interface taken back, a phone "
         "that refuses retried soon after its plug-in then left alone, plugged in again and asked at once, a mode "

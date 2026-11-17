@@ -16,7 +16,8 @@
 //   - Whether Android Auto is behind an accessory is only known by asking: its version request is sent and an answer
 //     awaited before the session is started. The phone answers that request again when the session sends its own.
 //   - A session can end with the phone still plugged in (seen on the car: the Android Auto logo, then iDrive again).
-//     The phone stays in accessory mode with nothing behind it, so it is reset and asked again at once.
+//     The phone stays in accessory mode with nothing behind it. It gets kUsbSessionRetryMs to finish the old session,
+//     then is reset and asked again. A failed session start gets kUsbStartFailureRetryMs instead.
 //   - Just after such a session, or just after it is plugged in, a phone that comes back in its normal mode has not
 //     refused for good: it is asked again a few times, kUsbQuickRetryMs apart, before it is left alone for
 //     kUsbRefusedMs. Seen on the car on 13 November 2026: a phone plugged in refused once, then took the request
@@ -87,6 +88,8 @@ const unsigned kUsbRefusedMs = 30000;    // a phone that refused is left alone t
 const unsigned kUsbAttempts = 3;         // rounds of "reset and ask again" in one connect()
 const unsigned kUsbQuickRetries = 3;     // after a plug-in or a session on the cable: refusals retried soon
 const unsigned kUsbQuickRetryMs = 2000;  // how soon
+const unsigned kUsbSessionRetryMs = 5000;
+const unsigned kUsbStartFailureRetryMs = 10000;
 // A phone in accessory mode for us whose Android Auto doesn't answer may be starting it, or showing its first-time
 // prompt: a reset would close the prompt. It is asked again on the same accessory kUsbSilentRetryMs later, and reset
 // only after kUsbSilentBeforeReset silences in a row. At most kUsbSilentResets such resets in kUsbSilentWindowMs: then
@@ -110,8 +113,9 @@ public:
     // the session. -1: no phone, a refusal, or the other program won every round; the reason is logged.
     int connect(const std::atomic<bool>& quit);
     bool active() const { return bridge_.running(); }  // the cable still carries the session
-    // Ends the bridge and gives the phone back. After a session, the next connect() starts afresh on that phone.
-    void close();
+    // Ends the bridge and gives the phone back. After handing out a socket, that port waits retryMs before a fresh
+    // attempt. Repeated cleanup leaves the deadline alone. An observed unplug/replug clears the wait.
+    void close(unsigned retryMs = kUsbSessionRetryMs);
     UsbBridge::Stats stats() const { return bridge_.stats(); }
 
 private:
