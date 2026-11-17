@@ -7,6 +7,8 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-11-17
+
 <!-- Flare Drive:
 Announcements over Wi-Fi now turn the radio down instead of stopping it. Your phone can show the car as "1 Series
 (F20)", and Fill in from the car in Flare Drive 2.1.6 sets its details for you. On the cable, Android Auto's
@@ -363,7 +365,8 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 - **Changing the car's clock no longer upsets Android Auto's timing.** When GPS corrected the clock while driving, a
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
-[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.6-test.4...HEAD
+[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.6
 [0.1.6-test.4]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.6-test.4
 [0.1.6-test.3]: https://github.com/CallMeLewis/AA-EntryNav/tree/fb8661df47aab7c890309682ac42f5613b72f20a
 [0.1.6-test.2]: https://github.com/CallMeLewis/AA-EntryNav/tree/aec8c05f7b85e9c299de2f804ca0a8ed939ac723
