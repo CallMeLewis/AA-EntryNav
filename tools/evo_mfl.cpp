@@ -9,6 +9,7 @@
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #include "evo_knob.hpp"
@@ -24,12 +25,35 @@ double now() {
 
 double started;
 
+struct Function {
+    uint16_t id;
+    const char* name;
+};
+
+// CPxyControlElementsMFL::init in libhmil6services.so, software 202306092158. The roller has its own functions;
+// reading SearchSwitch1 alone does not open vmostd's filter for RotarySteps or RotaryPress.
+const Function functions[] = {{evo::kMflTelephoneFkt, "Telephone"},
+                              {evo::kVolumeMflFkt, "Volume"},
+                              {0x511, "SearchSwitch1"},
+                              {evo::kMflVoiceFkt, "Voice"},
+                              {0x513, "SpecialFunction"},
+                              {0xC30, "RotarySteps"},
+                              {0xC31, "RotaryPress"}};
+
 void onMessage(void* msg, void*) {
     evo::VmostMsgView m;
     if (!evo::parseVmostMsg(msg, m) || m.fblock != evo::kVolumeFblock || m.inst != evo::kVolumeMflInstance) {
         return;
     }
-    printf("[%8.3f] 15.%02x fkt=0x%03x op=0x%x len=%u:", now() - started, m.inst, m.fkt, (unsigned)m.op, m.len);
+    const char* name = "other";
+    for (size_t i = 0; i < sizeof(functions) / sizeof(functions[0]); ++i) {
+        if (functions[i].id == m.fkt) {
+            name = functions[i].name;
+            break;
+        }
+    }
+    printf("[%8.3f] 15.%02x fkt=0x%03x %s op=0x%x len=%u:", now() - started, m.inst, m.fkt, name, (unsigned)m.op,
+           m.len);
     for (unsigned i = 0; m.data && i < m.len && i < 24; ++i) {
         printf(" %02x", m.data[i]);
     }
@@ -40,6 +64,12 @@ void onMessage(void* msg, void*) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 2 && !strcmp(argv[1], "--help")) {
+        puts("evo-mfl [seconds, 1..300, default 60]: read-only steering-wheel capture");
+        puts("Copies 15.02 status messages; plain Get reads for telephone, volume, search, voice, special function,");
+        puts("RotarySteps (0xC30) and RotaryPress (0xC31). No source selection or button forwarding.");
+        return 0;
+    }
     long seconds = argc > 1 ? strtol(argv[1], nullptr, 10) : 60;
     if (seconds < 1 || seconds > 300) {
         fprintf(stderr, "seconds: 1 to 300\n");
@@ -61,14 +91,13 @@ int main(int argc, char** argv) {
         vmost.disconnect();
         return 1;
     }
-    static const uint16_t functions[] = {evo::kMflTelephoneFkt, evo::kVolumeMflFkt, 0x511, 0x512, 0x513};
     for (unsigned i = 0; i < sizeof(functions) / sizeof(functions[0]); ++i) {
         evo::VmostMsgOut out;
         static const uint8_t dummy[4] = {0, 0, 0, 0};
-        evo::buildVmostGet(out, evo::kVolumeFblock, evo::kVolumeMflInstance, functions[i], dummy);
+        evo::buildVmostGet(out, evo::kVolumeFblock, evo::kVolumeMflInstance, functions[i].id, dummy);
         const int rc = vmost.send(&out);
-        printf("read (Get) 15.%02x fkt=0x%03x: %s (%d)\n", evo::kVolumeMflInstance, functions[i],
-               rc == 0 ? "sent" : "not sent", rc);
+        printf("read (Get) 15.%02x fkt=0x%03x %s: %s (%d)\n", evo::kVolumeMflInstance, functions[i].id,
+               functions[i].name, rc == 0 ? "sent" : "not sent", rc);
     }
     printf("listening %ld s: press the steering wheel buttons one at a time\n", seconds);
     fflush(stdout);

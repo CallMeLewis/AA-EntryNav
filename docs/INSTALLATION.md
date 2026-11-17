@@ -224,6 +224,13 @@ iDrive carries on without it ([crash guard](MAINTENANCE.md#crash-guard)). Once t
 **Android Auto doesn't start.** Turn on the logs ([MAINTENANCE.md](MAINTENANCE.md)), try again, then read
 `/tmp/aa-entrynav-service.log` and `/var/local/data/AA/app.log`.
 
+## Steering-wheel media warning
+
+For the steering-wheel source warning with sound over Wi-Fi, the [wheel capture guide](wheel-media-capture.md)
+uses the developer tool `evo-mfl`. In addition to its existing read-only button queries, it sends plain Get requests
+for roller steps (0xC30) and roller press (0xC31) on ControlElementsMFL 0x15.02. It copies status messages without
+changing settings or selecting an entertainment source. It runs from `/tmp` and needs no installation.
+
 ## How setup.sh protects the head unit
 
 - If any check fails, the script writes nothing to either partition.

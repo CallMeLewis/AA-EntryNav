@@ -7,6 +7,13 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+### Changed
+
+- **The wheel diagnostic tool now records the roller too.** `evo-mfl` reads `RotarySteps` (0xC30) and `RotaryPress`
+  (0xC31) on ControlElementsMFL 0x15.02, alongside its existing button reads. These are plain Get requests, with no
+  settings changed. Its output names each function. This prepares diagnosis of the cluster's "no entertainment
+  source selected" message with Wi-Fi audio; it does not fix the wheel controls yet.
+
 ### Fixed
 
 - **A phone on the cable gets time to finish its old session before reconnecting.** After a session ends, the same

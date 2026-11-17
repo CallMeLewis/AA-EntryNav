@@ -118,7 +118,14 @@ Calls stay on Bluetooth. Flare Drive's "sound over Wi-Fi" switch writes an empty
 The car only plays a sound output once its audio manager has connected it to the speakers. Before the first sound of a
 session, the service asks for that connection on the car's network, as BMW's CarPlay does for its music: route `0x315`,
 the `entertainment` output. It gives the route back when the session ends or Android Auto stops. While the route is
-ours, iDrive shows no Bluetooth audio selected, and the volume knob sets the level. Each line of the file is optional:
+ours, iDrive shows no Bluetooth audio selected, and the volume knob sets the level.
+
+Steering-wheel track changes and scrolling can fail with "no entertainment source selected" in the cluster. Media
+button forwarding and native entertainment-player integration are still under investigation. The
+[wheel capture guide](wheel-media-capture.md) records the separate roller and button messages without changing the
+source. Selecting Bluetooth audio is not a fix for the Wi-Fi-audio path.
+
+Each line of the file is optional:
 
 | Line | Meaning | Default |
 |---|---|---|

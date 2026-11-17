@@ -50,6 +50,7 @@ CASES = [
     ("capture-selftest", "evo-capture", ["--selftest"], None),
     ("check-load", "evo-check", ["--help"], "--dbus-watch"),
     ("ric-load", "evo-ric", ["--help"], "--watch"),
+    ("mfl-help", "evo-mfl", ["--help"], "read-only steering-wheel capture"),
 ]
 
 
