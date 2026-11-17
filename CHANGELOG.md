@@ -7,6 +7,62 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+<!-- Flare Drive:
+Announcements over Wi-Fi now turn the radio down instead of stopping it. Your phone can show the car as "1 Series
+(F20)", and Fill in from the car in Flare Drive 2.1.6 sets its details for you. On the cable, Android Auto's
+first-time prompt on the phone can now be accepted, and a frozen picture now reconnects by itself.
+-->
+
+Announcements that lower the radio instead of stopping it, the car's series and details on the phone, first-time
+setup over the cable, and fixes for a frozen picture, the car's GPS speed, the volume pill and the cluster's arrows.
+The service and the iDrive app change.
+
+### Added
+
+- **The phone can show the car's series.** Set it under Vehicle in Flare Drive 2.1.5, or with a `series=F20` line in
+  the `vehicle` file, and the phone shows "1 Series (F20)", or "M140i (F20)" when the model is M140i. MINIs,
+  Rolls-Royces and the Toyota Supra show their own make. Every series code iDrive knows is covered.
+- **Right-hand drive and diesel cars can say so.** Set them under Vehicle in Flare Drive, or with a `side=right` or
+  `fuel=diesel` line in the `vehicle` file. Android Auto then knows the driver sits on the right, and Maps looks for
+  diesel at fuel stops.
+- **Flare Drive can fill in the car's details for you.** The iDrive app reads the car's series and driver's side from
+  iDrive and gives the car an ID made from its VIN, so a phone used in two cars keeps them apart. Fill in from the
+  car, under Vehicle in Flare Drive 2.1.6, puts them in. Nothing the phone is told changes until you choose. The fuel
+  isn't read, because iDrive's fuel setting is the one its navigation uses to find filling stations, often "all
+  fuels".
+
+### Changed
+
+- **Navigation announcements over Wi-Fi lower the radio instead of stopping it.** With sound over Wi-Fi on and Android
+  Auto's music not playing, an announcement plays the way CarPlay's Maps does, on its own channel, so the car turns the
+  radio down for it and back up after. Before, the first announcement took the radio's place.
+
+### Fixed
+
+- **A frozen picture now ends the session.** When the encrypted stream from the phone broke, Android Auto froze on its
+  last picture until the cable was pulled or the Wi-Fi dropped. After 16 frames in a row that can't be read, the
+  session ends and the phone connects again.
+- **Maps no longer sees a petrol car that also charges at Tesla Superchargers.** Android Auto was told what Google's
+  test head unit says. Without a fuel set it is now told petrol only.
+- **The car's GPS speed stays inside what Android Auto accepts.** A speed of 70 m/s or more, which a speed worked out
+  from two positions could reach, made Android Auto ignore the car's speed for the rest of the drive. Such a speed is
+  no longer sent.
+- **No straight arrow at 0 in the cluster when a route starts.** Maps sends a short "depart" step at the start of a
+  route and after each reroute. The cluster no longer draws it, and after a reroute the last arrow stays until the
+  next turn.
+- **The next turn in the cluster no longer flashes up with a few metres to go.** Right after a turn, the next step
+  can come before its own distance. The cluster now waits up to 3 s for that distance, so a turn that is still far off
+  stays hidden.
+- **Roundabout exit numbers in the cluster from phones that send only the older turn message.**
+- **A phone on the cable that doesn't answer yet is given time.** Android Auto's first-time prompt on the phone could
+  never be accepted over the cable, because the phone was reset and asked again every few seconds, which closed the
+  prompt. Now the car waits for it, and after a few tries leaves the phone alone for two minutes, or until it's
+  plugged in again.
+- **A phone on the cable is told when Android Auto stops.** It used to be left waiting on a connection nobody read.
+  Now it ends its Android Auto session cleanly.
+- **The volume pill over Android Auto shows only the music volume.** A navigation prompt, a call or a chime could make
+  it pop up with that sound's own level.
+
 ## [0.1.6-test.4] - 2026-11-16
 
 <!-- Flare Drive:
