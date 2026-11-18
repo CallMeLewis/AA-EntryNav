@@ -17,6 +17,7 @@ import argparse
 import hashlib
 import io
 import os
+import pickle
 import shutil
 import signal
 import stat
@@ -591,53 +592,53 @@ def case_bad_arguments(unit):
 def faults(prepare, command, target_after, script="/tmp/aa-entrynav-2.0.0/setup.sh"):
     """Stops each mv, cp and rm call of the command in turn, then restarts and runs the command again."""
 
-    def case(unit, base, busybox):
+    def sweep(name, action, base, busybox):
+        """Every call of one command stopped one way, each on a head unit of its own. Returns how many were."""
         tried = 0
-        for name in ("mv", "cp", "rm"):
-            for action in ("kill", "fail"):
-                call = 1
-                while True:
-                    unit = Unit(base, busybox)
-                    prepare(unit)
-                    unit.write("test/fault", f"{name} {call} {action}\n")
-                    unit.run(*command, script=script)
-                    if not unit.fault_hit():
-                        break
-                    tried += 1
-                    where = f"{' '.join(command)}, {name} call {call} {action}"
-                    if action == "fail":
-                        check(unit.root_mode() == "ro", f"{where}: system left writable")
+        call = 1
+        while True:
+            unit = Unit(base, busybox)
+            prepare(unit)
+            unit.write("test/fault", f"{name} {call} {action}\n")
+            unit.run(*command, script=script)
+            if not unit.fault_hit():
+                break
+            tried += 1
+            where = f"{' '.join(command)}, {name} call {call} {action}"
+            if action == "fail":
+                check(unit.root_mode() == "ro", f"{where}: system left writable")
+            unit.restart()
+            try:
+                version = unit.installed_version()  # whole, or Failure
+            except Failure as error:
+                raise Failure(f"{where}: {error}") from None
+            record = unit.path("var/local/data/AA/install-record")
+            if action == "fail" and version and record.exists():
+                text = record.read_text()
+                check(f"version={version}\n" in text, f"{where}: the record names another version")
+            unit.expect_bmw_files()
+            # Then as the messages say: run it again, restart, tidy, restart (twice for a two-step uninstall).
+            out = ""
+            for _ in range(3):
+                again = script if unit.path(script[1:]).exists() else "/tmp/aa-entrynav-2.0.0/setup.sh"
+                out = unit.run(*command, script=again)[1]
+                unit.restart()
+                if unit.path("opt/aa/setup.sh").exists():
+                    unit.run("tidy", script="/opt/aa/setup.sh")
                     unit.restart()
-                    try:
-                        version = unit.installed_version()  # whole, or Failure
-                    except Failure as error:
-                        raise Failure(f"{where}: {error}") from None
-                    record = unit.path("var/local/data/AA/install-record")
-                    if action == "fail" and version and record.exists():
-                        text = record.read_text()
-                        check(f"version={version}\n" in text, f"{where}: the record names another version")
-                    unit.expect_bmw_files()
-                    # Then as the messages say: run it again, restart, tidy, restart (twice for a two-step uninstall).
-                    out = ""
-                    for _ in range(3):
-                        again = script if unit.path(script[1:]).exists() else "/tmp/aa-entrynav-2.0.0/setup.sh"
-                        out = unit.run(*command, script=again)[1]
-                        unit.restart()
-                        if unit.path("opt/aa/setup.sh").exists():
-                            unit.run("tidy", script="/opt/aa/setup.sh")
-                            unit.restart()
-                        if target_after(unit, check_only=True):
-                            break
-                    try:
-                        target_after(unit)
-                    except Failure as error:
-                        raise Failure(f"{where}: not finished by running again: {error}\n{out}") from None
-                    call += 1
-                    shutil.rmtree(unit.root)
-                shutil.rmtree(unit.root)
+                if target_after(unit, check_only=True):
+                    break
+            try:
+                target_after(unit)
+            except Failure as error:
+                raise Failure(f"{where}: not finished by running again: {error}\n{out}") from None
+            call += 1
+            shutil.rmtree(unit.root)
+        shutil.rmtree(unit.root)
+
         return tried
 
-    return case
+    return sweep
 
 
 def installed_2(unit, check_only=False):
@@ -825,6 +826,36 @@ FAULT_CASES = {
 }
 
 
+def forked(calls, limit):
+    """Runs each call in a process of its own, `limit` at a time. Returns (error text or None, result) for each."""
+    results, running, following = [None] * len(calls), {}, 0
+    while following < len(calls) or running:
+        while following < len(calls) and len(running) < limit:
+            reader, writer = os.pipe()
+            sys.stdout.flush()
+            child = os.fork()
+            if child == 0:
+                os.close(reader)
+                try:
+                    answer = (None, calls[following]())
+                except Failure as error:
+                    answer = (str(error), None)
+                except BaseException as error:  # reported as a failure of its case, not lost with the process
+                    answer = (f"{type(error).__name__}: {error}", None)
+                with os.fdopen(writer, "wb") as pipe:
+                    pickle.dump(answer, pipe)
+                os._exit(0)
+            os.close(writer)
+            running[child] = (following, reader)
+            following += 1
+        child, status = os.wait()
+        index, reader = running.pop(child)
+        with os.fdopen(reader, "rb") as pipe:
+            data = pipe.read()
+        results[index] = pickle.loads(data) if data else (f"its process ended with status {status}", None)
+    return results
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--busybox", default=shutil.which("busybox"), help="BusyBox binary")
@@ -843,30 +874,39 @@ def main():
         print(f"FAIL test_setup: this BusyBox cannot stand in for the car's: {unfit}. Build one that can with")
         print("    make test-host BUSYBOX=$(sh tests/build_busybox.sh)")
         return 1
-    failures = 0
     base = tempfile.mkdtemp(prefix="aa-entrynav-setup-")
-    try:
-        for name, case in CASES.items():
-            unit = Unit(base, options.busybox)
-            try:
-                case(unit)
-                print(f"PASS setup: {name}")
-            except Failure as error:
-                failures += 1
-                print(f"FAIL setup: {name}: {error}")
+
+    def run_case(case):
+        unit = Unit(base, options.busybox)
+        try:
+            case(unit)
+        finally:
             shutil.rmtree(unit.root, ignore_errors=True)
-        if not options.quick:
-            for name, case in FAULT_CASES.items():
-                try:
-                    tried = case(None, base, options.busybox)
-                    if not tried:
-                        raise Failure("no interruption happened: the fake mv, cp and rm never ran")
-                    print(f"PASS setup: {name} ({tried} interruptions)")
-                except Failure as error:
-                    failures += 1
-                    print(f"FAIL setup: {name}: {error}")
+
+    # Each case has a pretend head unit of its own, so the cases run side by side, each in a process (the test's own
+    # work is Python's, which threads would queue). A fault case is six sweeps, one per command and way of stopping it.
+    sweeps = [
+        (name, command, action) for name in FAULT_CASES for command in ("mv", "cp", "rm") for action in ("kill", "fail")
+    ]
+    calls = [lambda case=case: run_case(case) for case in CASES.values()]
+    if not options.quick:
+        calls += [lambda s=s: FAULT_CASES[s[0]](s[1], s[2], base, options.busybox) for s in sweeps]
+    try:
+        results = forked(calls, os.cpu_count() or 1)
     finally:
         shutil.rmtree(base, ignore_errors=True)
+    lines = []
+    for name, (error, _) in zip(CASES, results):
+        lines.append(f"FAIL setup: {name}: {error}" if error else f"PASS setup: {name}")
+    for name in [] if options.quick else FAULT_CASES:
+        mine = [result for sweep, result in zip(sweeps, results[len(CASES) :]) if sweep[0] == name]
+        errors = [error for error, _ in mine if error]
+        tried = sum(count for error, count in mine if not error)
+        if not errors and not tried:
+            errors = ["no interruption happened: the fake mv, cp and rm never ran"]
+        lines.append(f"FAIL setup: {name}: {errors[0]}" if errors else f"PASS setup: {name} ({tried} interruptions)")
+    print("\n".join(lines))
+    failures = sum(line.startswith("FAIL") for line in lines)
     if failures:
         print(f"test_setup: {failures} failure(s)")
         return 1
