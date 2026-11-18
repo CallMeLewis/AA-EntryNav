@@ -326,6 +326,7 @@ int main(int argc, char** argv) {
         knob.setVolumeLevelCallback(evo::ServiceApp::volumeLevel, &app);
         knob.setHardKeyCallback(evo::ServiceApp::hardKey, &app);
         knob.setAppKeyCallback(evo::ServiceApp::appKey, &app);
+        knob.setAsideKeyCallback(evo::ServiceApp::asideKey, &app);
         {
             FILE* f = fopen(evo::contract::kDayNightFile, "r");
             int v = 0;  // written by the iDrive app (CDS)
@@ -375,6 +376,10 @@ int main(int argc, char** argv) {
         knob.setOwned(owned);
         if (turn.focusMsg && turn.active) {
             app.session.postVideoFocus(turn.focusMsg == 1);
+        }
+        if (turn.mediaKey) {  // after the focus: the phone opens its media app on the picture it now shows
+            app.session.postKeyEvent(aa::AAK_MEDIA, true);
+            app.session.postKeyEvent(aa::AAK_MEDIA, false);
         }
         if (logsKept) {
             // Wireless or cable: how long the phone went without sending anything. A silent phone is pinged after 2 s

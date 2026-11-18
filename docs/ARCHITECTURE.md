@@ -66,6 +66,8 @@ the same session over USB.
   name, so there is no file and no network port, and only root or the service's own user may send on it.
 - **Stepping aside.** `peek_timing` decides when the picture clears or dims so iDrive's volume bar, popups and driving
   mode changes show. `aside_wait` times how long a phone waits for the app's "show" before coming up anyway.
+  `media_key_jump` decides when MEDIA, pressed over iDrive while Android Auto's sound plays, brings Android Auto back
+  on its media app.
 - **The picture.** `evo_video` feeds the H.264 stream to the car's decoder, `libxsvideo`, whose C interface
   `xsv_api.h` declares. `omap_dmabuf` holds the buffers that carry the stream, and `evo_ilm` places and stacks the
   surfaces through LayerManager's command-line tool. `evo_pill` shows the volume pill on a Wayland surface of its own,
@@ -160,7 +162,7 @@ Four tests compare against frozen records, byte for byte, and a change to those 
 Others cover the parts that are easy to get wrong in a car:
 
 - When to step aside or wait: `test_peek_timing.cpp`, `test_hold_machine.cpp`, `test_popup_peek.cpp`,
-  `test_aside_wait.cpp`, `test_session_silence.cpp`.
+  `test_aside_wait.cpp`, `test_session_silence.cpp`, `test_media_key_jump.cpp`.
 - Life cycles: `test_wireless_lifecycle.cpp` for Bluetooth then Wi-Fi, `test_evo_control.cpp` for the control channel
   through the app's own calls.
 - Hostile or odd input: `test_aa_frame.cpp`, `test_pb.cpp`, `test_parsers.cpp`.

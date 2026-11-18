@@ -55,6 +55,7 @@ constexpr char kServiceLog[] = "/tmp/aa-entrynav-service.log";
 constexpr char kServiceLogOld[] = "/tmp/aa-entrynav-service.old.log";  // the log's previous megabyte (log_profile.hpp)
 constexpr char kStateFile[] = "/tmp/aa-entrynav-state";                // "state pid overlay", written by the service
 constexpr char kAppKeyFile[] = "/tmp/aa-entrynav-appkey";              // a key that also moved iDrive went to AA
+constexpr char kMediaJumpFile[] = "/tmp/aa-entrynav-media";            // MEDIA over iDrive: the app shows AA
 constexpr char kDayNightFile[] = "/tmp/aa-entrynav-daynight";          // day or night, written by the app
 constexpr char kCarFile[] = "/tmp/aa-entrynav-car";                    // the car's own details, by the app
 constexpr char kWirelessLock[] = "/tmp/aa-entrynav-wireless.lock";     // one wireless start at a time

@@ -35,6 +35,7 @@ ServiceApp::ServiceApp(uint16_t p, bool v, volatile sig_atomic_t* quit)
       asking(false),
       inCall(false),
       pendingFocus(0),
+      pendingMediaKey(false),
       sppLinks(0),
       tcpLinks(0),
       videoFrames(0),
@@ -145,6 +146,8 @@ ServiceApp::Turn ServiceApp::turn(bool service) {
     }
     t.focusMsg = pendingFocus;
     pendingFocus = 0;
+    t.mediaKey = pendingMediaKey && t.active;
+    pendingMediaKey = false;
     t.idleForAdvert = !tcpPreparing && !t.active && (service || (!sppLinks && !tcpLinks));
     pthread_mutex_unlock(&mu);
     if (gaveUp) {
@@ -313,18 +316,56 @@ void ServiceApp::appKey(const char* name, void* user) {
     ELOG("ServiceApp", "key %s: sent to Android Auto, which stays on screen; iDrive brought back under it", name);
 }
 
+// MEDIA pressed while iDrive has the screen (evo_knob.cpp). With our media route built, iDrive takes CarPlay for the
+// playing source and asks it for its now-playing screen, which does nothing without an iPhone (media_key_jump.hpp). So
+// the iDrive app is asked to bring Android Auto forward (kMediaJumpFile), and its "show" sends MEDIA to the phone.
+// NAV and COM stay iDrive's.
+void ServiceApp::asideKey(const char* name, void* user) {
+    if (strcmp(name, "MEDIA") != 0) {
+        return;
+    }
+    ServiceApp* a = static_cast<ServiceApp*>(user);
+    const bool session = a->session.isActive();
+    const bool route = a->audio.holdsRoute();  // takes the audio's own lock: never under mu
+    pthread_mutex_lock(&a->mu);
+    const bool jump = a->videoEnabled && a->mediaJump.pressed(session, route, a->reverse || a->inCall, monoMs());
+    pthread_mutex_unlock(&a->mu);
+    if (!jump) {
+        ELOG("ServiceApp", "key MEDIA with iDrive on screen: iDrive's (%s)",
+             !session ? "no session"
+             : !route ? "Android Auto's sound not on the car"
+                      : "call or reverse gear");
+        return;
+    }
+    const std::string tmp = std::string(contract::kMediaJumpFile) + ".tmp";
+    const int fd = replaceTmpFile(tmp.c_str(), 0644);
+    bool written = false;
+    if (fd >= 0) {
+        static const char kLine[] = "media\n";
+        written = write(fd, kLine, sizeof(kLine) - 1) == static_cast<ssize_t>(sizeof(kLine) - 1);
+        close(fd);
+        written = written && rename(tmp.c_str(), contract::kMediaJumpFile) == 0;
+    }
+    ELOG("ServiceApp", "key MEDIA with iDrive on screen while Android Auto's sound plays: %s",
+         written ? "the iDrive app is asked to show Android Auto" : "cannot ask the iDrive app");
+}
+
 // Commands from the iDrive app (service mode): show, hide, await, drivemode, popup, gear, call, daynight, quit.
 void ServiceApp::command(const ControlCommand& c, void* user) {
     ServiceApp* a = static_cast<ServiceApp*>(user);
     pthread_mutex_lock(&a->mu);
+    bool mediaKey = false;
     if (c.verb == "show") {
         a->focus = true;
         a->asking = false;
         a->pendingFocus = 1;
+        mediaKey = a->mediaJump.shown(monoMs());
+        a->pendingMediaKey = a->pendingMediaKey || mediaKey;
     } else if (c.verb == "hide") {
         a->focus = false;
         a->asking = false;
         a->pendingFocus = 2;
+        a->mediaJump.cancel();
     } else if (c.verb == "await") {
         // iDrive performs no screen request of an app while one of its own windows is on top, and the knob acts on
         // whatever iDrive shows under Android Auto. So the app first brings iDrive to its blank page, then says
@@ -361,6 +402,9 @@ void ServiceApp::command(const ControlCommand& c, void* user) {
              c.arg ? "left to iDrive" : "to Android Auto");
     }
     pthread_mutex_unlock(&a->mu);
+    if (mediaKey) {
+        ELOG("ServiceApp", "Android Auto shown for MEDIA: its media app opens");
+    }
     if (c.verb == "daynight") {
         a->applyDayNight(c.arg, "iDrive app");
     }
@@ -414,6 +458,7 @@ void ServiceApp::ended(void* user) {
     pthread_mutex_lock(&a->mu);
     a->focus = false;
     a->asking = false;
+    a->mediaJump.cancel();
     pthread_mutex_unlock(&a->mu);
     a->server.notifySessionEnded();
     ELOG("ServiceApp", "session ended");

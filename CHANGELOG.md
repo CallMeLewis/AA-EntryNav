@@ -16,6 +16,11 @@ Each version links to the commit or tag its archive was built from.
 
 ### Fixed
 
+- **MEDIA opens Android Auto while its sound plays over Wi-Fi.** With sound over Wi-Fi, pressing MEDIA on the iDrive
+  controller from an iDrive screen did nothing, because iDrive took the music for CarPlay's and asked CarPlay to open.
+  Now Android Auto comes back on its media app, as MEDIA already does while Android Auto is on screen. With the radio
+  or Bluetooth playing, MEDIA is iDrive's as before. The steering-wheel roller still shows an empty list in the
+  cluster.
 - **A phone on the cable gets time to finish its old session before reconnecting.** After a session ends, the same
   phone waits 5 seconds before another attempt. If the session could not start, it waits 10 seconds. During either
   pause, unplugging and plugging it in again is noticed, and a phone can connect over Wi-Fi. Before, a session that

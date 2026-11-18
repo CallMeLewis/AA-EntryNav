@@ -229,6 +229,8 @@ test-host: test-parsers test-spp-host test-kombi-host test-gps-host test-capture
 	./tests/test-audio-mixer
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_prompt_path.cpp -o tests/test-prompt-path
 	./tests/test-prompt-path
+	$(HOST_CXX) $(HOST_FLAGS) tests/test_media_key_jump.cpp -o tests/test-media-key-jump
+	./tests/test-media-key-jump
 	gcc -std=c99 -Wall -Wextra -Werror -shared -fPIC tests/fake_asound.c -o tests/fake-asound.so
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_evo_audio.cpp platform/evo_audio.cpp platform/evo_alsa_out.cpp \
 	    platform/audio_route.cpp platform/vmost_client.cpp platform/evo_process.cpp -ldl -o tests/test-evo-audio

@@ -129,6 +129,12 @@ public:
         appKeyCb_ = cb;
         appKeyUser_ = user;
     }
+    // NAV, MEDIA or COM on the controller pressed while iDrive has the screen (the key stays with iDrive), on key-down.
+    // The caller may bring Android Auto forward (platform/media_key_jump.hpp).
+    void setAsideKeyCallback(HardKeyCallback cb, void* user) {
+        asideKeyCb_ = cb;
+        asideKeyUser_ = user;
+    }
     // Each volume level the car reports (any source: knob, steering wheel, iDrive). Called on the vMOST thread.
     using VolumeLevelCallback = void (*)(const VolumeLevel&, void*);
     void setVolumeLevelCallback(VolumeLevelCallback cb, void* user) {
@@ -184,6 +190,8 @@ private:
     void* volUser_;
     HardKeyCallback appKeyCb_;
     void* appKeyUser_;
+    HardKeyCallback asideKeyCb_;
+    void* asideKeyUser_;
     std::atomic<bool> phoneToIdrive_;
     bool telDown_;
     bool voiceDown_;

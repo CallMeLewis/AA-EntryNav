@@ -330,6 +330,36 @@ void statusRun(void*) {
     postRunnable(app, g_statusRunnable, kStatusPollMs);
 }
 
+// ---- MEDIA with iDrive on screen while Android Auto's sound plays (platform/media_key_jump.hpp) --------------------
+// The service writes the file as MEDIA is pressed; Android Auto comes forward as with the Open row, and the service
+// sends MEDIA to the phone once it gets the "show". Checked more often than the status, so the key feels immediate.
+const unsigned kMediaJumpPollMs = 200;
+const long kMediaJumpMaxAgeS = 2;  // older: a press the app did not see in time (iDrive busy), not acted on
+AppRunnable g_mediaJumpRunnable;
+
+void mediaJumpRun(void*) {
+    bmw::PluginApp* app = g_runApp;
+    if (!app) {
+        return;
+    }
+    struct stat st;
+    if (stat(contract::kMediaJumpFile, &st) == 0) {
+        unlink(contract::kMediaJumpFile);
+        const long age = static_cast<long>(time(nullptr) - st.st_mtime);  // both from the car's clock
+        const ServiceState d = readServiceState();
+        if (age < 0 || age > kMediaJumpMaxAgeS) {
+            alog("MEDIA: request %ld s old, not acted on", age);
+        } else if (d.onScreen()) {
+            alog("MEDIA: Android Auto already on screen");
+        } else if (!readyToShow(d)) {
+            alog("MEDIA: Android Auto not shown (service %s, call or reverse gear, or stopping)", d.state);
+        } else {
+            g_hold.showAndHold("MEDIA key", monoSeconds());
+        }
+    }
+    postRunnable(app, g_mediaJumpRunnable, kMediaJumpPollMs);
+}
+
 // ---- the car's CDS properties, subscribed once the app runs ---------------------------------------------------------
 AppRunnable g_subRunnable;
 void subscribeRun(void*) {
@@ -362,6 +392,9 @@ bool appOnInit(bmw::PluginApp* self) {
     postRunnable(self, g_subRunnable, 1500);
     makeRunnable(g_statusRunnable, &statusRun);
     postRunnable(self, g_statusRunnable, 2000);
+    unlink(contract::kMediaJumpFile);  // a press from before this start is not acted on
+    makeRunnable(g_mediaJumpRunnable, &mediaJumpRun);
+    postRunnable(self, g_mediaJumpRunnable, 2000);
     return ok;
 }
 

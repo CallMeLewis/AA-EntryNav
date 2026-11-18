@@ -131,6 +131,30 @@ int main() {
         app.pendingFocus = 0;
         onScreen(app, false);
     }
+    {  // MEDIA with iDrive on screen: the iDrive app is asked only while our route plays; its "show" sends MEDIA
+        unlink(evo::contract::kMediaJumpFile);
+        evo::ServiceApp::asideKey("NAV", &app);
+        evo::ServiceApp::asideKey("MEDIA", &app);  // no session, no route: iDrive's
+        assert(access(evo::contract::kMediaJumpFile, F_OK) != 0);
+        evo::ControlCommand show, hide;
+        show.verb = "show";
+        hide.verb = "hide";
+        show.hasArg = hide.hasArg = false;
+        show.arg = hide.arg = 0;
+        evo::ServiceApp::command(show, &app);
+        assert(!app.pendingMediaKey);  // the Open row's "show": no key
+        app.mediaJump.pressed(true, true, false, evo::monoMs());
+        evo::ServiceApp::command(hide, &app);
+        evo::ServiceApp::command(show, &app);
+        assert(!app.pendingMediaKey);  // "hide" in between: not the press's
+        app.mediaJump.pressed(true, true, false, evo::monoMs());
+        evo::ServiceApp::command(show, &app);
+        assert(app.pendingMediaKey);
+        app.pendingMediaKey = false;
+        app.pendingFocus = 0;
+        app.focus = true;
+        onScreen(app, false);
+    }
     {  // "await": the next session starts aside, until "show"; "hide" and the phone's own focus request end the wait
         evo::ControlCommand await, show, hide;
         await.verb = "await";

@@ -25,6 +25,7 @@
 #include "evo_pill.hpp"
 #include "evo_video.hpp"
 #include "kombi_nav.hpp"
+#include "media_key_jump.hpp"
 #include "peek_timing.hpp"
 #include "tcp_server.hpp"
 #include "usb_loop.hpp"
@@ -48,6 +49,7 @@ public:
         bool pictureStarted;  // the first picture has arrived
         int focusMsg;         // 1 tell the phone FOCUSED, 2 NATIVE, 0 nothing (after the inputs took their turn)
         bool idleForAdvert;   // nothing connected or being prepared: the advertisement may be refreshed
+        bool mediaKey;        // send MEDIA to the phone: MEDIA brought Android Auto forward (media_key_jump.hpp)
     };
 
     // port: the TCP port told to the phone. quit: the main loop's flag, set by the "quit" command.
@@ -79,6 +81,7 @@ public:
     static void hardKey(const char* name, void* user);
     static void knobEvent(const aa::CcsEvent& ev, void* user);
     static void appKey(const char* name, void* user);
+    static void asideKey(const char* name, void* user);
     static void command(const ControlCommand& c, void* user);
     static void videoFocus(bool projected, uint32_t reason, void* user);
     static void micRequest(bool open, void* user);
@@ -140,7 +143,9 @@ public:
     bool inCall;       // service: a call, from the iDrive app (the app keeps a phone aside through it)
     AsideWait aside;   // service: how long such a session has waited, under mu
     int pendingFocus;  // service: 1 tell the phone FOCUSED, 2 NATIVE (sent from the main loop)
-    PeekTiming peek;   // under mu
+    MediaKeyJump mediaJump;  // service: MEDIA with iDrive on screen, under mu
+    bool pendingMediaKey;    // service: MEDIA to the phone, sent from the main loop after the focus
+    PeekTiming peek;         // under mu
     EvoPill pill;
     unsigned sppLinks, tcpLinks;
     std::atomic<unsigned> videoFrames;  // counted on the session thread without mu

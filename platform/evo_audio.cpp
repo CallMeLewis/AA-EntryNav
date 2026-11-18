@@ -301,6 +301,13 @@ void EvoAudio::releaseRoute(bool wait) {
     }
 }
 
+bool EvoAudio::holdsRoute() {
+    pthread_mutex_lock(&mu_);
+    const bool held = routeAsked_;  // false before start() and after stop() (releaseRoute)
+    pthread_mutex_unlock(&mu_);
+    return held;
+}
+
 bool EvoAudio::musicPlaying(uint32_t nowMs) const {
     return musicOpen_ || (musicSoundMs_ && nowMs - musicSoundMs_ < kMusicRecentMs);
 }

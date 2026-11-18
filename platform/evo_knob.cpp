@@ -119,6 +119,8 @@ EvoKnob::EvoKnob()
       volUser_(nullptr),
       appKeyCb_(nullptr),
       appKeyUser_(nullptr),
+      asideKeyCb_(nullptr),
+      asideKeyUser_(nullptr),
       phoneToIdrive_(false),
       telDown_(false),
       voiceDown_(false),
@@ -413,6 +415,10 @@ void EvoKnob::onMessage(const VmostMsgView& m) {
         if (ev[i].kind == 1 && (isAppKey(ev[i].keycode) || isBackKey(ev[i].keycode)) && ev[i].down && send &&
             appKeyCb_) {
             appKeyCb_(what, appKeyUser_);
+        }
+        if (ev[i].kind == 1 && isAppKey(ev[i].keycode) && ev[i].down && !send && mode_ == INPUT_FORWARD &&
+            asideKeyCb_) {
+            asideKeyCb_(what, asideKeyUser_);
         }
         // A press goes to Android Auto only while it owns the screen; a release goes wherever its press went.
         bool forward = send;

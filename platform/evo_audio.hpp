@@ -69,6 +69,8 @@ public:
     void data(uint8_t channel, const uint8_t* pcm, size_t len);
     void sessionEnded();
     AudioMixer::Stats stats();  // what came in, what was lost, what was played
+    // Our media route is asked of the car for this session: iDrive then takes CarPlay for the playing source.
+    bool holdsRoute();
 
     // The session's callbacks (core/aa_session.hpp), user = the EvoAudio.
     static void onData(uint8_t channel, const uint8_t* pcm, size_t len, uint64_t pts, void* user);
