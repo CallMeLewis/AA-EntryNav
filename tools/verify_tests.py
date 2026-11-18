@@ -29,7 +29,10 @@ def make_targets():
         if not line.endswith("\\"):
             joined.append(buffer)
             buffer = ""
+    # NAME = words, as test-host's list of tests is written: $(NAME) among a target's prerequisites stands for them.
+    lists = {m.group(1): m.group(2) for m in (re.match(r"^([A-Z_]+) = (.*)$", line) for line in joined) if m}
     for line in joined:
+        line = re.sub(r"\$\(([A-Z_]+)\)", lambda m: lists.get(m.group(1), m.group(0)), line)
         if line.startswith("\t"):
             if current:
                 targets[current][1].append(line.strip())

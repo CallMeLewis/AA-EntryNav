@@ -10,8 +10,8 @@
 #                  test tone on one of the car's sound outputs, and evo-usb, Android Auto's cable link by hand (ARM,
 #                  not installed)
 #   test-arm-all   every ARM program tests/run_qemu.py runs (ARM)
-#   test-host      the tests that run on the PC itself (host compiler, libdbus-1-dev, dbus, protoc, python3-protobuf);
-#                  as root, also tools/setup.sh in a chroot, with BUSYBOX=$(sh tests/build_busybox.sh)
+#   test-host      the tests that run on the PC itself (host compiler, libdbus-1-dev, dbus, protoc, python3-protobuf),
+#                  one target each, so give it -j (make check does); as root, also tools/setup.sh in a chroot, with BUSYBOX=$(sh tests/build_busybox.sh)
 #   check          what CI runs without a copy of the car's system: style, verify_core, verify_repo, verify_tests,
 #                  test-host. What needs the copy runs in tools/verify_arm.py (pre-push hook, publish_release.py)
 #   clean          every build output
@@ -69,7 +69,7 @@ LIFECYCLE_OBJ = $(PLATFORM_OBJ) platform/evo_touch.o platform/evo_knob.o platfor
 VIDEO_LIBS = -l:libxsvideo.so.4 -l:libdrm_omap.so.1 -l:libdrm.so.2 -lpthread -lrt
 
 .PHONY: all daemon hmiapp dev-tools check style clean verify_core verify_binary verify_wireless verify_repo verify_tests \
-        test-host test-parsers test-spp-host test-kombi-host test-gps-host test-capture-host test-touch-live \
+        test-host test-touch-live \
         tests/evo-check-host test-arm-all test-pb-arm-build test-sdr-arm-build test-kombi-arm-build \
         test-session-silence-arm-build test-presentation-arm-build test-wireless-lifecycle-arm-build \
         test-gps-arm-build test-trial-arm-build test-hmiapp-arm-build test-spawn-arm-build test-lm-cli-arm-build \
@@ -146,7 +146,10 @@ style:
 	$(SHELLCHECK) -s sh -S style .githooks/pre-push
 	$(SHELLCHECK) -S style toolchain/tc.sh
 	$(SHELLCHECK) -s sh -S style tools/setup.sh tools/backup_headunit.sh tools/ric_capture.sh
-check: style verify_core verify_repo verify_tests test-host
+# JOBS: how many PC tests build and run at once.
+JOBS ?= $(shell nproc)
+check: style verify_core verify_repo verify_tests
+	$(MAKE) -j$(JOBS) --output-sync=target test-host
 
 # ---- tests on the PC ------------------------------------------------------------------------------------------------
 HOST_CXX ?= g++
@@ -163,128 +166,188 @@ tests/evo-check-host:
 	$(HOST_CXX) $(HOST_FLAGS) tools/evo_check.cpp platform/alps_spp.cpp platform/alps_spp_codec.cpp \
 	    platform/evo_process.cpp $(HOST_DBUS) -o $@
 
-test-host: test-parsers test-spp-host test-kombi-host test-gps-host test-capture-host tests/evo-check-host
+# One target per test, each building its program and running it, so that `make -j` runs them side by side:
+#   make -j$(nproc) --output-sync=target test-host     (make check does this by itself)
+HOST_TESTS = \
+    host-evo-elf host-spp-snapshot host-trial-recovery host-evo-ilm host-video-presentation host-evo-input \
+    host-evo-control host-peek-timing host-aside-wait host-sdr-g20 host-evo-sdr host-evo-wlan host-knob-fallback \
+    host-usb host-usb-link host-spawn-attr host-popup-peek host-hold-machine host-bt-audio-plan \
+    host-car-identity host-pin-lock host-qr-code host-flare-link host-qr-png host-crash-guard host-setup \
+    host-release-version host-log-profile host-pb host-volume-pill host-audio-mixer host-prompt-path \
+    host-media-key-jump host-evo-audio host-aa-frame host-aa-messages host-tcp-server host-session-phone \
+    host-wireless-phone host-parsers host-alps-spp host-bluez-adapter host-kombi-phone host-kombi-display \
+    host-kombi-graph host-kombi-guide host-kombi-client host-kombi-nav host-bmw-guidance host-kombi-golden \
+    host-evo-gps host-gps-wire-oracle host-evo-capture host-evo-ric
+.PHONY: $(HOST_TESTS) tests/fake-vmostclient.so tests/fake-asound.so
+test-host: $(HOST_TESTS)
+
+host-evo-elf:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_evo_elf.cpp -o tests/test-evo-elf
 	if [ -f "$(SPP_FIXTURE_LIB)" ]; then AA_ENTRYNAV_FIXTURE_LIB="$(SPP_FIXTURE_LIB)" ./tests/test-evo-elf; else ./tests/test-evo-elf; fi
+host-spp-snapshot:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_spp_snapshot.cpp platform/evo_spp_snapshot.cpp -o tests/test-spp-snapshot
 	if [ -f "$(SPP_FIXTURE_LIB)" ]; then AA_ENTRYNAV_FIXTURE_LIB="$(SPP_FIXTURE_LIB)" ./tests/test-spp-snapshot; else echo "SKIP test-spp-snapshot: no copy of the car system"; fi
+host-trial-recovery:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_trial_recovery.cpp platform/alps_spp_codec.cpp -o tests/test-trial-recovery
 	./tests/test-trial-recovery
+host-evo-ilm: tests/evo-check-host
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_evo_ilm.cpp platform/evo_ilm.cpp platform/evo_process.cpp -o tests/test-evo-ilm
 	AA_ENTRYNAV_DIAGNOSTIC=./tests/evo-check-host ./tests/test-evo-ilm
+host-video-presentation:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_video_presentation.cpp platform/evo_video.cpp -o tests/test-video-presentation
 	./tests/test-video-presentation
+host-evo-input:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_evo_input.cpp platform/evo_touch.cpp platform/evo_knob.cpp platform/vmost_client.cpp \
 	    -ldl -o tests/test-evo-input
 	./tests/test-evo-input
+host-evo-control:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_evo_control.cpp platform/evo_control.cpp -o tests/test-evo-control
 	./tests/test-evo-control
+host-peek-timing:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_peek_timing.cpp platform/peek_timing.cpp -o tests/test-peek-timing
 	./tests/test-peek-timing
+host-aside-wait:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_aside_wait.cpp -o tests/test-aside-wait
 	./tests/test-aside-wait
+host-sdr-g20:
 	$(HOST_CXX) $(HOST_FLAGS) -Icore/include tests/test_sdr_g20.cpp core/sdr_builder.cpp platform/evo_sdr_sensors.cpp -o tests/test-sdr-g20
 	./tests/test-sdr-g20
+host-evo-sdr:
 	$(HOST_CXX) $(HOST_FLAGS) -Icore/include tests/test_evo_sdr.cpp core/sdr_builder.cpp platform/evo_sdr_sensors.cpp -o tests/test-evo-sdr
 	./tests/test-evo-sdr
+tests/fake-vmostclient.so:
 	gcc -std=c99 -Wall -Wextra -Werror -shared -fPIC tests/fake_vmostclient.c -o tests/fake-vmostclient.so
+host-evo-wlan: tests/fake-vmostclient.so
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_evo_wlan.cpp platform/evo_wlan.cpp platform/vmost_client.cpp -ldl -o tests/test-evo-wlan
 	./tests/test-evo-wlan $(CURDIR)/tests/fake-vmostclient.so
+host-knob-fallback: tests/fake-vmostclient.so
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_knob_fallback.cpp platform/evo_knob.cpp platform/vmost_client.cpp \
 	    -ldl -o tests/test-knob-fallback
 	./tests/test-knob-fallback $(CURDIR)/tests/fake-vmostclient.so
+host-usb:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_usb.cpp $(USB_SRC) -o tests/test-usb
 	./tests/test-usb
+host-usb-link:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_usb_link.cpp $(USB_SRC) -o tests/test-usb-link
 	./tests/test-usb-link
+host-spawn-attr:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_spawn_attr.cpp -o tests/test-spawn-attr
 	./tests/test-spawn-attr
+host-popup-peek:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_popup_peek.cpp -o tests/test-popup-peek
 	./tests/test-popup-peek
+host-hold-machine:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_hold_machine.cpp hmiapp/hold_machine.cpp -o tests/test-hold-machine
 	./tests/test-hold-machine
+host-bt-audio-plan:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_bt_audio_plan.cpp -o tests/test-bt-audio-plan
 	./tests/test-bt-audio-plan
+host-car-identity:
 	$(HOST_CXX) $(HOST_FLAGS) -Icore/include tests/test_car_identity.cpp core/sdr_builder.cpp -o tests/test-car-identity
 	./tests/test-car-identity
+host-pin-lock:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_pin_lock.cpp -o tests/test-pin-lock
 	./tests/test-pin-lock
+host-qr-code:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_qr_code.cpp hmiapp/qr_code.cpp -o tests/test-qr-code
 	./tests/test-qr-code
+host-flare-link:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_flare_link.cpp hmiapp/qr_code.cpp -o tests/test-flare-link
 	./tests/test-flare-link
+host-qr-png:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_qr_png.cpp hmiapp/qr_png.cpp hmiapp/qr_code.cpp -o tests/test-qr-png
 	./tests/test-qr-png
+host-crash-guard:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_crash_guard.cpp -o tests/test-crash-guard
 	./tests/test-crash-guard
+host-setup:
 	python3 tests/test_setup.py $(if $(BUSYBOX),--busybox $(BUSYBOX))
+host-release-version:
 	python3 -I tests/test_release_version.py
+host-log-profile:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_log_profile.cpp -o tests/test-log-profile
 	./tests/test-log-profile
+host-pb:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_pb.cpp -o tests/test-pb
 	./tests/test-pb
+host-volume-pill:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_volume_pill.cpp -o tests/test-volume-pill
 	./tests/test-volume-pill
+host-audio-mixer:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_audio_mixer.cpp -o tests/test-audio-mixer
 	./tests/test-audio-mixer
+host-prompt-path:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_prompt_path.cpp -o tests/test-prompt-path
 	./tests/test-prompt-path
+host-media-key-jump:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_media_key_jump.cpp -o tests/test-media-key-jump
 	./tests/test-media-key-jump
+tests/fake-asound.so:
 	gcc -std=c99 -Wall -Wextra -Werror -shared -fPIC tests/fake_asound.c -o tests/fake-asound.so
+host-evo-audio: tests/fake-asound.so
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_evo_audio.cpp platform/evo_audio.cpp platform/evo_alsa_out.cpp \
 	    platform/audio_route.cpp platform/vmost_client.cpp platform/evo_process.cpp -ldl -o tests/test-evo-audio
 	./tests/test-evo-audio $(CURDIR)/tests/fake-asound.so
+host-aa-frame:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_aa_frame.cpp core/aa_frame.cpp -o tests/test-aa-frame
 	./tests/test-aa-frame
+host-aa-messages:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_aa_messages.cpp core/aa_messages.cpp -o tests/test-aa-messages
 	./tests/test-aa-messages
+host-tcp-server:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_tcp_server.cpp core/tcp_server.cpp -o tests/test-tcp-server
 	./tests/test-tcp-server
+host-session-phone:
 	$(HOST_CXX) $(HOST_FLAGS) $(HOST_SSL_FLAGS) -Icore/include tests/test_session_phone.cpp $(SESSION_SRC) -lssl -lcrypto \
 	    -o tests/test-session-phone
 	./tests/test-session-phone tests/fixtures/session_phone.golden
+host-wireless-phone:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_wireless_phone.cpp core/wireless_setup.cpp -o tests/test-wireless-phone
 	./tests/test-wireless-phone tests/fixtures/wireless_phone.golden
-
-test-parsers:
+host-parsers:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_parsers.cpp platform/alps_spp_codec.cpp platform/evo_ap_config.cpp -o tests/test-parsers
 	./tests/test-parsers
-
-test-spp-host: tests/evo-check-host
+host-alps-spp: tests/evo-check-host
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_alps_spp.cpp platform/alps_spp.cpp platform/alps_spp_codec.cpp platform/evo_process.cpp $(HOST_DBUS) -o tests/test-alps-spp
 	env -u XDG_RUNTIME_DIR dbus-run-session -- sh -c 'DBUS_SYSTEM_BUS_ADDRESS="$$DBUS_SESSION_BUS_ADDRESS" AA_ENTRYNAV_TEST_BUS=1 AA_ENTRYNAV_DIAGNOSTIC=./tests/evo-check-host ./tests/test-alps-spp'
+host-bluez-adapter:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_bluez_adapter.cpp platform/bluez_adapter.cpp $(HOST_DBUS) -o tests/test-bluez-adapter
 	env -u XDG_RUNTIME_DIR dbus-run-session -- sh -c 'DBUS_SYSTEM_BUS_ADDRESS="$$DBUS_SESSION_BUS_ADDRESS" ./tests/test-bluez-adapter'
-
-test-kombi-host:
+host-kombi-phone:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_kombi_phone.cpp platform/kombi_phone.cpp -o tests/test-kombi-phone
 	./tests/test-kombi-phone
+host-kombi-display:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_kombi_display.cpp platform/kombi_display.cpp platform/kombi_phone.cpp \
 	    -o tests/test-kombi-display
 	./tests/test-kombi-display
+host-kombi-graph:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_kombi_graph.cpp platform/kombi_graph.cpp platform/kombi_someip.cpp \
 	    -o tests/test-kombi-graph
 	./tests/test-kombi-graph
+host-kombi-guide:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_kombi_guide.cpp $(KOMBI_SRC) -o tests/test-kombi-guide
 	./tests/test-kombi-guide
+host-kombi-client:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_kombi_client.cpp $(KOMBI_SRC) -o tests/test-kombi-client
 	./tests/test-kombi-client
+host-kombi-nav:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_kombi_nav.cpp $(KOMBI_SRC) -o tests/test-kombi-nav
 	./tests/test-kombi-nav
+host-bmw-guidance:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_bmw_guidance.cpp platform/evo_bmw_guidance.cpp $(HOST_DBUS) -o tests/test-bmw-guidance
 	env -u XDG_RUNTIME_DIR dbus-run-session -- ./tests/test-bmw-guidance
+host-kombi-golden:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_kombi_golden.cpp $(KOMBI_SRC) -o tests/test-kombi-golden
 	./tests/test-kombi-golden
-
-test-gps-host:
+host-evo-gps:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_evo_gps.cpp -o tests/test-evo-gps
 	./tests/test-evo-gps
+host-gps-wire-oracle: host-evo-gps
 	python3 tests/test_gps_wire_oracle.py
-
-test-capture-host:
+host-evo-capture:
 	$(HOST_CXX) $(HOST_FLAGS) tools/evo_capture.cpp -o tests/test-evo-capture
 	./tests/test-evo-capture --selftest
+host-evo-ric:
 	$(HOST_CXX) $(HOST_FLAGS) tools/evo_ric.cpp $(HOST_DBUS) -o tests/test-evo-ric
 	env -u XDG_RUNTIME_DIR dbus-run-session -- ./tests/test-evo-ric --selftest
 

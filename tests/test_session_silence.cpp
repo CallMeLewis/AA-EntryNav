@@ -48,6 +48,10 @@ static double silentPhone(bool wakes, double max_s) {
         }
         usleep(100000);
     }
+    // The session thread goes inactive first and calls back after: give it a moment on a busy machine.
+    for (int i = 0; lasted >= 0 && !g_ended && i < 200; ++i) {
+        usleep(10000);
+    }
     const int ended_now = g_ended;
     session.stop();
     close(peers[1]);

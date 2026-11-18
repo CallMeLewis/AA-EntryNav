@@ -162,6 +162,13 @@ public:
         feedLocked();
         pthread_mutex_unlock(&mu_);
     }
+    // True once the bridge waits for the phone's next data.
+    bool listening() {
+        pthread_mutex_lock(&mu_);
+        const bool waiting = pendingIn_ != nullptr;
+        pthread_mutex_unlock(&mu_);
+        return waiting;
+    }
     void unplug() {
         pthread_mutex_lock(&mu_);
         gone = true;
@@ -248,6 +255,10 @@ bool waitFor(bool (*condition)(void*), void* user, int ms) {
         usleep(5000);
     }
     return condition(user);
+}
+
+bool phoneListening(void* phone) {
+    return static_cast<FakePhone*>(phone)->listening();
 }
 
 bool bridgeStopped(void* bridge) {
@@ -495,6 +506,9 @@ int main() {
         CHECK(session >= 0);
         phone.send("hello", 16384);
         CHECK(readAll(session, 5, 2000) == "hello");
+        // Unplugged while the bridge waits for data, as a phone left alone is. Sooner, the bridge may be asking for
+        // that data at this instant and report the refusal as an I/O error instead.
+        CHECK(waitFor(phoneListening, &phone, 2000));
         phone.unplug();
         CHECK(waitFor(bridgeStopped, &bridge, 2000));
         char byte;

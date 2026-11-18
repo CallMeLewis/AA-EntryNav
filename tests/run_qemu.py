@@ -2,11 +2,14 @@
 """Run the ARM regression checks under QEMU, with the libraries of the copy of the car's system. Nothing else.
 
 Build them first: bash toolchain/tc.sh make all test-arm-all. Logs and a summary go to artifacts/validation-pc.
+The cases run side by side, QEMU_JOBS at once (default: one per processor): most of their time is spent waiting.
 """
 
 import json
+import os
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 from pathlib import Path
 
@@ -67,9 +70,16 @@ def main():
     out = ROOT / "artifacts/validation-pc"
     out.mkdir(parents=True, exist_ok=True)
     report = {"vehicle_connected": False, "visual_result": "NOT TESTED", "tests": {}}
-    for name, program, args, expected in CASES:
+
+    def run_case(case):
+        program, args = case[1], case[2]
+        return subprocess.run([*QEMU, str(ROOT / program), *args], cwd=ROOT, capture_output=True, text=True, timeout=60)
+
+    jobs = int(os.environ.get("QEMU_JOBS") or os.cpu_count() or 1)
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        results = list(pool.map(run_case, CASES))
+    for (name, program, _, expected), result in zip(CASES, results):
         path = ROOT / program
-        result = subprocess.run([*QEMU, str(path), *args], cwd=ROOT, capture_output=True, text=True, timeout=60)
         (out / f"{name}.log").write_text(result.stdout + result.stderr)
         if not passed(result, expected):
             raise SystemExit(f"FAIL ARM/QEMU {name} (exit {result.returncode})\n{result.stdout}{result.stderr}")

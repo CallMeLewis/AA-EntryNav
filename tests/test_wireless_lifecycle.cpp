@@ -71,6 +71,15 @@ static void awaitStarts(int count) {
     }
     assert(starts == count);
 }
+// The phone opens its Bluetooth link again. The loop closes the link it had after each handshake, on its own thread,
+// and that close would take this new link with it: wait for it first.
+static void offerLink() {
+    for (unsigned i = 0; i < 200 && borrowed; ++i) {
+        usleep(10000);
+    }
+    assert(!borrowed);
+    fixtureLink = true;
+}
 // One main-loop turn of the peeks, Android Auto on screen or not (no video in this test).
 static void onScreen(evo::ServiceApp& app, bool on, uint32_t later = 0) {
     app.peek.turn(evo::monoMs() + later, on);
@@ -199,14 +208,14 @@ int main() {
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, peers) == 0);
     assert(app.session.start(peers[0]) && app.session.isActive());
     preparing(false);
-    fixtureLink = true;  // the phone reopens SPP while its session runs on the Wi-Fi: offered the same Wi-Fi again
+    offerLink();  // the phone reopens SPP while its session runs on the Wi-Fi: offered the same Wi-Fi again
     awaitStarts(2);
     assert(app.session.isActive());
     pthread_mutex_lock(&app.mu);
     assert(app.sppLinks == 1);  // not a new start
     pthread_mutex_unlock(&app.mu);
     // A phone connection being prepared (the fake handshake leaves one): a returning link is held, not answered.
-    fixtureLink = true;
+    offerLink();
     usleep(350000);
     assert(starts == 2 && app.session.isActive());
     app.session.stop();
@@ -217,7 +226,7 @@ int main() {
     // handshake left a TCP connection being prepared: cleared first, so that only the cable holds the loop back.
     preparing(false);
     app.usbBusy = true;
-    fixtureLink = true;
+    offerLink();
     usleep(350000);
     assert(starts == 3);
     app.usbBusy = false;

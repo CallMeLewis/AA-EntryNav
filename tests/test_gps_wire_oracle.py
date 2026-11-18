@@ -2,7 +2,7 @@
 """Compare actual C++ GPS messages with pinned aasdk protobuf via Google's protoc/runtime.
 
 Requires protoc + python protobuf on the PC. No vehicle or telephone connection.
-Run after make test-gps-host. Add --arm after test-gps-arm-build to check ARM/QEMU too.
+Run after make host-evo-gps. Add --arm after test-gps-arm-build to check ARM/QEMU too.
 Expected coordinates are literal E7 values, independent of our C++ scaling/varint code.
 """
 

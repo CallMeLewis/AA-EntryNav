@@ -38,7 +38,15 @@ jobs:
         run: |
           git config --global --add safe.directory "$PWD"
           make verify_core verify_repo verify_tests
+      # The installer test needs a BusyBox that behaves like the car's; Debian's packages do not (tests/build_busybox.sh).
+      # Building it takes about 20 seconds, so it is kept between runs.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/aa-entrynav-busybox
+          key: busybox-${{ hashFiles('tests/build_busybox.sh') }}
       - name: PC tests
-        # The installer test needs a BusyBox that behaves like the car's; Debian's packages do not (tests/build_busybox.sh).
-        run: make test-host HOST_CXX=g++ BUSYBOX="$(sh tests/build_busybox.sh)"
+        # One make target per test, so they build and run side by side.
+        run: |
+          BUSYBOX="$(sh tests/build_busybox.sh)"
+          make -j"$(nproc)" --output-sync=target test-host HOST_CXX=g++ BUSYBOX="$BUSYBOX"
 
