@@ -2,7 +2,8 @@
 # Copyright (c) 2026 CallMeLewis
 # Refuses a push if a commit being pushed holds the car's password, a compiled program or a local-only folder, and, for
 # main and release/* branches, if the ARM build or a check that needs the copy of the car's system fails
-# (tools/verify_arm.py, on the pushed commit alone). CI runs everything else.
+# (tools/verify_arm.py, on the pushed commit alone). CI runs everything else. A push that changes documentation only
+# (tools/code_changes.py) skips the ARM check, as CI skips its run.
 # git gives the pushed refs on the standard input: "local-ref local-sha remote-ref remote-sha", one line each.
 python=
 for candidate in python3 python py; do
@@ -18,7 +19,7 @@ fi
 refs=$(cat)
 printf '%s\n' "$refs" | "$python" tools/verify_repo.py --pre-push || exit 1
 checked=
-printf '%s\n' "$refs" | while read -r _ local_sha remote_ref _; do
+printf '%s\n' "$refs" | while read -r _ local_sha remote_ref remote_sha; do
     case $remote_ref in
         refs/heads/main | refs/heads/release/*) ;;
         *) continue ;;
@@ -31,6 +32,18 @@ printf '%s\n' "$refs" | while read -r _ local_sha remote_ref _; do
         *" $local_sha "*) continue ;;
     esac
     checked="$checked $local_sha"
+    # Nothing but documentation since what the remote has: nothing for the ARM check to find. Any other answer,
+    # an error included (a remote commit this clone lacks), runs it.
+    case $remote_sha in
+        *[!0]*)
+            changed=0
+            "$python" tools/code_changes.py "$remote_sha" "$local_sha" </dev/null || changed=$?
+            if [ "$changed" -eq 3 ]; then
+                echo "Documentation only: ARM check skipped."
+                continue
+            fi
+            ;;
+    esac
     "$python" tools/verify_arm.py --commit "$local_sha" </dev/null || exit 1
 done || {
     echo "Push refused: the ARM build or its tests failed. See above." >&2

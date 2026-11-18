@@ -74,6 +74,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
+import code_changes  # noqa: E402
 import release_version  # noqa: E402
 import verify_arm  # noqa: E402
 
@@ -392,12 +393,14 @@ def require_ready():
     if not output("git", "branch", "-r", "--contains", head):
         sys.exit("FAIL: HEAD is not pushed, so CI has not tested it. Push it and wait for CI.")
     query = "[.check_runs[] | {name, status, conclusion}]"
-    runs = json.loads(output("gh", "api", f"repos/{REPO}/commits/{head}/check-runs", "--jq", query))
+    # CI starts no run for a commit that changes documentation only: the commit it tested is the last one before.
+    tested = code_changes.tested_commit(head)
+    runs = json.loads(output("gh", "api", f"repos/{REPO}/commits/{tested}/check-runs", "--jq", query))
     if not runs:
-        sys.exit(f"FAIL: CI has not run on {head[:7]}.")
+        sys.exit(f"FAIL: CI has not run on {tested[:7]}.")
     failed = [r["name"] for r in runs if r["status"] != "completed" or r["conclusion"] != "success"]
     if failed:
-        sys.exit(f"FAIL: CI has not passed on {head[:7]}: {', '.join(failed)}.")
+        sys.exit(f"FAIL: CI has not passed on {tested[:7]}: {', '.join(failed)}.")
     return head
 
 

@@ -2,11 +2,25 @@
 # The ARM build links against the car's libraries (BMW files), so it runs on a developer's machine, not here.
 name: CI
 
+# A push or pull request that changes documentation only (Markdown files and docs/) starts no run. NOTICE.md is not
+# documentation here: verify_core.py reads it. tools/code_changes.py holds the same rule for the pre-push hook and
+# publish_release.py, and the two must agree.
 on:
   push:
     # release/x.y.z: a published version rebuilt from its own commit with a fix that does not touch what ships.
     branches: [main, "release/**"]
+    paths:
+      - "**"
+      - "!**.md"
+      - "!docs/**"
+      - "NOTICE.md"
   pull_request:
+    paths:
+      - "**"
+      - "!**.md"
+      - "!docs/**"
+      - "NOTICE.md"
+  workflow_dispatch:
 
 permissions:
   contents: read

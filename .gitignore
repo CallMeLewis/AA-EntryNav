@@ -59,6 +59,7 @@ __pycache__/
 !/tools/evo_mfl.cpp
 !/tools/pc_headunit.cpp
 !/tools/car_sound_probe.sh
+!/tools/code_changes.py
 !/tools/setup.sh
 !/tools/evo_trial.cpp
 !/tools/format_sources.py
