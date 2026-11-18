@@ -35,6 +35,7 @@ public:
     DBusConnection* conn;
     std::atomic<bool> active, suppressUuid, suppressConfig;
     std::atomic<int> uuidRequests, dataRequests, writes, reads;
+    std::atomic<int> releaseAsked, released;  // releaseName(): asked for, and the bus's answer (0 until it comes)
     uint8_t config;
     std::mutex mu;
     std::vector<uint8_t> sent, lastUuid;
@@ -48,6 +49,8 @@ public:
           dataRequests(0),
           writes(0),
           reads(0),
+          releaseAsked(0),
+          released(0),
           config(0) {
         DBusError e;
         dbus_error_init(&e);
@@ -120,8 +123,24 @@ public:
         }
         return value == expected;
     }
+    // Gives the service's name back, as BMW's Bluetooth does when it stops. The service thread does it: a call that
+    // waits for its answer here, on the connection that thread reads, can lose the answer to it.
+    bool releaseName() {
+        releaseAsked = 1;
+        for (int i = 0; i < 2000 && !released; ++i) {
+            sleepMs(5);
+        }
+        return released == DBUS_RELEASE_NAME_REPLY_RELEASED;
+    }
     void loop() {
         while (active) {
+            if (releaseAsked.exchange(0)) {
+                DBusError e;
+                dbus_error_init(&e);
+                const int reply = dbus_bus_release_name(conn, "org.alps.evolution", &e);
+                dbus_error_free(&e);
+                released = reply > 0 ? reply : -1;
+            }
             dbus_connection_read_write(conn, 0);
             DBusMessage* m;
             while ((m = dbus_connection_pop_message(conn)) != 0) {
@@ -458,9 +477,7 @@ int main() {
     {
         evo::AlpsSppLink link;
         CHECK(link.start(2));
-        DBusError e;
-        dbus_error_init(&e);
-        CHECK(dbus_bus_release_name(fake.conn, "org.alps.evolution", &e) == DBUS_RELEASE_NAME_REPLY_RELEASED);
+        CHECK(fake.releaseName());
         for (int i = 0; i < 400 && link.running(); ++i) {
             sleepMs(5);
         }
