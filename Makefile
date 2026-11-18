@@ -146,8 +146,8 @@ style:
 	$(SHELLCHECK) -s sh -S style .githooks/pre-push
 	$(SHELLCHECK) -S style toolchain/tc.sh
 	$(SHELLCHECK) -s sh -S style tools/setup.sh tools/backup_headunit.sh tools/ric_capture.sh
-# JOBS: how many PC tests build and run at once.
-JOBS ?= $(shell nproc)
+# JOBS: how many PC tests build and run at once. Three per processor: most of a test's time is spent waiting.
+JOBS ?= $(shell expr $$(nproc) '*' 3)
 check: style verify_core verify_repo verify_tests
 	$(MAKE) -j$(JOBS) --output-sync=target test-host
 
@@ -167,7 +167,7 @@ tests/evo-check-host:
 	    platform/evo_process.cpp $(HOST_DBUS) -o $@
 
 # One target per test, each building its program and running it, so that `make -j` runs them side by side:
-#   make -j$(nproc) --output-sync=target test-host     (make check does this by itself)
+#   make -j24 --output-sync=target test-host     (make check does this by itself, with JOBS)
 HOST_TESTS = \
     host-evo-elf host-spp-snapshot host-trial-recovery host-evo-ilm host-video-presentation host-evo-input \
     host-evo-control host-peek-timing host-aside-wait host-sdr-g20 host-evo-sdr host-evo-wlan host-knob-fallback \

@@ -45,8 +45,9 @@ jobs:
           path: ~/.cache/aa-entrynav-busybox
           key: busybox-${{ hashFiles('tests/build_busybox.sh') }}
       - name: PC tests
-        # One make target per test, so they build and run side by side.
+        # One make target per test, so they build and run side by side: three per processor, since most of a test's
+        # time is spent waiting.
         run: |
           BUSYBOX="$(sh tests/build_busybox.sh)"
-          make -j"$(nproc)" --output-sync=target test-host HOST_CXX=g++ BUSYBOX="$BUSYBOX"
+          make -j"$(($(nproc) * 3))" --output-sync=target test-host HOST_CXX=g++ BUSYBOX="$BUSYBOX"
 

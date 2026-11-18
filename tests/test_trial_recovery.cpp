@@ -1,6 +1,25 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Exercise the actual supervisor recovery decisions with simulated Alps/ILM boundaries.
 // The real /proc reader and D-Bus encodings have separate process/integration tests.
+//
+// The supervisor's waits are usleep() loops against evo::monoMs(). Both are replaced below by a clock of the test's
+// own, which only a sleep moves, so 15 seconds of waiting pass at once and no check depends on the machine's speed.
+#include <unistd.h>
+
+#include "../platform/evo_log.hpp"
+
+namespace evo {
+static uint32_t g_testNowMs = 1000;
+inline uint32_t testMonoMs() {
+    return g_testNowMs;
+}
+}  // namespace evo
+static int testSleep(useconds_t us) {
+    evo::g_testNowMs += us / 1000;
+    return 0;
+}
+#define monoMs testMonoMs
+#define usleep testSleep
 #define main trial_entry_unused
 #include "../tools/evo_trial.cpp"
 #undef main

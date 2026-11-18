@@ -145,20 +145,44 @@ static void crashOrder() {
     assert(text.find("previous\n", previous + 1) == std::string::npos);
 }
 
+// The three sessions wait 5, 5 and 10 seconds on the real clock. Each runs in a process of its own, all at once, so the
+// test takes as long as the longest one.
+static pid_t inChild(void (*scenario)()) {
+    const pid_t child = fork();
+    assert(child >= 0);
+    if (child == 0) {
+        scenario();
+        _exit(0);
+    }
+    return child;
+}
+static void quietScenario() {
+    const double quiet = silentPhone(false, 10);
+    printf("silent phone, no wake-ups: ended after %.1f s\n", quiet);
+    assert(quiet > 4 && quiet < 7);  // 5 s of silence (kRxSilenceMs, core/aa_session.cpp)
+}
+static void wokenScenario() {
+    const double woken = silentPhone(true, 10);
+    printf("silent phone, woken 10 times a second: ended after %.1f s\n", woken);
+    assert(woken > 4 && woken < 7);
+}
+static void stuckScenario() {
+    const double stuck = stuckPhone(20);
+    printf("phone stuck in the handshake, a byte every 2 s: ended after %.1f s\n", stuck);
+    assert(stuck > 9 && stuck < 12);  // kSetupMs, core/aa_session.cpp
+}
+
 int main() {
     setvbuf(stdout, 0, _IONBF, 0);
     crashOrder();
     puts("PASS crash: crash line, then the hook, then the previous handler");
-    const double quiet = silentPhone(false, 10);
-    printf("silent phone, no wake-ups: ended after %.1f s\n", quiet);
-    assert(quiet > 4 && quiet < 7);  // 5 s of silence (kRxSilenceMs, core/aa_session.cpp)
-    const double woken = silentPhone(true, 10);
-    printf("silent phone, woken 10 times a second: ended after %.1f s\n", woken);
-    assert(woken > 4 && woken < 7);
+    const pid_t children[] = {inChild(quietScenario), inChild(wokenScenario), inChild(stuckScenario)};
+    for (size_t i = 0; i < sizeof(children) / sizeof(children[0]); ++i) {
+        int status = 0;
+        assert(waitpid(children[i], &status, 0) == children[i]);
+        assert(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    }
     puts("PASS session: a phone that disappears ends the session, even when the GPS keeps waking it");
-    const double stuck = stuckPhone(20);
-    printf("phone stuck in the handshake, a byte every 2 s: ended after %.1f s\n", stuck);
-    assert(stuck > 9 && stuck < 12);  // kSetupMs, core/aa_session.cpp
     puts("PASS session: a phone that never finishes the handshake ends the session after 10 s");
     return 0;
 }

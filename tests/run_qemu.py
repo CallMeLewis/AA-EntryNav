@@ -2,7 +2,7 @@
 """Run the ARM regression checks under QEMU, with the libraries of the copy of the car's system. Nothing else.
 
 Build them first: bash toolchain/tc.sh make all test-arm-all. Logs and a summary go to artifacts/validation-pc.
-The cases run side by side, QEMU_JOBS at once (default: one per processor): most of their time is spent waiting.
+The cases run side by side, QEMU_JOBS at once (default: three per processor): most of their time is spent waiting.
 """
 
 import json
@@ -75,7 +75,7 @@ def main():
         program, args = case[1], case[2]
         return subprocess.run([*QEMU, str(ROOT / program), *args], cwd=ROOT, capture_output=True, text=True, timeout=60)
 
-    jobs = int(os.environ.get("QEMU_JOBS") or os.cpu_count() or 1)
+    jobs = int(os.environ.get("QEMU_JOBS") or 3 * (os.cpu_count() or 1))
     with ThreadPoolExecutor(max_workers=jobs) as pool:
         results = list(pool.map(run_case, CASES))
     for (name, program, _, expected), result in zip(CASES, results):
