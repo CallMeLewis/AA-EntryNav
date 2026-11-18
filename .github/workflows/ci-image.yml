@@ -1,0 +1,38 @@
+# Builds the image CI's job runs in (.github/ci/Dockerfile) and pushes it to this repository's packages.
+# ci.yml names the image by TAG, so an image is never replaced under a running CI: raise TAG with each change to the
+# Dockerfile, wait for this workflow, then use the new tag in ci.yml.
+name: CI image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/ci/Dockerfile
+      - .github/workflows/ci-image.yml
+      - tests/build_busybox.sh
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/callmelewis/aa-entrynav-ci
+  TAG: "1"
+
+jobs:
+  build:
+    name: Build and push
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build
+        run: docker build -f .github/ci/Dockerfile -t "$IMAGE:$TAG" .
+      - name: Push
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          printf '%s' "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          docker push "$IMAGE:$TAG"
