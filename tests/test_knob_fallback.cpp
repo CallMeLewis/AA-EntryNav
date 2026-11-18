@@ -129,9 +129,11 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < 3; ++i) {
         CHECK(count(sent, kNew[i]) == 1);
     }
-    // + volume (2), phone button, voice button, volume level
-    CHECK(count(sent, "e5.01.") == 0 && count(sent, "op=1") == 3 + 5);
+    // + volume (2), phone button, voice button, roller and its push, volume level
+    CHECK(count(sent, "e5.01.") == 0 && count(sent, "op=1") == 3 + 7);
     CHECK(count(sent, "send addr=ffff 15.02.512 op=1 len=0") == 1);
+    CHECK(count(sent, "send addr=ffff 15.02.c30 op=1 len=0") == 1);
+    CHECK(count(sent, "send addr=ffff 15.02.c31 op=1 len=0") == 1);
     CHECK(count(sent, "\nregister e5.") == 3);  // instances 01, 03 and 05, as before
 
     // No answer and it has not been long enough: nothing yet.
@@ -143,7 +145,7 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < 2; ++i) {
         CHECK(count(sent, kOld[i]) == 1);
     }
-    CHECK(count(sent, "e5.03.") == 3 && count(sent, "e5.01.") == 2 && count(sent, "op=1") == 5 + 5);
+    CHECK(count(sent, "e5.03.") == 3 && count(sent, "e5.01.") == 2 && count(sent, "op=1") == 5 + 7);
     CHECK(count(sent, "send ") == count(sent, "op=1"));  // nothing but reads was ever sent
     // From then on the other known controller instances are copied too, and given back at the end.
     const char* const kMore[] = {"register e5.02\n", "register e5.10\n", "register e5.12\n", "register e5.14\n"};

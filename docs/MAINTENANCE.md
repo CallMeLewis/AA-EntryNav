@@ -120,10 +120,14 @@ session, the service asks for that connection on the car's network, as BMW's Car
 the `entertainment` output. It gives the route back when the session ends or Android Auto stops. While the route is
 ours, iDrive shows no Bluetooth audio selected, and the volume knob sets the level.
 
-Steering-wheel track changes and scrolling can fail with "no entertainment source selected" in the cluster. Media
-button forwarding and native entertainment-player integration are still under investigation. The
-[wheel capture guide](wheel-media-capture.md) records the separate roller and button messages without changing the
-source. Selecting Bluetooth audio is not a fix for the Wi-Fi-audio path.
+iDrive takes the music for CarPlay's but finds no CarPlay player without an iPhone, so its own wheel controls skip
+nothing and the cluster says "no active entertainment source" ([why](aa-media-source-re.md)). The service handles the
+steering-wheel roller itself, the way iDrive's own players use it: roll down then push for the next track, roll up
+then push for the previous one, within 4 seconds, whoever has the screen and outside calls. A push skips one track
+however far the roll went. The service log shows `steering wheel roller rolled down`, `steering wheel roller pushed:
+next track offered` and `steering wheel roller: next track`. The cluster still shows its message for a few seconds. With Bluetooth audio the roller is
+iDrive's, as before. The [wheel capture guide](wheel-media-capture.md) records the roller and button messages without
+changing the source.
 
 Each line of the file is optional:
 

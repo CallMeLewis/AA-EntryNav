@@ -53,7 +53,7 @@ then runs over that Wi-Fi and fills iDrive's screen.
 - You start and stop it under *Media*, *Android Auto*, and can have it start along with iDrive.
 - It answers to the car's own controls: the iDrive controller and its buttons, the touch screen, the steering wheel
   buttons and the voice button. With sound over Wi-Fi, MEDIA brings Android Auto back on its media app from any
-  iDrive screen.
+  iDrive screen, and rolling the steering-wheel roller then pushing it changes track.
 - Calls and the Assistant hear you through the car's microphone, and maps take their position from the car's GPS.
 - Android Auto's next turn also shows in the instrument cluster and the head-up display, on cars whose cluster takes
   it over the car's network, such as the G20 and the X3 G01. F-series clusters don't show it yet.

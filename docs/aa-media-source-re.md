@@ -9,8 +9,8 @@ With sound over Wi-Fi, Android Auto asks the car's audio manager for connection 
 (`platform/audio_route.hpp`). The music plays, but three things fail:
 
 1. The iDrive MEDIA key does nothing while iDrive is on screen.
-2. The steering-wheel roller opens the cluster's previous/next list, which shows no track information. Earlier the
-   cluster said "no active entertainment source".
+2. The steering-wheel roller shows "no active entertainment source" in the cluster (0.1.7, music playing). On
+   18 November it opened an empty previous/next list instead, while `evo-mfl` ran.
 3. Next and previous never reach the phone.
 
 The 18 November capture on the car (`artifacts/car-2026-11-18/`) shows the MEDIA presses reach iDrive and our service
@@ -73,6 +73,49 @@ The CarPlay stub handles `onTrackInformation_increment` / `_decrement`, `onDeckS
 A cluster with an empty list therefore means CARPLAY has no track to report. The roller list asks instance `0x70`, and
 nothing behind it knows about Android Auto.
 
+## Why the cluster says "no active entertainment source"
+
+Static analysis, 18 November 2026, after 0.1.7 showed the message with music playing, MEDIA pressed or not.
+
+The roller is iDrive's: `CHmiControlElementsMFLController::onRotaryStepsStatus` (`0x2567178`) turns RotarySteps into
+event `0x36` (value below `0x7F`, `0x7F - value` steps) or `0x37` (value above, `value - 0x7F` steps), ignoring `0x7F`
+and `0xFF`. The cluster's lists move one row down for `0x36` and up for `0x37` (`CHmiICListInputHandler::handleInput`,
+`0x35fdcb4`). `CHmiInstrumentClusterApp::onICControllerEvent` (`0x2c828d0`) calls `openCurrentState`
+(`0x2c8226c`) for both, which shows the menu of the cluster's current audio mode for 4 seconds.
+
+That mode does not come from the audio source. It is the IC audio mode (`IICAudioModeConstants::EMode`, names from
+`getICModeString`: `CDMM_CarPlay` is `0x2c`, `CDMM_NO_AUDIO` is `0x32`), which
+`CICEntertainmentSourcesListController::PlayerTypeToICMode` (`0x2ca5f7c`) derives from the active player in
+`CHmiModePlayerEvent`. `CEntModeButtonService` sends that event (`notifyModeSequenceListeners`, `0x26e9338`) from its
+list of registered mode handlers. `alignModeHandler` (`0x26e979c`) looks for the handler whose device plays; when none
+does it logs "Mode handler for currently playing audio source ... not found", and the cluster mode becomes
+`CDMM_NO_AUDIO`.
+
+CarPlay's handler (`CEntModeHandlerCarPlay`, made by `CEntPlayerCarPlay::initModeHandler`) only registers once
+`CEntModeHandlerBase::calculateModeHandlerAvailability` (`0x26e580c`) finds its device connected.
+`CDevCarPlay::isRemovableDeviceConnected` (`0x2682e24`) reads that from CARPLAY's `AuxIn_DeviceInfo2` on `0x24.0x70`:
+DeviceStatus must be 2. Without an iPhone it never is. So the audio service sees source `0x82` (MEDIA's check), while
+the entertainment side has no player for it.
+
+The cluster's "now playing" text follows the audio source instead (`CEntCurrentUpdaterHelper::setupUpdaterForAudioSource`,
+`0x2882240`): CarPlay's updater for `0x81` to `0x83`, the "no audio" one (`CEntInfoUpdaterNoAudio`, text `0x2000f550`)
+for source 0.
+
+What does not fix it:
+
+- Announcing a CarPlay device by sending `AuxIn_DeviceInfo2` as if from `0x24.0x70`. It would register the handler,
+  but CARPLAY owns that instance and answers iDrive's reads with the truth. When the status falls back to
+  disconnected while CarPlay's source plays, `CDevMediaPlayerAbstract::handleRemovableDeviceState` (`0x2803230`) asks
+  the audio service to drop it, which would cut Android Auto's sound. iDrive would also list CarPlay as a source.
+- The app-media path (A4A, `CICA4AController`). It has cluster text and skip actions for BMW Apps, but only for A4A
+  audio sources (`0x39` to `0x3e`, `0x7e`, `0x7f`, `0x8a`, `0x8c`), so it needs another route and a registered BMW
+  Apps audio session.
+
+What remains possible for the message: a mode handler of our own, registered from the iDrive app inside HmiMain3D
+through `IEntModeButtonService::registerModeHandler` (vtable slot `0x18`), active while route `0x315` is ours. The
+`IEntModeHandler` layout is known from `CEntModeHandlerCarPlay`'s vtable (`0x3843058`, 22 slots). It would put
+Android Auto into iDrive's source list and the MODE sequence too, so it needs care and a car to try it on.
+
 ## Proposal
 
 Keep `0x315`. Moving to another route would lose the radio switch-off and the volume behaviour that already work.
@@ -91,6 +134,13 @@ Verify on the car: no CarPlay popup or error appears, the hold machine does not 
 MEDIA with the radio or Bluetooth playing is unchanged.
 
 ### 2. Next and previous reach the phone
+
+Implemented differently on 18 November 2026 (`platform/wheel_roller.hpp`), not yet tried on the car. The cluster's
+mode is `CDMM_NO_AUDIO` (see above), so the roller never reaches CarPlay's skip list and iDrive sends no skip. The
+service reads RotarySteps and RotaryPress (`0xC31`, 1 pressed, 0 released; `onRotaryPressStatus`, `0x2567348`,
+event `0x38`, which plays the row the roll reached) itself. As with iDrive's own lists, a roll then a push within 4
+seconds sends Android Auto's next or previous track key, in the direction iDrive's lists use. With no list to show
+how far the roll went, one push is one skip. The rest of this section is the earlier plan, for the steering-wheel skip buttons some wheels have.
 
 Shadow FBlock `0x24` instance `0x70` for `TrackInformation` (`0x434`), the way the knob code shadows the iDrive
 controller. Turn Increment into AA's next-track key and Decrement into previous. Do it only while the session runs and
@@ -135,7 +185,8 @@ Before building it:
 
 ## Roller capture (18 November)
 
-`RotarySteps` (`0x15.02`, `0xC30`, Status) idles at `0x80`. Each movement sends a short burst of values around it,
-such as `81 80 7e 7d`, and up and down have not been told apart yet. `RotaryPress` (`0xC31`), `SearchSwitch1`
-(`0x511`) and `SpecialFunction` (`0x513`) did not change. iDrive handles the roller itself (it opened the cluster
-list), so change 2 hooks iDrive's skip request rather than decoding the roller.
+`RotarySteps` (`0x15.02`, `0xC30`, Status) answered our read with `0x80`, its last value. Each movement sends a
+short burst about 120 ms apart, such as `7e 7d` then `81 80`: below `0x7F` is down iDrive's lists, above is up (see
+above). Which way is physically up on the wheel has not been checked. `RotaryPress` (`0xC31`), `SearchSwitch1`
+(`0x511`) and `SpecialFunction` (`0x513`) did not change. Whether the roller was pushed during that capture is not
+recorded; if it was, its push reaches iDrive some other way and the roll-then-push skip needs that message instead.

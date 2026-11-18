@@ -82,6 +82,7 @@ public:
     static void knobEvent(const aa::CcsEvent& ev, void* user);
     static void appKey(const char* name, void* user);
     static void asideKey(const char* name, void* user);
+    static void wheelSkip(int direction, void* user);
     static void command(const ControlCommand& c, void* user);
     static void videoFocus(bool projected, uint32_t reason, void* user);
     static void micRequest(bool open, void* user);

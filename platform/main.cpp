@@ -327,6 +327,7 @@ int main(int argc, char** argv) {
         knob.setHardKeyCallback(evo::ServiceApp::hardKey, &app);
         knob.setAppKeyCallback(evo::ServiceApp::appKey, &app);
         knob.setAsideKeyCallback(evo::ServiceApp::asideKey, &app);
+        knob.setWheelSkipCallback(evo::ServiceApp::wheelSkip, &app);
         {
             FILE* f = fopen(evo::contract::kDayNightFile, "r");
             int v = 0;  // written by the iDrive app (CDS)

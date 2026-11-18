@@ -7,6 +7,15 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The steering-wheel roller changes tracks while Android Auto's sound plays over Wi-Fi.** As with the radio, roll
+  then push: roll down and push for the next track, roll up and push for the previous one, whether Android Auto or
+  iDrive is on screen. A push skips one track however far you rolled, and a roll without a push does nothing. iDrive
+  took the music for CarPlay's and found no CarPlay player without an iPhone, so the roller did nothing. The cluster
+  still shows "no active entertainment source" for a few seconds. During a call, and with Bluetooth audio, the roller
+  is iDrive's as before. The service now reads the roller and its push with one plain read each when it starts.
+
 ## [0.1.7] - 2026-11-18
 
 <!-- Flare Drive:

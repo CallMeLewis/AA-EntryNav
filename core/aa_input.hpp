@@ -11,6 +11,8 @@ enum AndroidKey {
     AAK_BACK = 4,
     AAK_CALL = 5,
     AAK_SEARCH = 84,
+    AAK_MEDIA_NEXT = 87,
+    AAK_MEDIA_PREVIOUS = 88,
     // The direction pad, clockwise: the controller's tilt, then its push.
     AAK_DPAD_UP = 19,
     AAK_DPAD_RIGHT = 22,

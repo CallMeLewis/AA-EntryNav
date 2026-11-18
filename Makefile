@@ -174,8 +174,8 @@ HOST_TESTS = \
     host-usb host-usb-link host-spawn-attr host-popup-peek host-hold-machine host-bt-audio-plan \
     host-car-identity host-pin-lock host-qr-code host-flare-link host-qr-png host-crash-guard host-setup \
     host-release-version host-log-profile host-pb host-volume-pill host-audio-mixer host-prompt-path \
-    host-media-key-jump host-evo-audio host-aa-frame host-aa-messages host-tcp-server host-session-phone \
-    host-wireless-phone host-parsers host-alps-spp host-bluez-adapter host-kombi-phone host-kombi-display \
+    host-media-key-jump host-wheel-roller host-evo-audio host-aa-frame host-aa-messages host-tcp-server \
+    host-session-phone host-wireless-phone host-parsers host-alps-spp host-bluez-adapter host-kombi-phone host-kombi-display \
     host-kombi-graph host-kombi-guide host-kombi-client host-kombi-nav host-bmw-guidance host-kombi-golden \
     host-evo-gps host-gps-wire-oracle host-evo-capture host-evo-ric
 .PHONY: $(HOST_TESTS) tests/fake-vmostclient.so tests/fake-asound.so
@@ -282,6 +282,9 @@ host-prompt-path:
 host-media-key-jump:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_media_key_jump.cpp -o tests/test-media-key-jump
 	./tests/test-media-key-jump
+host-wheel-roller:
+	$(HOST_CXX) $(HOST_FLAGS) tests/test_wheel_roller.cpp -o tests/test-wheel-roller
+	./tests/test-wheel-roller
 tests/fake-asound.so:
 	gcc -std=c99 -Wall -Wextra -Werror -shared -fPIC tests/fake_asound.c -o tests/fake-asound.so
 host-evo-audio: tests/fake-asound.so

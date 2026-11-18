@@ -8,6 +8,7 @@
 #include <cstring>
 #include <string>
 
+#include "aa_input.hpp"
 #include "evo_log.hpp"
 #include "evo_spp_snapshot.hpp"
 #include "evo_touch.hpp"
@@ -348,6 +349,25 @@ void ServiceApp::asideKey(const char* name, void* user) {
     }
     ELOG("ServiceApp", "key MEDIA with iDrive on screen while Android Auto's sound plays: %s",
          written ? "the iDrive app is asked to show Android Auto" : "cannot ask the iDrive app");
+}
+
+// A turn of the steering wheel roller (evo_knob.cpp, wheel_roller.hpp): the next or previous track, while Android
+// Auto's sound plays over Wi-Fi. With our media route built iDrive takes CarPlay for the playing source and finds no
+// player behind it, so the wheel skips nothing there. Without the route the radio or Bluetooth audio plays, and the
+// turn is iDrive's: Bluetooth audio skips by itself, and a skip here would skip twice.
+void ServiceApp::wheelSkip(int direction, void* user) {
+    ServiceApp* a = static_cast<ServiceApp*>(user);
+    const bool session = a->session.isActive();
+    const bool route = a->audio.holdsRoute();  // takes the audio's own lock
+    if (!session || !route) {
+        ELOG("ServiceApp", "steering wheel roller: iDrive's (%s)",
+             !session ? "no session" : "Android Auto's sound not on the car");
+        return;
+    }
+    const uint32_t key = direction > 0 ? aa::AAK_MEDIA_NEXT : aa::AAK_MEDIA_PREVIOUS;
+    a->session.postKeyEvent(key, true);
+    a->session.postKeyEvent(key, false);
+    ELOG("ServiceApp", "steering wheel roller: %s track", direction > 0 ? "next" : "previous");
 }
 
 // Commands from the iDrive app (service mode): show, hide, await, drivemode, popup, gear, call, daynight, quit.

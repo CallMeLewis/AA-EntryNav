@@ -226,6 +226,10 @@ iDrive carries on without it ([crash guard](MAINTENANCE.md#crash-guard)). Once t
 
 ## Steering-wheel media warning
 
+The service reads the steering-wheel roller as it reads the phone and voice buttons: a copy of ControlElementsMFL
+0x15.02's RotarySteps (0xC30) and RotaryPress (0xC31), each opened by one plain Get read when it starts. It changes no
+setting and sends nothing to the wheel. With sound over Wi-Fi, a roll then a push changes Android Auto's track.
+
 For the steering-wheel source warning with sound over Wi-Fi, the [wheel capture guide](wheel-media-capture.md)
 uses the developer tool `evo-mfl`. In addition to its existing read-only button queries, it sends plain Get requests
 for roller steps (0xC30) and roller press (0xC31) on ControlElementsMFL 0x15.02. It copies status messages without

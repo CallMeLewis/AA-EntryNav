@@ -37,6 +37,7 @@
 #include "evo_ccs.hpp"
 #include "input_mode.hpp"
 #include "vmost_client.hpp"
+#include "wheel_roller.hpp"
 
 namespace evo {
 
@@ -75,6 +76,11 @@ const uint16_t kMflVoiceFkt = 0x512;
 // so 50 ms above BMW's limit keeps a press from going to both.
 const uint32_t kVoiceHoldMs = 800;
 int decodeVoiceButton(const VmostMsgView& m);
+// The steering wheel roller, RotarySteps 0x15.02 0xC30 (platform/wheel_roller.hpp): its steps, positive down iDrive's
+// lists (next), negative up (previous); 0 for no movement or another message.
+int decodeRotarySteps(const VmostMsgView& m);
+// Its push, RotaryPress 0x15.02 0xC31: 1 pressed, 0 released, -1 otherwise (as the phone button).
+int decodeRotaryPress(const VmostMsgView& m);
 
 // Volume buttons, as HmiMain3D's CDevVolumeControl reads them (libhmil6services):
 //   CECenterStack       MOST 0x15 instance 0x0C fkt 0xC01 AudioVolumeButtonCS, Status: AudioVolume(0..3), Steps
@@ -141,6 +147,13 @@ public:
         levelCb_ = cb;
         levelUser_ = user;
     }
+    // The steering wheel roller rolled then pushed (platform/wheel_roller.hpp): 1 next track, -1 previous.
+    // Called on the knob thread, whoever has the screen, outside calls. The caller decides whether the phone gets it.
+    using WheelSkipCallback = void (*)(int direction, void*);
+    void setWheelSkipCallback(WheelSkipCallback cb, void* user) {
+        wheelCb_ = cb;
+        wheelUser_ = user;
+    }
     // During a phone call (iDrive's call screen) COM and the steering wheel phone button stay with iDrive.
     void setPhoneToIdrive(bool v) { phoneToIdrive_ = v; }
     void stop();
@@ -197,6 +210,11 @@ private:
     bool voiceDown_;
     bool voiceSent_;         // this hold has reached Android Auto
     uint32_t voiceSinceMs_;  // when the voice button went down (monoMs)
+    WheelSkipCallback wheelCb_;
+    void* wheelUser_;
+    WheelSkip wheel_;  // knob thread only
+    bool rollerDown_;  // the roller is pushed in
+    unsigned wheelLogs_;
     uint8_t pushPrev_[8];
     unsigned volumeSteps_;
     aa::CcsDecoder decoder_;

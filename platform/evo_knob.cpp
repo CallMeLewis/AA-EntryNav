@@ -82,6 +82,16 @@ int decodeTelephoneButton(const VmostMsgView& m) {
 int decodeVoiceButton(const VmostMsgView& m) {
     return decodeMflButton(m, kMflVoiceFkt);
 }
+int decodeRotarySteps(const VmostMsgView& m) {
+    if (m.fblock != kVolumeFblock || m.inst != kVolumeMflInstance || m.fkt != kMflRotaryStepsFkt || m.op != 0xC ||
+        !m.data || m.len < 1) {
+        return 0;
+    }
+    return rollerSteps(m.data[0]);
+}
+int decodeRotaryPress(const VmostMsgView& m) {
+    return decodeMflButton(m, kMflRotaryPressFkt);
+}
 
 bool isAppKey(uint32_t k) {
     return k == aa::AAK_TEL || k == aa::AAK_NAVIGATION || k == aa::AAK_MEDIA;
@@ -126,6 +136,10 @@ EvoKnob::EvoKnob()
       voiceDown_(false),
       voiceSent_(false),
       voiceSinceMs_(0),
+      wheelCb_(nullptr),
+      wheelUser_(nullptr),
+      rollerDown_(false),
+      wheelLogs_(0),
       volumeSteps_(0),
       otherProtocolLogged_(false),
       messages_(0),
@@ -350,6 +364,38 @@ void EvoKnob::onMessage(const VmostMsgView& m) {
             }
             voiceDown_ = false;
         }
+        // The steering wheel roller: roll up or down, then push, for the previous or next track. iDrive receives both
+        // too and shows its cluster message, which plays nothing while Android Auto's sound plays over Wi-Fi
+        // (platform/wheel_roller.hpp).
+        const int turned = decodeRotarySteps(m);
+        if (turned) {
+            wheel_.rolled(turned, now);
+            if (++wheelLogs_ <= 200) {
+                ELOG("Knob", "steering wheel roller rolled %s (%d step(s)): a push now skips %s",
+                     turned > 0 ? "down" : "up", turned > 0 ? turned : -turned,
+                     wheel_.pending(now) > 0   ? "to the next track"
+                     : wheel_.pending(now) < 0 ? "to the previous track"
+                                               : "nothing (reading its state)");
+            }
+        }
+        const int push = decodeRotaryPress(m);
+        if (push == 1 && !rollerDown_) {
+            rollerDown_ = true;
+            const int skip = wheel_.pushed(now);
+            const bool send = skip && mode_ == INPUT_FORWARD && wheelCb_ && !phoneToIdrive_;
+            if (++wheelLogs_ <= 200) {
+                ELOG("Knob", "steering wheel roller pushed: %s",
+                     !skip            ? "no roll just before it, nothing"
+                     : send           ? (skip > 0 ? "next track offered" : "previous track offered")
+                     : phoneToIdrive_ ? "call in progress: left to iDrive"
+                                      : "not forwarded");
+            }
+            if (send) {
+                wheelCb_(skip, wheelUser_);
+            }
+        } else if (push == 0) {
+            rollerDown_ = false;
+        }
         return;
     }
     if (m.fblock != kControllerFblock) {
@@ -504,6 +550,16 @@ void EvoKnob::run() {
                 const int vr2 = vmost_.send(&vm2);
                 ELOG("Knob", "steering wheel voice button 15.%02x function 0x%03x: read (Get) %s (%d)",
                      kVolumeMflInstance, kMflVoiceFkt, vr2 == 0 ? "sent" : "not sent", vr2);
+                // The roller and its push: the same read-only Get. The answers are their last state, not the driver.
+                static const uint16_t rollerFkt[2] = {kMflRotaryStepsFkt, kMflRotaryPressFkt};
+                for (int r = 0; r < 2; ++r) {
+                    VmostMsgOut rm;
+                    buildVmostGet(rm, kVolumeFblock, kVolumeMflInstance, rollerFkt[r], dummy);
+                    const int rr = vmost_.send(&rm);
+                    ELOG("Knob", "steering wheel roller 15.%02x function 0x%03x: read (Get) %s (%d)",
+                         kVolumeMflInstance, rollerFkt[r], rr == 0 ? "sent" : "not sent", rr);
+                }
+                wheel_.reset(monoMs());
             }
         }
         // Volume level: same passive copy; the Get (record PosX 1, PosY 0, read-only) opens vmostd's filter for it.

@@ -443,6 +443,86 @@ int main() {
             CHECK(rec.n == b0 + 2);
             pt.fkt = 0x512;
         }
+        // The roller, RotarySteps 15.02.C30 (below 0x7F down iDrive's lists, above up) and RotaryPress 15.02.C31 (1
+        // pressed, 0 released): a roll then a push is one skip, down the next track, up the previous. It goes to the
+        // wheel callback, not to the key callback; a roll alone does nothing, and nothing goes out during a call.
+        {
+            struct Turns {
+                static void got(int direction, void* u) {
+                    Turns* t = static_cast<Turns*>(u);
+                    t->last = direction;
+                    ++t->n;
+                }
+                int n, last;
+            } turns = {0, 0};
+            kk.setWheelSkipCallback(&Turns::got, &turns);
+            evo::VmostMsgView rv = tv;
+            rv.fkt = 0xC30;
+            uint8_t down2[1] = {0x7D}, up1[1] = {0x80}, still[1] = {0x7F}, none[1] = {0xFF};
+            rv.data = down2;
+            CHECK(evo::decodeRotarySteps(rv) == 2);
+            rv.data = up1;
+            CHECK(evo::decodeRotarySteps(rv) == -1);
+            rv.data = still;
+            CHECK(evo::decodeRotarySteps(rv) == 0);
+            rv.data = none;
+            CHECK(evo::decodeRotarySteps(rv) == 0);
+            rv.op = 0x1;  // our own Get
+            rv.data = down2;
+            CHECK(evo::decodeRotarySteps(rv) == 0);
+            rv.op = 0xC;
+            rv.fkt = 0x401;
+            CHECK(evo::decodeRotarySteps(rv) == 0);
+            rv.fkt = 0xC30;
+            evo::VmostMsgView pv2 = tv;
+            pv2.fkt = 0xC31;
+            uint8_t in[1] = {1}, out[1] = {0}, noinfo[1] = {3};
+            pv2.data = in;
+            CHECK(evo::decodeRotaryPress(pv2) == 1);
+            CHECK(evo::decodeRotarySteps(pv2) == 0);
+            pv2.data = out;
+            CHECK(evo::decodeRotaryPress(pv2) == 0);
+            pv2.data = noinfo;
+            CHECK(evo::decodeRotaryPress(pv2) == -1);
+            const int keysBefore = rec.n;
+            kk.onMessage(rv);     // rolled down
+            CHECK(turns.n == 0);  // a roll alone
+            pv2.data = in;
+            kk.onMessage(pv2);
+            kk.onMessage(pv2);  // still held: one push
+            pv2.data = out;
+            kk.onMessage(pv2);
+            CHECK(turns.n == 1 && turns.last == 1 && rec.n == keysBefore);
+            pv2.data = in;
+            kk.onMessage(pv2);  // pushed again with no roll before it
+            pv2.data = out;
+            kk.onMessage(pv2);
+            CHECK(turns.n == 1);
+            rv.data = up1;
+            kk.onMessage(rv);  // rolled up
+            pv2.data = in;
+            kk.onMessage(pv2);
+            pv2.data = out;
+            kk.onMessage(pv2);
+            CHECK(turns.n == 2 && turns.last == -1 && rec.n == keysBefore);
+            evo::EvoKnob kc;  // during a call: iDrive's
+            Turns callTurns = {0, 0};
+            kc.attachForTest(evo::INPUT_FORWARD, &Rec::ev, &rec);
+            kc.setWheelSkipCallback(&Turns::got, &callTurns);
+            kc.setPhoneToIdrive(true);
+            kc.onMessage(rv);
+            pv2.data = in;
+            kc.onMessage(pv2);
+            CHECK(callTurns.n == 0);
+            evo::EvoKnob ko;  // the observing mode only logs
+            Turns observed = {0, 0};
+            ko.attachForTest(evo::INPUT_OBSERVE, &Rec::ev, &rec);
+            ko.setWheelSkipCallback(&Turns::got, &observed);
+            ko.onMessage(rv);
+            ko.onMessage(pv2);
+            CHECK(observed.n == 0);
+            kk.setWheelSkipCallback(nullptr, nullptr);
+        }
         const int beforeHidden = rec.n;
         kk.setOwned(false);
         tv.data = t1;
@@ -677,6 +757,7 @@ int main() {
         "machine (press, drag, release, duplicate, fragmented frame, forced release, nothing before the picture), "
         "vMOST message -> controller decoder; keys as CarPlay has them (tap ignored, NAV/MEDIA/COM and steering wheel "
         "phone button -> AA apps, COM to iDrive during a call, BACK and a left tilt keep Android Auto up); console and "
-        "steering wheel volume buttons decoded; volume level (20.00.C08); touches on the 720p and 1080p canvases");
+        "steering wheel volume buttons decoded; steering wheel roller: roll then push -> one track skip; volume level "
+        "(20.00.C08); touches on the 720p and 1080p canvases");
     return 0;
 }
