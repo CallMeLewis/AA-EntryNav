@@ -7,6 +7,16 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-11-18
+
+<!-- Flare Drive:
+With sound over Wi-Fi, the MEDIA button now brings Android Auto back on its media app. A phone on the cable gets a
+few seconds to finish its old session before it reconnects.
+-->
+
+MEDIA brings Android Auto back while its sound plays over Wi-Fi, and phones on the cable reconnect more calmly. The
+service and the iDrive app change.
+
 ### Changed
 
 - **The wheel diagnostic tool now records the roller too.** `evo-mfl` reads `RotarySteps` (0xC30) and `RotaryPress`
@@ -278,7 +288,8 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 - **Changing the car's clock no longer upsets Android Auto's timing.** When GPS corrected the clock while driving, a
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
-[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.7
 [0.1.6]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.6
 [0.1.5]: https://github.com/CallMeLewis/AA-EntryNav/tree/2b475f0c2594c6b7b4849ddca0093c84648b9385
 [0.1.4]: https://github.com/CallMeLewis/AA-EntryNav/tree/6d271b999ed2f2d4d23ee61f7d7cbfa5cda2a43b
