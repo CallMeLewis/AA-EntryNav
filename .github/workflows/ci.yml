@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  packages: read # the job's image
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -19,16 +20,15 @@ jobs:
   linux:
     name: Style, content and PC tests
     runs-on: ubuntu-24.04
-    container: debian:12
+    # Debian 12 with the compilers, the style tools and the installer test's BusyBox: .github/ci/Dockerfile, built by
+    # ci-image.yml. A change there gets a new tag, named here once it is pushed.
+    container:
+      image: ghcr.io/callmelewis/aa-entrynav-ci:1
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 20
     steps:
-      - name: Install the tools
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends bzip2 ca-certificates curl dbus g++ gcc git libdbus-1-dev \
-            libssl-dev make pkg-config protobuf-compiler python3 python3-protobuf python3-venv shellcheck
-          python3 -m venv /opt/style
-          /opt/style/bin/pip install --quiet clang-format==18.1.8 ruff==0.6.9
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # verify_repo.py reads every commit
@@ -38,16 +38,10 @@ jobs:
         run: |
           git config --global --add safe.directory "$PWD"
           make verify_core verify_repo verify_tests
-      # The installer test needs a BusyBox that behaves like the car's; Debian's packages do not (tests/build_busybox.sh).
-      # Building it takes about 20 seconds, so it is kept between runs.
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/aa-entrynav-busybox
-          key: busybox-${{ hashFiles('tests/build_busybox.sh') }}
       - name: PC tests
         # One make target per test, so they build and run side by side: three per processor, since most of a test's
         # time is spent waiting.
-        run: |
-          BUSYBOX="$(sh tests/build_busybox.sh)"
-          make -j"$(($(nproc) * 3))" --output-sync=target test-host HOST_CXX=g++ BUSYBOX="$BUSYBOX"
+        # The installer test needs a BusyBox that behaves like the car's; Debian's packages do not. The image holds the
+        # one tests/build_busybox.sh builds.
+        run: make -j"$(($(nproc) * 3))" --output-sync=target test-host HOST_CXX=g++ BUSYBOX=/opt/busybox/busybox
 
