@@ -7,6 +7,16 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+## [0.1.8-test.1] - 2026-11-19
+
+<!-- Flare Drive:
+With sound over Wi-Fi, a short pause on the Wi-Fi or the cable no longer cuts the music, and the steering-wheel
+roller changes tracks. Roll it, then push.
+-->
+
+Music over Wi-Fi keeps playing through short pauses on the link, and the steering-wheel roller changes tracks. Only
+the service changes.
+
 ### Changed
 
 - **With sound over Wi-Fi, a short pause on the Wi-Fi or the cable no longer cuts the music.** About 0.4 s of music
@@ -304,7 +314,8 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 - **Changing the car's clock no longer upsets Android Auto's timing.** When GPS corrected the clock while driving, a
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
-[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.8-test.1...HEAD
+[0.1.8-test.1]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.8-test.1
 [0.1.7]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.7
 [0.1.6]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.6
 [0.1.5]: https://github.com/CallMeLewis/AA-EntryNav/tree/2b475f0c2594c6b7b4849ddca0093c84648b9385
