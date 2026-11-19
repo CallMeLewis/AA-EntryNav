@@ -90,7 +90,9 @@ the same session over USB.
   observed unplug/replug can cancel the wait. The fake-phone test exercises the same polling turn.
 - **Sound and microphone.** `evo_mic` feeds the car's microphone to the Assistant. For sound over Wi-Fi (the
   `audio-wifi` file), `evo_audio` receives the phone's two streams, `audio_mixer.hpp` mixes them, and `evo_alsa_out`
-  plays the result through the car's own `libasound`.
+  plays the result through the car's own `libasound`. `evo_audio` reports each byte of music once it is played, and
+  the session acks the phone's music messages by that count (`core/played_acks.hpp`), so the phone sends at the speed
+  the car plays.
 - **GPS and the car description.** `evo_gps` reads the car's GPS without disturbing BMW's navigation or CarPlay.
   `evo_sdr_sensors` removes the sensors the car can't feed from the description.
 - **Cluster and head-up display.** `kombi_nav` runs Android Auto's guidance on the cluster, with the `kombi-off` and

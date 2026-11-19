@@ -23,6 +23,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <initializer_list>
 #include <string>
 #include <vector>
@@ -547,7 +548,9 @@ private:
 struct Link {
     aa::AASession session;
     int phoneFd;
-    explicit Link(bool touch = true, bool wifiAudio = false) : phoneFd(-1) {
+    // playedForceMs: with the platform's sound, the media sink is acked once played, or at this limit (0: as it
+    // arrives).
+    explicit Link(bool touch = true, bool wifiAudio = false, uint64_t playedForceMs = 0) : phoneFd(-1) {
         int fds[2];
         if (socketpair(AF_UNIX, SOCK_STREAM, 0, fds) != 0) {
             fprintf(stderr, "FAIL socketpair\n");
@@ -556,6 +559,7 @@ struct Link {
         watch(session, touch);
         if (wifiAudio) {
             session.setAudioCallbacks(onAudio, onAudioStream);
+            session.setAckMediaWhenPlayed(playedForceMs != 0, playedForceMs);
         }
         phoneFd = fds[1];
         if (!session.start(fds[0])) {
@@ -1062,6 +1066,76 @@ void wifiAudio(std::vector<std::string>& log) {
     ended(link, log);
 }
 
+// Music acked once played: no ack for a media message until the player reports the end of its sound, speech acked as
+// it arrives, and a stream that starts over acked for what it left, under its old session id. The limit is far away:
+// the acks forced at it run on the clock, in unplayedMusic below.
+void musicPlayed(std::vector<std::string>& log) {
+    Link link(true, true, 600000);
+    Phone phone(link.phoneFd, log);
+    phone.handshake();
+    phone.discover();
+    log.push_back("-- music (session 3) of 4 and 8 bytes, and speech: only the speech is acked");
+    phone.send(9, kSealed, bytes({0x80, 0x01, 0x08, 0x03}));
+    phone.send(9, kSealed, bytes({0x00, 0x00, 0, 0, 0, 0, 0, 0, 0, 1}) + counting(4, 0));
+    phone.send(9, kSealed, bytes({0x00, 0x00, 0, 0, 0, 0, 0, 0, 0, 2}) + counting(8, 4));
+    phone.send(8, kSealed, bytes({0x80, 0x01, 0x08, 0x07}));
+    phone.send(8, kSealed, bytes({0x00, 0x00, 0, 0, 0, 0, 0, 0, 0, 3}) + counting(2, 0x40));
+    phone.settle();
+    log.push_back("-- 2 bytes played: no ack");
+    link.session.postMediaPlayed(2);
+    phone.settle();
+    log.push_back("-- 6 more, the end of the first message and half of the second: one ack");
+    link.session.postMediaPlayed(6);
+    phone.settle();
+    log.push_back("-- a third message, then the stream starts over (session 5): two acks under session 3");
+    phone.send(9, kSealed, bytes({0x00, 0x00, 0, 0, 0, 0, 0, 0, 0, 4}) + counting(4, 12));
+    phone.send(9, kSealed, bytes({0x80, 0x01, 0x08, 0x05}));
+    phone.settle();
+    log.push_back("-- its first message, played in one go with the next: two acks under session 5");
+    phone.send(9, kSealed, bytes({0x00, 0x00, 0, 0, 0, 0, 0, 0, 0, 5}) + counting(4, 16));
+    phone.send(9, kSealed, bytes({0x00, 0x00, 0, 0, 0, 0, 0, 0, 0, 6}) + counting(4, 20));
+    phone.settle();
+    link.session.postMediaPlayed(8);
+    phone.settle();
+    phone.leave();
+    ended(link, log);
+}
+
+// Music nobody plays is acked at the limit, so the phone's stream never stops: three messages, no report, and their
+// three acks come once the limit has passed and not before. On the clock, so kept out of the golden. An empty verdict
+// means it passed.
+std::string unplayedMusic() {
+    const char* const ack = "hu ch=9 fl=0b 8004 08001001";
+    const long long limit = 400;
+    std::vector<std::string> log;
+    Link link(true, true, limit);
+    Phone phone(link.phoneFd, log);
+    phone.handshake();
+    phone.discover();
+    phone.send(9, kSealed, bytes({0x80, 0x01, 0x08, 0x00}));
+    const long long since = monotonicMs();
+    for (int i = 0; i < 3; ++i) {
+        phone.send(9, kSealed, bytes({0x00, 0x00, 0, 0, 0, 0, 0, 0, 0, 1}) + counting(4, 0));
+    }
+    phone.settle();
+    // A machine too slow to get here before the limit cannot tell an ack that came too soon.
+    const bool beforeLimit = monotonicMs() - since < limit - 100;
+    long acks = std::count(log.begin(), log.end(), std::string(ack));
+    if (beforeLimit && acks != 0) {
+        return format("%ld ack(s) before the limit", acks);
+    }
+    while (acks < 3 && !phone.lost() && monotonicMs() - since < 3000) {
+        usleep(50000);
+        phone.settle();
+        acks = std::count(log.begin(), log.end(), std::string(ack));
+    }
+    const long long took = monotonicMs() - since;
+    if (acks != 3 || took < limit || !link.session.isActive()) {
+        return format("%ld ack(s) after %lld ms, session active=%d", acks, took, link.session.isActive() ? 1 : 0);
+    }
+    return std::string();
+}
+
 // A phone that stops speaking by itself (iDrive has the screen, no music) keeps its session as long as it answers the
 // head unit's pings. One that answers nothing loses it within the 5 s silence limit, pings or not. This runs on the
 // clock, so it is checked here and kept out of the golden. An empty verdict means it passed.
@@ -1120,6 +1194,7 @@ const Scenario kScenarios[] = {
     {"plain edges", plainEdges},     {"cut headers", cutHeaders},
     {"lifecycle", lifecycle},        {"sound over Wi-Fi", wifiAudio},
     {"broken stream", brokenStream}, {"goodbye", goodbye},
+    {"music played", musicPlayed},
 };
 
 void timedOut(int) {
@@ -1190,6 +1265,7 @@ int main(int argc, char** argv) {
     }
     const std::string quiet = writing ? std::string() : quietPhone();
     const std::string bye = writing ? std::string() : unansweredGoodbye();
+    const std::string unplayed = writing ? std::string() : unplayedMusic();
     takeEvents();
     fflush(stdout);
     dup2(console, 1);
@@ -1233,6 +1309,11 @@ int main(int argc, char** argv) {
         printf("FAIL session, goodbye: %s\n", bye.c_str());
         return 1;
     }
+    if (!unplayed.empty()) {
+        printf("FAIL session, music nobody plays: %s\n", unplayed.c_str());
+        return 1;
+    }
+    puts("PASS session, music nobody plays: its messages are acked at the limit, not before, and the session goes on");
     puts(
         "PASS session, goodbye: a phone that does not answer keeps its session past the wait, no session returns at "
         "once");

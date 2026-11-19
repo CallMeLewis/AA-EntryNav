@@ -44,6 +44,10 @@ const uint64_t kSetupMs = 10000;
 // drops. This many encrypted frames in a row that do not decrypt end the session. One that decrypts starts the count
 // again. Upstream (Sq00ky, 5ec2bad) ends its sessions at the same count.
 const unsigned kMaxUndecrypted = 16;
+// A media message whose sound nobody played within its limit is acked anyway (core/played_acks.hpp). While any waits
+// for its sound to be played, the thread wakes this often to see to it.
+const long kPlayedCheckMs = 250;
+const unsigned kForcedLogged = 5;
 const unsigned kFramesLoggedFirst = 40;  // per channel, then one frame in kFramesLoggedEvery
 const unsigned kFramesLoggedEvery = 3000;
 const unsigned kKeysLogged = 200;  // evo_knob logs every key anyway
@@ -73,15 +77,21 @@ AASession::AASession()
       thread_(0),
       vehicleFile_(nullptr),
       hdVideo_(false),
+      ackWhenPlayed_(false),
+      playedForceMs_(kPlayedForceMs),
       longestSilenceMs_(0),
       lastReceivedMs_(0),
       setupUntilMs_(0),
       undecrypted_(0),
       videoReady_(false),
       mediaMessages_(0),
-      microphoneChunks_(0) {
+      microphoneChunks_(0),
+      playedWaiting_(false),
+      playedAcked_(0),
+      forcedLogged_(0) {
     pthread_mutex_init(&lifecycleLock_, nullptr);
     pthread_mutex_init(&socketLock_, nullptr);
+    pthread_mutex_init(&playedLock_, nullptr);
     memset(mediaSessions_, 0, sizeof(mediaSessions_));
     audioMessages_[0] = audioMessages_[1] = 0;
     resetCounters();
@@ -89,6 +99,7 @@ AASession::AASession()
 
 AASession::~AASession() {
     stop();
+    pthread_mutex_destroy(&playedLock_);
     pthread_mutex_destroy(&socketLock_);
     pthread_mutex_destroy(&lifecycleLock_);
 }
@@ -156,6 +167,17 @@ void AASession::postCarLocation(const CarLocation& location) {
 
 void AASession::postMicData(const uint8_t* pcm, size_t len) {
     inbox_.postMicrophone(pcm, len);
+}
+
+void AASession::postMediaPlayed(size_t bytes) {
+    bool due;
+    {
+        MutexLock lock(playedLock_);
+        due = played_.played(bytes);
+    }
+    if (due) {
+        inbox_.nudge();  // only the session thread may use TLS: it sends the ack
+    }
 }
 
 // ---- lifecycle ----------------------------------------------------------------------------------------------------
@@ -237,6 +259,12 @@ bool AASession::start(int client_fd) {
     mediaMessages_ = 0;
     memset(mediaSessions_, 0, sizeof(mediaSessions_));
     audioMessages_[0] = audioMessages_[1] = 0;
+    {
+        MutexLock lock(playedLock_);
+        played_.clear();
+    }
+    playedWaiting_ = false;
+    playedAcked_ = forcedLogged_ = 0;
     lastReceivedMs_ = 0;  // the previous session's thread is joined
     longestSilenceMs_.store(0);
     resetCounters();
@@ -300,6 +328,13 @@ void AASession::run() {
         }
     }
     printf("[AASession] Session loop terminated.\n");
+    if (ackWhenPlayed_) {
+        MutexLock lock(playedLock_);
+        printf(
+            "[AASession] media acked once played: %u ack(s), %u forced after %u ms unplayed, at most %u unacked at "
+            "once\n",
+            playedAcked_, played_.forced(), static_cast<unsigned>(playedForceMs_), played_.mostWaiting());
+    }
     g_trail.stage = kTrailIdle;
     finish();
 }
@@ -345,8 +380,8 @@ bool AASession::receiveExactly(uint8_t* to, size_t size, size_t* received) {
             highest = wakeFd > highest ? wakeFd : highest;
         }
         timeval wait;
-        wait.tv_sec = 1;
-        wait.tv_usec = 0;
+        wait.tv_sec = playedWaiting_ ? 0 : 1;
+        wait.tv_usec = playedWaiting_ ? kPlayedCheckMs * 1000 : 0;
         const int ready = select(highest + 1, &readable, nullptr, nullptr, &wait);
         if (ready < 0) {
             if (errno == EINTR) {
@@ -357,6 +392,10 @@ bool AASession::receiveExactly(uint8_t* to, size_t size, size_t* received) {
         if (ready > 0 && wakeFd >= 0 && FD_ISSET(wakeFd, &readable)) {
             inbox_.emptyWake();
             sendCarInput();
+        }
+        if (playedWaiting_) {
+            // At every turn, whatever woke it: video keeps this loop from ever timing out.
+            sendPlayedAcks();
         }
         if (ready == 0 || !FD_ISSET(fd, &readable)) {
             // Silence is measured on the clock: car input wakes this loop far more often than once a second.
@@ -439,6 +478,31 @@ bool AASession::sendPlain(uint8_t channel, const Message& message) {
 bool AASession::sendSealed(uint8_t channel, const Message& message, uint8_t flags) {
     std::vector<uint8_t> records;
     return tls_.seal(&message[0], message.size(), records) && sendFrame(channel, flags, &records[0], records.size());
+}
+
+void AASession::sendPlayedAcks() {
+    unsigned count, forced;
+    {
+        MutexLock lock(playedLock_);
+        const unsigned before = played_.forced();
+        count = played_.take(locationClockMs(), playedForceMs_);
+        forced = played_.forced() - before;
+        playedWaiting_ = played_.waiting() != 0;
+    }
+    for (unsigned i = 0; i < count; ++i) {
+        if (!sendSealed(channel::kMediaAudio, message::mediaAck(mediaSessions_[channel::kMediaAudio & 31]))) {
+            break;  // the send shut the socket: the session ends
+        }
+        ++playedAcked_;
+    }
+    if (forced && forcedLogged_ < kForcedLogged) {
+        ++forcedLogged_;
+        printf(
+            "[AASession] %u media ack(s) sent after %u ms with their sound not played (the player takes nothing: no "
+            "output, or it is stopped)%s\n",
+            forced, static_cast<unsigned>(playedForceMs_),
+            forcedLogged_ == kForcedLogged ? "; not logged again this session" : "");
+    }
 }
 
 // Our ping is encrypted, as the phone's own pings are. False before the TLS handshake has ended: nothing can be sealed

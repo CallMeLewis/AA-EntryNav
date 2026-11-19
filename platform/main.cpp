@@ -78,6 +78,11 @@ bool trialReady(evo::SppSnapshotReader& reader, unsigned instance, const TrialBa
     }
     return ok;
 }
+// The playback thread and the session thread say how much of the phone's music has been played.
+void onMediaPlayed(size_t bytes, void* session) {
+    static_cast<aa::AASession*>(session)->postMediaPlayed(bytes);
+}
+
 void usage(const char* argv0) {
     printf(
         "Usage: %s --monitor | --introspect | --run [options]\n"
@@ -230,10 +235,14 @@ int main(int argc, char** argv) {
     // Sound over Wi-Fi only with its settings file, and only if the car's sound library loads: else the phone is told
     // about no media sink and its sound stays on the car's Bluetooth.
     evo::AudioSettings audioSettings;
+    app.audio.setMediaPlayed(onMediaPlayed, &app.session);
     const bool wifiAudio =
         evo::loadAudioSettings(evo::contract::kAudioWifi, audioSettings) && app.audio.start(audioSettings);
     if (wifiAudio) {
         app.session.setAudioCallbacks(evo::EvoAudio::onData, evo::EvoAudio::onStream, &app.audio);
+        // The phone's music is acked as the car plays it: about 0.4 s of it then waits here, against a pause on the
+        // Wi-Fi, and the phone cannot send faster or slower than the car plays for long.
+        app.session.setAckMediaWhenPlayed(true);
     }
     if (cableOnly) {
         ELOG("Main", "cable only: no hotspot, no listener on the Wi-Fi; media over %s",

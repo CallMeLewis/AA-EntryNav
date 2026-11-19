@@ -29,6 +29,12 @@ const uint32_t kMusicRecentMs = 3000;     // the phone's music counts as playing
 const uint32_t kPromptMaxMs = 15000;      // a prompt waiting for its route keeps this much, the oldest goes
 const uint32_t kPromptPrebufferMs = 60;   // as the mix does for speech
 const uint32_t kPromptFlushMs = 80;
+const unsigned kGapsLogged = 20;  // gaps and trims of the music in a session, each: then one in kGapsLogEvery
+const unsigned kGapsLogEvery = 20;
+
+bool logged(unsigned count) {
+    return count <= kGapsLogged || count % kGapsLogEvery == 0;
+}
 
 // The formats of the description sent to the phone (core/include/dhu_sdp.h, as core/sdr_builder.cpp leaves it):
 // channel 9 has one configuration, channel 8 two.
@@ -158,6 +164,11 @@ EvoAudio::EvoAudio()
       started_(false),
       quit_(false),
       routeAsked_(false),
+      mediaPlayed_(nullptr),
+      mediaPlayedUser_(nullptr),
+      mediaDryMs_(0),
+      mediaGaps_(0),
+      mediaTrims_(0),
       promptThread_(0),
       promptThreadRunning_(false),
       promptHead_(0),
@@ -374,6 +385,7 @@ void EvoAudio::stream(uint8_t channel, bool started, uint32_t config) {
     pthread_mutex_lock(&mu_);
     if (s == AudioMixer::kMedia) {
         musicOpen_ = false;
+        mediaDryMs_ = 0;  // stopped by the phone: its next sound is no gap ending
     }
     if (s == AudioMixer::kSpeech && promptAlt_) {
         promptEnded_ = true;
@@ -388,13 +400,23 @@ void EvoAudio::stream(uint8_t channel, bool started, uint32_t config) {
 
 void EvoAudio::data(uint8_t channel, const uint8_t* pcm, size_t len) {
     AudioMixer::Stream s = AudioMixer::kMedia;
-    if (!streamOf(channel, s) || len < 2) {
+    if (!streamOf(channel, s)) {
+        return;
+    }
+    // Media that will never be played, or that left the queue: all of it unless the mix takes it below.
+    size_t played = s == AudioMixer::kMedia ? len : 0;
+    if (len < 2) {
+        if (played && mediaPlayed_) {
+            mediaPlayed_(played, mediaPlayedUser_);
+        }
         return;
     }
     // The phone's bytes are little-endian samples at any address: copied into place first.
     std::vector<int16_t> samples(len / 2);
     memcpy(&samples[0], pcm, samples.size() * 2);
     const uint32_t now = monoMs();
+    unsigned long trimmedMs = 0;
+    unsigned trims = 0;
     pthread_mutex_lock(&mu_);
     if (started_ && !quit_) {
         if (s == AudioMixer::kSpeech && promptAlt_) {
@@ -409,11 +431,24 @@ void EvoAudio::data(uint8_t channel, const uint8_t* pcm, size_t len) {
             if (s == AudioMixer::kMedia) {
                 musicSoundMs_ = now ? now : 1;
             }
-            mixer_.push(s, &samples[0], samples.size(), now);
+            const unsigned long droppedBefore = mixer_.stats().dropped[s];
+            const size_t taken = mixer_.push(s, &samples[0], samples.size(), now);
+            if (s == AudioMixer::kMedia) {
+                played = len - taken * sizeof(int16_t) + mixer_.takePlayedBytes(s);
+                trimmedMs = (mixer_.stats().dropped[s] - droppedBefore) / (kMixRate / 1000);
+                trims = trimmedMs ? ++mediaTrims_ : 0;
+            }
             pthread_cond_signal(&cv_);
         }
     }
     pthread_mutex_unlock(&mu_);
+    if (played && mediaPlayed_) {
+        mediaPlayed_(played, mediaPlayedUser_);
+    }
+    if (trims && logged(trims)) {
+        ELOG(kTag, "media: more than %u ms waited, the oldest %lu ms dropped (trim %u of this session)",
+             static_cast<unsigned>(AudioMixer::kMediaMaxQueueMs), trimmedMs, trims);
+    }
 }
 
 void EvoAudio::sessionEnded() {
@@ -426,6 +461,8 @@ void EvoAudio::sessionEnded() {
     promptPlaying_ = false;
     musicOpen_ = false;
     musicSoundMs_ = 0;
+    mediaDryMs_ = 0;
+    mediaGaps_ = mediaTrims_ = 0;
     const PromptPath::Action prompt = path_.stop();
     pthread_cond_signal(&promptCv_);
     pthread_mutex_unlock(&mu_);
@@ -447,10 +484,12 @@ void EvoAudio::onStream(uint8_t channel, bool started, uint32_t config, void* us
 void EvoAudio::logStats(const char* when) {
     const AudioMixer::Stats stats = this->stats();
     ELOG(kTag,
-         "%s: media %lu ms in (%lu ms lost, %lu gap(s)), speech %lu ms in (%lu ms lost, %lu gap(s)), %lu ms played",
+         "%s: media %lu ms in (%lu ms lost, %lu gap(s), at most %lu ms waiting), speech %lu ms in (%lu ms lost, %lu "
+         "gap(s)), %lu ms played",
          when, stats.framesIn[AudioMixer::kMedia] / 48, stats.dropped[AudioMixer::kMedia] / 48,
-         stats.underruns[AudioMixer::kMedia], stats.framesIn[AudioMixer::kSpeech] / 48,
-         stats.dropped[AudioMixer::kSpeech] / 48, stats.underruns[AudioMixer::kSpeech], stats.framesOut / 48);
+         stats.underruns[AudioMixer::kMedia], stats.mostWaiting[AudioMixer::kMedia] / 48,
+         stats.framesIn[AudioMixer::kSpeech] / 48, stats.dropped[AudioMixer::kSpeech] / 48,
+         stats.underruns[AudioMixer::kSpeech], stats.framesOut / 48);
 }
 
 void* EvoAudio::threadStub(void* arg) {
@@ -622,8 +661,23 @@ void EvoAudio::loop() {
     for (;;) {
         pthread_mutex_lock(&mu_);
         bool have = false;
+        size_t played = 0;                // media that left the queue in this turn
+        unsigned gap = 0, back = 0;       // the music ran dry (its number in this session), or plays again
+        uint32_t quietMs = 0, dryMs = 0;  // how long the phone had sent none, and how long nothing played
         if (!quit_) {
-            have = mixer_.mix(period, kPeriodFrames, monoMs());
+            const uint32_t mixAt = monoMs();
+            const unsigned long gaps = mixer_.stats().underruns[AudioMixer::kMedia];
+            have = mixer_.mix(period, kPeriodFrames, mixAt);
+            played = mixer_.takePlayedBytes(AudioMixer::kMedia);
+            if (mixer_.stats().underruns[AudioMixer::kMedia] != gaps) {
+                gap = ++mediaGaps_;
+                mediaDryMs_ = mixAt ? mixAt : 1;
+                quietMs = mixAt - mixer_.lastPushMs(AudioMixer::kMedia);
+            } else if (mediaDryMs_ && mixer_.playing(AudioMixer::kMedia)) {
+                back = mediaGaps_;
+                dryMs = mixAt - mediaDryMs_;
+                mediaDryMs_ = 0;
+            }
             if (!have) {
                 // Queued but not playing yet: its prebuffer or its flush delay is close. Else wait for sound, waking
                 // for the drain and the close of an open PCM.
@@ -640,6 +694,16 @@ void EvoAudio::loop() {
         pthread_mutex_unlock(&mu_);
         if (quit) {
             break;
+        }
+        if (played && mediaPlayed_) {
+            mediaPlayed_(played, mediaPlayedUser_);
+        }
+        // Each gap as it happens, with what tells a link that stalled (the phone sent nothing for a while) from a
+        // phone that sends slower than the car plays (it sent a moment ago).
+        if (gap && logged(gap)) {
+            ELOG(kTag, "media ran dry: nothing from the phone for %u ms (gap %u of this session)", quietMs, gap);
+        } else if (back && logged(back)) {
+            ELOG(kTag, "media plays again after %u ms", dryMs);
         }
         const uint32_t now = monoMs();
         if (!have) {

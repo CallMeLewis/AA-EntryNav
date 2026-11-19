@@ -174,7 +174,7 @@ HOST_TESTS = \
     host-usb host-usb-link host-spawn-attr host-popup-peek host-hold-machine host-bt-audio-plan \
     host-car-identity host-pin-lock host-qr-code host-flare-link host-qr-png host-crash-guard host-setup \
     host-release-version host-log-profile host-pb host-volume-pill host-audio-mixer host-prompt-path \
-    host-media-key-jump host-wheel-roller host-evo-audio host-aa-frame host-aa-messages host-tcp-server \
+    host-media-key-jump host-wheel-roller host-evo-audio host-aa-frame host-played-acks host-aa-messages host-tcp-server \
     host-session-phone host-wireless-phone host-parsers host-alps-spp host-bluez-adapter host-kombi-phone host-kombi-display \
     host-kombi-graph host-kombi-guide host-kombi-client host-kombi-nav host-bmw-guidance host-kombi-golden \
     host-evo-gps host-gps-wire-oracle host-evo-capture host-evo-ric
@@ -294,6 +294,9 @@ host-evo-audio: tests/fake-asound.so
 host-aa-frame:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_aa_frame.cpp core/aa_frame.cpp -o tests/test-aa-frame
 	./tests/test-aa-frame
+host-played-acks:
+	$(HOST_CXX) $(HOST_FLAGS) tests/test_played_acks.cpp -o tests/test-played-acks
+	./tests/test-played-acks
 host-aa-messages:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_aa_messages.cpp core/aa_messages.cpp -o tests/test-aa-messages
 	./tests/test-aa-messages

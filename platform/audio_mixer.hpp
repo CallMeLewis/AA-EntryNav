@@ -7,6 +7,10 @@
 // while speech plays, and comes back after it, both in a ramp. A queue that grows too long (the phone's clock runs
 // faster than the car's, or the car's output stalls) loses its oldest sound rather than fall ever further behind.
 //
+// The phone sends media only as fast as it is played here (core/played_acks.hpp, takePlayedBytes): about ten of its
+// messages wait, 0.4 s of music, where 0.1 s waited before. Media's queue limit is above that level and is reached
+// only after the output stalled. Speech is sent on the phone's own clock, as before.
+//
 // Pure: no clock, no thread, no sound library. The caller gives the time and holds its own lock.
 // tests/test_audio_mixer.cpp.
 #ifndef AA_ENTRYNAV_PLATFORM_AUDIO_MIXER_HPP
@@ -29,17 +33,20 @@ public:
     enum : unsigned {
         kMediaPrebufferMs = 100,
         kSpeechPrebufferMs = 60,
-        kFlushMs = 80,       // nothing more received this long: what waits plays
-        kMaxQueueMs = 400,   // more than this waiting: the oldest goes...
-        kKeepQueueMs = 150,  // ...down to this
+        kFlushMs = 80,            // nothing more received this long: what waits plays
+        kMaxQueueMs = 400,        // speech: more than this waiting: the oldest goes...
+        kKeepQueueMs = 150,       // ...down to this
+        kMediaMaxQueueMs = 1200,  // media, whose usual level is the phone's window of unacked messages
+        kMediaKeepQueueMs = 500,
         kDuckRampMs = 120,
         kDuckHoldMs = 400  // media stays lowered this long after the last speech
     };
 
     struct Stats {
-        unsigned long framesIn[kStreams];   // after conversion
-        unsigned long dropped[kStreams];    // lost to a queue too long
-        unsigned long underruns[kStreams];  // ran dry while the phone had not ended it
+        unsigned long framesIn[kStreams];     // after conversion
+        unsigned long dropped[kStreams];      // lost to a queue too long
+        unsigned long underruns[kStreams];    // ran dry while the phone had not ended it
+        unsigned long mostWaiting[kStreams];  // the longest its queue has been, in frames
         unsigned long framesOut;
     };
 
@@ -48,7 +55,7 @@ public:
         : gainQ15_(percentQ15(gainPercent)), duckQ15_(percentQ15(duckPercent)), duckNowQ15_(kOne), duckHold_(0) {
         for (int s = 0; s < kStreams; ++s) {
             in_[s] = Input();
-            stats_.framesIn[s] = stats_.dropped[s] = stats_.underruns[s] = 0;
+            stats_.framesIn[s] = stats_.dropped[s] = stats_.underruns[s] = stats_.mostWaiting[s] = 0;
         }
         stats_.framesOut = 0;
     }
@@ -65,11 +72,12 @@ public:
         return ok;
     }
 
-    // PCM as the phone sent it: `count` samples (not frames). Half a frame at the end is dropped.
-    void push(Stream s, const int16_t* samples, size_t count, uint32_t nowMs) {
+    // PCM as the phone sent it: `count` samples (not frames). Half a frame at the end is dropped. Returns the samples
+    // taken, which takePlayedBytes() will account for: 0 for a stream that is not configured.
+    size_t push(Stream s, const int16_t* samples, size_t count, uint32_t nowMs) {
         Input& in = in_[s];
         if (!in.rate || !count) {
-            return;
+            return 0;
         }
         const unsigned factor = kMixRate / in.rate;
         const size_t frames = count / in.channels;
@@ -94,12 +102,31 @@ public:
         in.lastPushMs = nowMs;
         in.ended = false;
         const size_t have = queued(in);
-        if (have > framesOf(kMaxQueueMs)) {
-            const size_t drop = have - framesOf(kKeepQueueMs);
+        if (have > stats_.mostWaiting[s]) {
+            stats_.mostWaiting[s] = have;
+        }
+        if (have > framesOf(s == kMedia ? kMediaMaxQueueMs : kMaxQueueMs)) {
+            const size_t drop = have - framesOf(s == kMedia ? kMediaKeepQueueMs : kKeepQueueMs);
             in.head += drop * kMixChannels;
+            in.gone += drop;
             stats_.dropped[s] += drop;
         }
         compact(in);
+        return frames * in.channels;
+    }
+
+    // How much of what push() took has left the queue since the last call, played or lost to a queue too long, in
+    // bytes of the phone's PCM. Whoever acks the phone's sound once it is played asks after every push() and mix().
+    size_t takePlayedBytes(Stream s) {
+        Input& in = in_[s];
+        if (!in.rate) {
+            in.gone = 0;
+            return 0;
+        }
+        const unsigned factor = kMixRate / in.rate;
+        const size_t frames = in.gone / factor;  // the phone's frames; part of one waits for the next call
+        in.gone -= frames * factor;
+        return frames * in.channels * sizeof(int16_t);
     }
 
     // The phone stopped the stream: what waits plays out without waiting for more.
@@ -113,6 +140,7 @@ public:
             in_[s].playing = false;
             in_[s].ended = false;
             in_[s].hasLast = false;
+            in_[s].gone = 0;  // nobody is left to tell
         }
         duckNowQ15_ = kOne;
         duckHold_ = 0;
@@ -121,6 +149,7 @@ public:
     bool pending() const { return queued(in_[kMedia]) || queued(in_[kSpeech]); }
     size_t waiting(Stream s) const { return queued(in_[s]); }  // frames
     bool playing(Stream s) const { return in_[s].playing; }
+    uint32_t lastPushMs(Stream s) const { return in_[s].lastPushMs; }  // the `nowMs` of its last push()
     const Stats& stats() const { return stats_; }
 
     // The next `frames` frames into `out` (2 * frames samples), silence where a stream has nothing. False, and `out`
@@ -160,11 +189,13 @@ public:
                 left = (media.queue[media.head] * duckNowQ15_) >> 15;
                 right = (media.queue[media.head + 1] * duckNowQ15_) >> 15;
                 media.head += kMixChannels;
+                ++media.gone;
             }
             if (speaking) {
                 left += speech.queue[speech.head];
                 right += speech.queue[speech.head + 1];
                 speech.head += kMixChannels;
+                ++speech.gone;
             }
             out[i * 2] = clamp((left * gainQ15_) >> 15);
             out[i * 2 + 1] = clamp((right * gainQ15_) >> 15);
@@ -191,6 +222,7 @@ private:
         unsigned rate, channels;     // 0: not configured
         std::vector<int16_t> queue;  // 48 kHz stereo, read from head
         size_t head;
+        size_t gone;  // frames that left the queue and takePlayedBytes() has not reported
         bool playing, ended, hasLast;
         uint32_t lastPushMs;
         int16_t lastLeft, lastRight;
@@ -198,6 +230,7 @@ private:
             : rate(0),
               channels(0),
               head(0),
+              gone(0),
               playing(false),
               ended(false),
               hasLast(false),

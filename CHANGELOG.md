@@ -7,6 +7,13 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+### Changed
+
+- **With sound over Wi-Fi, a short pause on the Wi-Fi or the cable no longer cuts the music.** About 0.4 s of music
+  now waits in the car, where 0.1 s did, and the phone sends it at the speed the car plays, so a phone whose clock
+  runs a little fast or slow no longer skips or leaves a gap. Pause, play and a new track are heard about 0.3 s
+  later. With logging on, the service log has a line for each gap as it happens (`media ran dry`).
+
 ### Fixed
 
 - **The steering-wheel roller changes tracks while Android Auto's sound plays over Wi-Fi.** As with the radio, roll

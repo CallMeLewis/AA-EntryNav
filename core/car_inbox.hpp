@@ -54,6 +54,8 @@ public:
     void postLocation(const CarLocation& location);
     void postMicrophone(const uint8_t* pcm, size_t size);
     void postGoodbye();
+    // Wakes the session thread with nothing posted: it has something of its own to send.
+    void nudge() { wake(); }
 
     // Session thread.
     int wakeFd() const { return wake_[0]; }

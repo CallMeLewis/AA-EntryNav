@@ -59,6 +59,15 @@ public:
     EvoAudio();
     ~EvoAudio();
 
+    // Told of every byte of media handed to data() once it is played, or will never be: the session acks the phone's
+    // music by it (AASession::setAckMediaWhenPlayed), so the phone sends as fast as the car plays. Called from the
+    // session thread and the playback thread, with no lock held. Set before start().
+    using MediaPlayed = void (*)(size_t bytes, void* user);
+    void setMediaPlayed(MediaPlayed fn, void* user) {
+        mediaPlayed_ = fn;
+        mediaPlayedUser_ = user;
+    }
+
     // False when the car's libasound cannot be loaded or the thread cannot start: sound must stay on Bluetooth.
     bool start(const AudioSettings& settings);
     void stop();
@@ -102,6 +111,12 @@ private:
     bool started_, quit_;
     AudioMixer mixer_;  // under mu_
     bool routeAsked_;   // under mu_: the route was asked for in this session
+    MediaPlayed mediaPlayed_;
+    void* mediaPlayedUser_;
+    // Under mu_: the music ran dry while the phone had not stopped it, at that time (0: it plays or is stopped), and
+    // how many times in this session.
+    uint32_t mediaDryMs_;
+    unsigned mediaGaps_, mediaTrims_;
     void releaseRoute(bool wait);
 
     // The prompts' own path: under mu_ but promptOut_, which only the prompt thread uses.

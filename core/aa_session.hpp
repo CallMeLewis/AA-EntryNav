@@ -16,6 +16,7 @@
 #include "aa_tls.hpp"
 #include "car_inbox.hpp"
 #include "car_location.hpp"
+#include "played_acks.hpp"
 
 namespace aa {
 
@@ -69,6 +70,17 @@ public:
     // Sound over Wi-Fi: the phone is told about the media sink and a real guidance sink (core/sdr_builder.hpp), and
     // their PCM goes to these callbacks. Without this call sound stays on the car's Bluetooth and is only counted.
     void setAudioCallbacks(AudioDataCallback data, AudioStreamCallback stream, void* user_data = nullptr);
+    // The media sink's messages are acked once their sound is played, not as they arrive (core/played_acks.hpp): the
+    // phone then keeps about kMaxUnacked messages of music waiting in the car, and sends no faster than the car plays.
+    // Whoever takes the sound from the data callback must then report every byte of channel 9 with postMediaPlayed.
+    // Speech and guidance are acked as they arrive either way: a prompt can wait seconds for its route. Off by default.
+    // forceMs: a message whose sound nobody played within this is acked anyway. Set before start().
+    void setAckMediaWhenPlayed(bool on, uint64_t forceMs = kPlayedForceMs) {
+        ackWhenPlayed_ = on;
+        playedForceMs_ = forceMs;
+    }
+    // `bytes` of the media sink's sound were played or thrown away, oldest first. Any thread.
+    void postMediaPlayed(size_t bytes);
     void setTouchForwarding(bool on) { inbox_.setTouchForwarding(on); }  // on by default; keys go either way
     // The file holding the car's model and year (SdrIdentity::loadVehicleFile), read at each service discovery; kept
     // as given, so it must outlive the session. None by default: the reference car.
@@ -120,6 +132,7 @@ private:
     bool sendPlain(uint8_t channel, const Message& message);
     bool sendSealed(uint8_t channel, const Message& message, uint8_t flags = frame::kSealed);
     bool askPhone(uint64_t silentMs);  // our own ping to a silent phone; false when it cannot go yet
+    void sendPlayedAcks();             // the media sink's acks that are due (setAckMediaWhenPlayed)
     Received receive(uint8_t& channel, Message& message);
 
     // Car input (aa_session.cpp).
@@ -169,6 +182,10 @@ private:
     Callback<AudioStreamCallback> audioStream_;
     const char* vehicleFile_;
     bool hdVideo_;
+    bool ackWhenPlayed_;
+    uint64_t playedForceMs_;
+    pthread_mutex_t playedLock_;
+    PlayedAcks played_;  // guarded by playedLock_: the player reports from its own thread
 
     CarInbox inbox_;
     std::atomic<uint32_t> longestSilenceMs_;
@@ -183,6 +200,9 @@ private:
     uint32_t mediaMessages_;      // media messages received, every channel
     uint32_t audioMessages_[2];   // guidance (8), media (9)
     uint32_t microphoneChunks_;   // sent since the phone opened the microphone
+    bool playedWaiting_;          // media messages wait for their sound to be played before their ack
+    unsigned playedAcked_;        // acks sent for them
+    unsigned forcedLogged_;       // lines about acks forced by age (kForcedLogged)
     // Log throttles, per session.
     unsigned framesSeen_[256];
     unsigned keysLogged_, movesLogged_, navigationLogged_, pings_;

@@ -6,6 +6,7 @@
 #include "aa_session.hpp"
 #include "crash_handler.hpp"
 #include "dhu_sdp.h"
+#include "mutex_lock.hpp"
 #include "sdr_builder.hpp"
 
 namespace aa {
@@ -266,6 +267,21 @@ void AASession::onSetup(uint8_t channel) {
 // of unacked messages: the stream stalls.
 void AASession::onStart(uint8_t channel, const Message& message) {
     const uint32_t session = bodyField(message, 1);
+    if (channel == channel::kMediaAudio && ackWhenPlayed_) {
+        // The stream starts over: what the old one left unacked is acked now, under its own session id.
+        unsigned left;
+        {
+            MutexLock lock(playedLock_);
+            left = played_.takeAll();
+        }
+        playedWaiting_ = false;
+        for (unsigned i = 0; i < left; ++i) {
+            if (!sendSealed(channel, message::mediaAck(mediaSessions_[channel & 31]))) {
+                break;
+            }
+            ++playedAcked_;
+        }
+    }
     if (session != kNoField) {
         mediaSessions_[channel & 31] = session;
     }
@@ -284,18 +300,26 @@ void AASession::onAudioStop(uint8_t channel) {
     }
 }
 
-// Media of any channel: counted, video handed to the callbacks, everything acked, cut-short video included.
+// Media of any channel: counted, video handed to the callbacks, everything acked, cut-short video included. Only the
+// media sink's ack can wait, for its sound to be played.
 void AASession::onMedia(uint8_t channel, uint16_t id, const Message& message) {
     ++mediaMessages_;
     if (mediaMessages_ % kMediaLogEvery == 1) {
         printf("[AASession] >>> Streaming Media Frame %u on Channel %u (%u bytes)\n", mediaMessages_, channel,
                static_cast<unsigned>(message.size()));
     }
+    bool held = false;  // its ack waits for its sound to be played (setAckMediaWhenPlayed)
     if (channel::isAudioSink(channel) && id == msg::kMediaData) {
         // 8-byte timestamp, then s16le PCM. Counted; played by the platform with sound over Wi-Fi (setAudioCallbacks).
         // Without it the phone sends its sound to the car's Bluetooth.
         if (message.size() > kTimestampedHeader) {
             if (audio_.fn) {
+                if (channel == channel::kMediaAudio && ackWhenPlayed_) {
+                    // Noted before the player gets the sound: it may report some of it played at once.
+                    MutexLock lock(playedLock_);
+                    played_.arrived(message.size() - kTimestampedHeader, locationClockMs());
+                    playedWaiting_ = held = true;
+                }
                 audio_.fn(channel, &message[kTimestampedHeader], message.size() - kTimestampedHeader,
                           bigEndian64(&message[kMessageIdSize]), audio_.user);
             }
@@ -330,7 +354,9 @@ void AASession::onMedia(uint8_t channel, uint16_t id, const Message& message) {
             g_trail.stage = kTrailHandler;
         }
     }
-    sendSealed(channel, message::mediaAck(mediaSessions_[channel & 31]));
+    if (!held) {
+        sendSealed(channel, message::mediaAck(mediaSessions_[channel & 31]));
+    }
 }
 
 void AASession::ackDropped(uint8_t channel) {

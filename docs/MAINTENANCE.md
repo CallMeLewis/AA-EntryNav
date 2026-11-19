@@ -150,6 +150,21 @@ car's answer, 3 s at most. It's given back a second after the last announcement.
 announcements go into the music's mix for a minute. The log shows `prompt on PCM 'carplay_alt'`, the route's request
 and answer, and `prompt route 0x31a given back`. Tested on PC only.
 
+The phone may send ten messages of music, about 0.4 s, ahead of the service's answers. The service answers each one
+once its sound has been played, as Google's own head unit does, so those ten wait in the car and the phone sends at
+the speed the car plays. A pause of up to about 0.4 s on the Wi-Fi or the cable is then not heard. Announcements are
+answered as they arrive, as before. The log tells what the music did:
+
+| Line | Meaning |
+|---|---|
+| `media ran dry: nothing from the phone for 380 ms (gap 2 of this session)` | The music stopped for want of sound. A time near 400 ms or more is a link that stalled. A few milliseconds is a phone that sends slower than the car plays |
+| `media plays again after 120 ms` | How long the gap lasted |
+| `media: more than 1200 ms waited, the oldest 700 ms dropped` | The car's output stalled, and the music skipped ahead to catch up |
+| `session ended: media … ms in (… ms lost, … gap(s), at most … ms waiting)` | The totals since the service started. `at most … ms waiting` is near 430 when the phone keeps its ten messages ahead |
+| `media acked once played: … ack(s), … forced after 1000 ms unplayed, at most … unacked at once` | Forced answers mean the output took no sound for a second: the phone was answered anyway, so that its music never stops for good |
+
+The first twenty gaps of a session are logged, then every twentieth. Tested on PC only.
+
 `evo-sound` lists the outputs and plays a test tone, without asking for a route. Build it with `make dev-tools` and copy
 it to `/tmp`. It isn't installed.
 

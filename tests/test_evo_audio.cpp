@@ -7,10 +7,12 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <string>
 #include <vector>
 
 #include "../core/aa_protocol.hpp"
+#include "../core/played_acks.hpp"
 #include "../platform/audio_route.hpp"
 #include "../platform/evo_alsa_out.hpp"
 #include "../platform/evo_audio.hpp"
@@ -310,6 +312,152 @@ void realTime() {
     unsetenv("FAKE_ASOUND_PACE");
 }
 
+std::atomic<size_t> g_reported(0);  // bytes of media reported played: from the test's thread and the playback thread
+void onMediaPlayed(size_t bytes, void*) {
+    g_reported += bytes;
+}
+
+bool waitForReported(size_t bytes) {
+    for (int i = 0; i < 400 && g_reported != bytes; ++i) {
+        usleep(5000);
+    }
+    return g_reported == bytes;
+}
+
+// Every byte of media handed over is reported, once played or at once when it never will be: the session acks the
+// phone's music by it, so a byte never reported would hold the phone's stream back.
+void playedReports() {
+    forget();
+    evo::AudioSettings s;
+    s.pcm = "entertainment";
+    s.route = 0;  // no request to a car's audio manager here
+    {
+        evo::EvoAudio audio;
+        audio.setMediaPlayed(onMediaPlayed, nullptr);
+        // Before start(), and before the phone started the stream: none of it will be played.
+        send(audio, aa::channel::kMediaAudio, std::vector<int16_t>(100, 1));
+        CHECK(g_reported == 200);
+        CHECK(audio.start(s));
+        send(audio, aa::channel::kMediaAudio, std::vector<int16_t>(100, 1));
+        CHECK(g_reported == 400);
+        // Played: nothing at once, all of it by the time it has gone to the PCM. Speech is nobody's to report.
+        g_reported = 0;
+        audio.stream(aa::channel::kMediaAudio, true, 0);
+        audio.stream(aa::channel::kGuidanceAudio, true, 0);
+        send(audio, aa::channel::kMediaAudio, std::vector<int16_t>(48000 * 2 * 3 / 10, 2000));  // 300 ms
+        CHECK(g_reported == 0);
+        send(audio, aa::channel::kGuidanceAudio, std::vector<int16_t>(1600, 4000));
+        audio.stream(aa::channel::kGuidanceAudio, false, 0);
+        audio.stream(aa::channel::kMediaAudio, false, 0);
+        CHECK(waitFor("drain") && waitForReported(57600));
+        // Bytes that make no whole frame are reported at once, the rest once played.
+        g_reported = 0;
+        audio.stream(aa::channel::kMediaAudio, true, 0);
+        const uint8_t odd[7] = {0};
+        audio.data(aa::channel::kMediaAudio, odd, sizeof(odd));
+        CHECK(g_reported == 3);
+        audio.data(aa::channel::kMediaAudio, odd, 1);
+        CHECK(g_reported == 4);
+        audio.stream(aa::channel::kMediaAudio, false, 0);
+        CHECK(waitForReported(8));
+        // The session ends with sound waiting: it is dropped, and there is nobody left to tell.
+        g_reported = 0;
+        audio.stream(aa::channel::kMediaAudio, true, 0);
+        send(audio, aa::channel::kMediaAudio, std::vector<int16_t>(4800, 2000));  // 50 ms: still waiting for more
+        audio.sessionEnded();
+        usleep(150000);
+        CHECK(g_reported == 0);
+        audio.stop();
+        send(audio, aa::channel::kMediaAudio, std::vector<int16_t>(100, 1));  // after stop
+        CHECK(g_reported == 200);
+    }
+    // A PCM that does not open plays nothing, but the sound still leaves the queue: the phone is not held back.
+    forget();
+    g_reported = 0;
+    s.pcm = "missing";
+    {
+        evo::EvoAudio audio;
+        audio.setMediaPlayed(onMediaPlayed, nullptr);
+        CHECK(audio.start(s));
+        audio.stream(aa::channel::kMediaAudio, true, 0);
+        send(audio, aa::channel::kMediaAudio, std::vector<int16_t>(48000 * 2 / 5, 2000));  // 200 ms
+        audio.stream(aa::channel::kMediaAudio, false, 0);
+        CHECK(waitForReported(38400));
+        CHECK(played().empty());
+    }
+}
+
+// The session's side of music acked once played: the same ledger under a lock, told by the player.
+struct Acked {
+    pthread_mutex_t mu;
+    aa::PlayedAcks acks;
+    Acked() { pthread_mutex_init(&mu, nullptr); }
+    ~Acked() { pthread_mutex_destroy(&mu); }
+};
+void onAckedPlayed(size_t bytes, void* user) {
+    Acked* a = static_cast<Acked*>(user);
+    pthread_mutex_lock(&a->mu);
+    a->acks.played(bytes);
+    pthread_mutex_unlock(&a->mu);
+}
+
+// The whole loop on the real clock: a phone with music to spare sends a message whenever fewer than ten of its
+// messages are unacked, as Android Auto does, and each is acked once the player reports its sound played. The car's
+// clock then sets the pace: two seconds bring two seconds of music plus the ten messages that wait, no more, with no
+// gap, nothing dropped and no ack forced by age.
+void pacedByAcks() {
+    forget();
+    setenv("FAKE_ASOUND_PACE", "1", 1);
+    evo::AudioSettings s;
+    s.pcm = "entertainment";
+    s.route = 0;                         // no request to a car's audio manager here
+    const size_t kMessageFrames = 2048;  // 43 ms, as phones send music
+    const unsigned kWindow = 10;         // aa::kMaxUnacked
+    const std::vector<int16_t> message(kMessageFrames * 2, 3000);
+    {
+        Acked acked;
+        evo::EvoAudio audio;
+        audio.setMediaPlayed(onAckedPlayed, &acked);
+        CHECK(audio.start(s));
+        audio.stream(aa::channel::kMediaAudio, true, 0);
+        unsigned unacked = 0, sent = 0;
+        const uint32_t start = evo::monoMs();
+        while (evo::monoMs() - start < 2000) {
+            pthread_mutex_lock(&acked.mu);
+            unacked -= acked.acks.take(evo::monoMs(), aa::kPlayedForceMs);
+            const bool room = unacked < kWindow;
+            if (room) {
+                acked.acks.arrived(message.size() * 2, evo::monoMs());
+            }
+            pthread_mutex_unlock(&acked.mu);
+            if (room) {
+                send(audio, aa::channel::kMediaAudio, message);
+                ++unacked;
+                ++sent;
+            } else {
+                usleep(2000);
+            }
+        }
+        audio.stream(aa::channel::kMediaAudio, false, 0);
+        CHECK(waitFor("drain"));
+        const evo::AudioMixer::Stats stats = audio.stats();
+        // 2 s is 47 messages; with the 10 that wait, and the PC's own delays, 50 to 62.
+        CHECK(sent >= 50 && sent <= 62);
+        CHECK(stats.dropped[evo::AudioMixer::kMedia] == 0 && acked.acks.forced() == 0);
+        CHECK(stats.underruns[evo::AudioMixer::kMedia] <= 1);  // one allowed for a PC that stalls the test
+        // The window is used, and it bounds what waits: 10 messages are 427 ms.
+        CHECK(acked.acks.mostWaiting() == kWindow);
+        CHECK(stats.mostWaiting[evo::AudioMixer::kMedia] >= 300 * 48);
+        CHECK(stats.mostWaiting[evo::AudioMixer::kMedia] <= kWindow * kMessageFrames);
+        // Every message was played to its end: all are acked without waiting for the limit.
+        pthread_mutex_lock(&acked.mu);
+        unacked -= acked.acks.take(evo::monoMs(), aa::kPlayedForceMs);
+        pthread_mutex_unlock(&acked.mu);
+        CHECK(unacked == 0);
+    }
+    unsetenv("FAKE_ASOUND_PACE");
+}
+
 // The prompt route's requests, as the helper would get them; a build's answer is given by the test.
 struct RouteCall {
     bool build;
@@ -474,7 +622,9 @@ int main(int argc, char** argv) {
     settingsFile();
     listing();
     mediaAndSpeech();
+    playedReports();
     realTime();
+    pacedByAcks();
     prompts();
     troubles();
     forget();
@@ -486,7 +636,8 @@ int main(int argc, char** argv) {
     }
     puts(
         "PASS sound over Wi-Fi: settings file, PCM list, media and speech played through a stand-in libasound, "
-        "unknown format silent, session end, sound in real time without a gap, PCM that does not open, underrun, no "
+        "unknown format silent, session end, media reported once played, sound in real time without a gap, music paced "
+        "by its acks, PCM that does not open, underrun, no "
         "library, prompts on their own PCM and route (granted, refused, with the music, at the session's end)");
     return 0;
 }

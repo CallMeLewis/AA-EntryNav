@@ -155,14 +155,27 @@ void ducking() {
 
 void queueTooLong() {
     AudioMixer m;
-    m.configure(AudioMixer::kMedia, 48000, 2);
-    push(m, AudioMixer::kMedia, stereo(200, 1), 0);
-    push(m, AudioMixer::kMedia, stereo(200, 2), 0);
-    CHECK(m.waiting(AudioMixer::kMedia) == 400 * kMs && m.stats().dropped[AudioMixer::kMedia] == 0);
-    push(m, AudioMixer::kMedia, stereo(100, 3), 0);  // 500 ms wait: the oldest 350 go
-    CHECK(m.waiting(AudioMixer::kMedia) == 150 * kMs && m.stats().dropped[AudioMixer::kMedia] == 350 * kMs);
+    // Speech, sent on the phone's own clock: 400 ms may wait.
+    m.configure(AudioMixer::kSpeech, 48000, 1);
+    push(m, AudioMixer::kSpeech, mono(48000, 200, 1), 0);
+    push(m, AudioMixer::kSpeech, mono(48000, 200, 2), 0);
+    CHECK(m.waiting(AudioMixer::kSpeech) == 400 * kMs && m.stats().dropped[AudioMixer::kSpeech] == 0);
+    push(m, AudioMixer::kSpeech, mono(48000, 100, 3), 0);  // 500 ms wait: the oldest 350 go
+    CHECK(m.waiting(AudioMixer::kSpeech) == 150 * kMs && m.stats().dropped[AudioMixer::kSpeech] == 350 * kMs);
     std::vector<int16_t> out = take(m, 150, 0);
     CHECK(out[0] == 2 && out[50 * kMs * 2 - 1] == 2 && out[50 * kMs * 2] == 3);
+    // Media waits at the level of the phone's window of unacked messages, so its limit is far above it.
+    m = AudioMixer();
+    m.configure(AudioMixer::kMedia, 48000, 2);
+    push(m, AudioMixer::kMedia, stereo(600, 1), 0);
+    push(m, AudioMixer::kMedia, stereo(600, 2), 0);
+    CHECK(m.waiting(AudioMixer::kMedia) == 1200 * kMs && m.stats().dropped[AudioMixer::kMedia] == 0);
+    CHECK(m.stats().mostWaiting[AudioMixer::kMedia] == 1200 * kMs);
+    push(m, AudioMixer::kMedia, stereo(100, 3), 0);  // 1300 ms wait: the oldest 800 go
+    CHECK(m.waiting(AudioMixer::kMedia) == 500 * kMs && m.stats().dropped[AudioMixer::kMedia] == 800 * kMs);
+    CHECK(m.stats().mostWaiting[AudioMixer::kMedia] == 1300 * kMs);
+    out = take(m, 500, 0);
+    CHECK(out[0] == 2 && out[400 * kMs * 2 - 1] == 2 && out[400 * kMs * 2] == 3);
     // The session ended: nothing waits, nothing plays.
     push(m, AudioMixer::kMedia, stereo(300, 4), 10);
     m.clear();
@@ -175,17 +188,51 @@ void queueTooLong() {
 
 }  // namespace
 
+// What left the queue, in bytes of the phone's PCM: the session acks the phone's music by it.
+void playedBytes() {
+    AudioMixer m;
+    m.configure(AudioMixer::kMedia, 48000, 2);
+    const std::vector<int16_t> music = stereo(200, 5);
+    CHECK(m.push(AudioMixer::kMedia, &music[0], music.size(), 0) == music.size());
+    CHECK(m.takePlayedBytes(AudioMixer::kMedia) == 0);  // it waits: nothing played
+    take(m, 30, 0);
+    CHECK(m.takePlayedBytes(AudioMixer::kMedia) == 30 * kMs * 4 && m.takePlayedBytes(AudioMixer::kMedia) == 0);
+    // Sound lost to a queue too long has left it too.
+    push(m, AudioMixer::kMedia, stereo(1100, 6), 0);  // 1270 ms wait: the oldest 770 go
+    CHECK(m.stats().dropped[AudioMixer::kMedia] == 770 * kMs);
+    CHECK(m.takePlayedBytes(AudioMixer::kMedia) == 770 * kMs * 4);
+    // More asked than waits: only what waited was played.
+    take(m, 600, 0);
+    CHECK(m.takePlayedBytes(AudioMixer::kMedia) == 500 * kMs * 4);
+    // Half a frame at the end of a push is not taken, and nothing is from a stream that is not configured.
+    const int16_t odd[] = {7, 7, 7};
+    CHECK(m.push(AudioMixer::kMedia, odd, 3, 0) == 2);
+    CHECK(m.push(AudioMixer::kSpeech, odd, 3, 0) == 0 && m.takePlayedBytes(AudioMixer::kSpeech) == 0);
+    // The session ended with sound waiting: nobody is left to tell.
+    m.clear();
+    CHECK(m.takePlayedBytes(AudioMixer::kMedia) == 0);
+    // 16 kHz mono plays as three frames each: counted in the phone's frames, part of one kept for the next call.
+    AudioMixer speech;
+    speech.configure(AudioMixer::kSpeech, 16000, 1);
+    const std::vector<int16_t> prompt = mono(16000, 100, 9);
+    CHECK(speech.push(AudioMixer::kSpeech, &prompt[0], prompt.size(), 0) == prompt.size());
+    std::vector<int16_t> out(200);
+    CHECK(speech.mix(&out[0], 100, 0) && speech.takePlayedBytes(AudioMixer::kSpeech) == 33 * 2);
+    CHECK(speech.mix(&out[0], 2, 0) && speech.takePlayedBytes(AudioMixer::kSpeech) == 1 * 2);
+}
+
 int main() {
     prebufferAndFlush();
     conversion();
     ducking();
     queueTooLong();
+    playedBytes();
     if (g_failures) {
         printf("FAIL audio mixer: %d checks failed\n", g_failures);
         return 1;
     }
     puts(
         "PASS audio mixer: prebuffer and flush, 16 and 24 kHz to 48 kHz stereo, media lowered under speech, gain, "
-        "clamp, queue too long, session end");
+        "clamp, queue too long, played bytes, session end");
     return 0;
 }
