@@ -71,7 +71,7 @@ the same session over USB.
 - **The picture.** `evo_video` feeds the H.264 stream to the car's decoder, `libxsvideo`, whose C interface
   `xsv_api.h` declares. `omap_dmabuf` holds the buffers that carry the stream, and `evo_ilm` places and stacks the
   surfaces through LayerManager's command-line tool. `evo_pill` shows the volume pill on a Wayland surface of its own,
-  and `volume_pill.hpp` draws it.
+  `volume_pill.hpp` draws it, and `volume_filter.hpp` picks the car's volume levels that open it.
 - **Inputs.** `evo_knob` reads the iDrive controller, the buttons and the volume over MOST through `vmost_client`, the
   car's vMOST library loaded at run time. `evo_ccs.hpp` decodes both controller generations' messages. `evo_touch` and
   `evo_touch_frame.hpp` read the touchscreen's UDP packets. `input_mode.hpp` says what the inputs do during a run.

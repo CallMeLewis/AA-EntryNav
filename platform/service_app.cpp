@@ -241,7 +241,9 @@ void ServiceApp::touchEvent(const aa::TouchEventOut& ev, void* user) {
 void ServiceApp::volumeEvent(unsigned steps, void* user) {
     ServiceApp* a = static_cast<ServiceApp*>(user);
     pthread_mutex_lock(&a->mu);
-    const bool start = a->peek.volumeKey(monoMs(), a->pill.ready());
+    const uint32_t now = monoMs();
+    a->volume.volumeKey(now);
+    const bool start = a->peek.volumeKey(now, a->pill.ready());
     const bool refused = a->peek.dimRefused();
     pthread_mutex_unlock(&a->mu);
     if (start) {
@@ -250,17 +252,20 @@ void ServiceApp::volumeEvent(unsigned steps, void* user) {
     }
 }
 
-// Volume level from the car (vMOST thread): the pill over Android Auto, which stays opaque.
+// Volume level from the car (vMOST thread): the pill over Android Auto, which stays opaque. Only a change, or a level
+// right after a volume key, shows it; another source's level never does (volume_filter.hpp).
 void ServiceApp::volumeLevel(const VolumeLevel& level, void* user) {
     ServiceApp* a = static_cast<ServiceApp*>(user);
     pthread_mutex_lock(&a->mu);
     const bool first = !a->peek.levelSeen();
     const bool ready = a->pill.ready();
-    if (a->peek.volumeLevel(ready)) {
+    const bool shows = a->volume.level(level.value, level.min, level.max, a->inCall, monoMs());
+    if (shows && a->peek.volumeLevel(ready)) {
         a->pill.show(level.value, level.min, level.max);  // only takes the pill's own short lock
     }
+    const bool seen = a->peek.levelSeen();
     pthread_mutex_unlock(&a->mu);
-    if (first) {
+    if (first && seen) {
         ELOG("ServiceApp", "volume level received from the car: pill %s", ready ? "on" : "unavailable");
     }
 }

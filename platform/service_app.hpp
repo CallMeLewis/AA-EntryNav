@@ -29,6 +29,7 @@
 #include "peek_timing.hpp"
 #include "tcp_server.hpp"
 #include "usb_loop.hpp"
+#include "volume_filter.hpp"
 #include "wireless_loop.hpp"
 #include "wireless_setup.hpp"
 
@@ -149,6 +150,7 @@ public:
     bool pendingMediaKey;    // service: MEDIA to the phone, sent from the main loop after the focus
     PeekTiming peek;         // under mu
     EvoPill pill;
+    VolumeFilter volume;  // which levels open the pill, under mu
     unsigned sppLinks, tcpLinks;
     std::atomic<unsigned> videoFrames;  // counted on the session thread without mu
     bool wppReply, wppAccepted;

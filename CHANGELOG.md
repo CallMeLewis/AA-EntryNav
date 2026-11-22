@@ -16,6 +16,8 @@ Each version links to the commit or tag its archive was built from.
 - **Android Auto waits for the reverse camera to close.** The gear can leave reverse a moment before iDrive closes the
   camera, and Android Auto came back over a camera still on screen. It now comes back once iDrive leaves the camera,
   when you pick Android Auto yourself, or after 15 seconds at most.
+- **The volume pill no longer opens by itself.** It opens when you change the volume. Some cars sent another source's
+  volume, or the same level again, as the phone connected, and the pill opened with nothing pressed.
 
 ## [0.1.8-test.1] - 2026-11-19
 

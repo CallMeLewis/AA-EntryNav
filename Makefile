@@ -173,7 +173,7 @@ HOST_TESTS = \
     host-evo-control host-peek-timing host-aside-wait host-sdr-g20 host-evo-sdr host-evo-wlan host-knob-fallback \
     host-usb host-usb-link host-spawn-attr host-popup-peek host-hold-machine host-bt-audio-plan \
     host-car-identity host-pin-lock host-qr-code host-flare-link host-qr-png host-crash-guard host-setup \
-    host-release-version host-log-profile host-pb host-volume-pill host-audio-mixer host-prompt-path \
+    host-release-version host-log-profile host-pb host-volume-pill host-volume-filter host-audio-mixer host-prompt-path \
     host-media-key-jump host-wheel-roller host-evo-audio host-aa-frame host-played-acks host-aa-messages host-tcp-server \
     host-session-phone host-wireless-phone host-parsers host-alps-spp host-bluez-adapter host-kombi-phone host-kombi-display \
     host-kombi-graph host-kombi-guide host-kombi-client host-kombi-nav host-bmw-guidance host-kombi-golden \
@@ -273,6 +273,9 @@ host-pb:
 host-volume-pill:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_volume_pill.cpp -o tests/test-volume-pill
 	./tests/test-volume-pill
+host-volume-filter:
+	$(HOST_CXX) $(HOST_FLAGS) tests/test_volume_filter.cpp -o tests/test-volume-filter
+	./tests/test-volume-filter
 host-audio-mixer:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_audio_mixer.cpp -o tests/test-audio-mixer
 	./tests/test-audio-mixer
