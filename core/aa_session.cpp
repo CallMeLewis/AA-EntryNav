@@ -85,6 +85,7 @@ AASession::AASession()
       setupUntilMs_(0),
       undecrypted_(0),
       videoReady_(false),
+      projected_(false),
       mediaMessages_(0),
       microphoneChunks_(0),
       playedWaiting_(false),
@@ -156,6 +157,10 @@ void AASession::postRelativeEvent(uint32_t keycode, int delta) {
 
 void AASession::postVideoFocus(bool projected) {
     inbox_.postFocus(projected);
+}
+
+void AASession::postKeyframeRequest() {
+    inbox_.postKeyframeRequest();
 }
 
 void AASession::postNightMode(bool night) {
@@ -256,6 +261,8 @@ bool AASession::start(int client_fd) {
     inbox_.reset();
     undecrypted_ = 0;
     videoReady_ = false;
+    projected_ = false;
+    keyframe_.reset();
     microphoneChunks_ = 0;
     mediaMessages_ = 0;
     memset(mediaSessions_, 0, sizeof(mediaSessions_));
@@ -661,6 +668,9 @@ void AASession::sendCarInput() {
         printf("[AASession] video focus -> phone: %s (unrequested) %s\n",
                projected ? "FOCUSED/projected" : "UNFOCUSED/native", sent ? "sent" : "SEND FAILED");
     }
+    if (batch.keyframe) {
+        askKeyframe();  // after the focus above: a step aside just posted leaves the phone without the screen
+    }
     for (size_t i = 0; i < batch.keys.size(); ++i) {
         const CarKey& key = batch.keys[i];
         const Message event = key.rotary ? message::rotaryEvent(monotonicUs(), key.keycode, key.delta)
@@ -730,10 +740,23 @@ bool AASession::sendSensorEvent(uint32_t type) {
 bool AASession::sendVideoFocus(bool projected, bool unrequested) {
     const bool sent = sendSealed(channel::kVideo, message::videoFocusIndication(projected, unrequested));
     if (sent) {
+        projected_ = projected;
         printf("[AASession] >>> Sent VideoFocusIndication (%s%s) on Channel %u!\n", projected ? "FOCUSED" : "UNFOCUSED",
                unrequested ? ", unrequested" : "", channel::kVideo);
     }
     return sent;
+}
+
+// The decoder lost a frame and the picture builds on it until the phone's next IDR: the focus is taken away and given
+// back at once, which starts the phone's encoder again with one (keyframe_request.hpp). Only once the phone has set
+// its video up and while it has the screen. A request it may not have yet is dropped: the video asks again.
+void AASession::askKeyframe() {
+    if (!videoReady_ || !projected_ || !keyframe_.allow(locationClockMs())) {
+        return;
+    }
+    const bool sent = sendVideoFocus(false, true) && sendVideoFocus(true, true);
+    printf("[AASession] a video frame was lost: a new IDR asked for (video focus off and on) %s\n",
+           sent ? "sent" : "SEND FAILED");
 }
 
 }  // namespace aa

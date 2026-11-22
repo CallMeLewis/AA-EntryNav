@@ -29,6 +29,7 @@ struct CarBatch {
     std::vector<TouchEventOut> touches;
     std::vector<CarKey> keys;
     FocusRequest focus;
+    bool keyframe;      // the decoder lost a frame: the phone may be asked for a new IDR (aa_session.cpp)
     bool nightChanged;  // the phone started night mode and the car changed since the last event
     std::vector<std::vector<uint8_t>> microphone;
     bool goodbye;  // the car is leaving: the phone is asked to end the session, and the rest no longer matters
@@ -50,6 +51,7 @@ public:
     void postKey(uint32_t keycode, bool down);
     void postRotary(uint32_t keycode, int delta);
     void postFocus(bool projected);
+    void postKeyframeRequest();  // the session decides whether and when to ask the phone
     void postNight(bool night);  // kept across sessions
     void postLocation(const CarLocation& location);
     void postMicrophone(const uint8_t* pcm, size_t size);
@@ -86,6 +88,7 @@ private:
     std::vector<CarKey> keys_;
     unsigned keyDrops_, rotaryDrops_;
     FocusRequest focus_;
+    bool keyframe_;
     int night_;
     bool nightStarted_, nightChanged_;
     LocationFeed location_;

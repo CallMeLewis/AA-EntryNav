@@ -213,13 +213,12 @@ void ServiceApp::frame(uint32_t, const uint8_t* data, size_t len, uint64_t pts, 
             ELOG("ServiceApp", "video decoder stuck: the session ends and starts again");
             a->session.end();
         } else if (a->video.takeKeyframeRequest(monoMs()) && pthread_mutex_trylock(&a->mu) == 0) {
-            // A frame was lost and the next ones build on it: the phone is told again that it has the screen, which
-            // makes it start its stream afresh from an IDR. Only while it has the screen; never waits for mu.
+            // A frame was lost and the next ones build on it: the session asks the phone for a new IDR when it may
+            // (core/keyframe_request.hpp). Only while it has the screen; never waits for mu.
             const bool projected = a->focus;
             pthread_mutex_unlock(&a->mu);
             if (projected) {
-                ELOG("Video", "a frame was dropped: a new IDR asked for (video focus sent again)");
-                a->session.postVideoFocus(true);
+                a->session.postKeyframeRequest();
             }
         }
     }

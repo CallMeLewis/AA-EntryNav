@@ -18,6 +18,8 @@ Each version links to the commit or tag its archive was built from.
   when you pick Android Auto yourself, or after 15 seconds at most.
 - **The volume pill no longer opens by itself.** It opens when you change the volume. Some cars sent another source's
   volume, or the same level again, as the phone connected, and the pill opened with nothing pressed.
+- **A picture broken by a lost video frame mends sooner.** When the car loses a frame, the phone is now asked to
+  restart its picture from a whole new frame, at most once every 10 seconds, instead of waiting for its next one.
 
 ## [0.1.8-test.1] - 2026-11-19
 

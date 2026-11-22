@@ -48,7 +48,7 @@ struct EvoVideoConfig {
 // phone sending late, no free buffer, the decoder call, or the compositor). Kept under EvoVideo's mutex.
 const uint32_t kVideoStatsMs = 10000;
 const uint32_t kVideoStallMs = 3000;   // no buffer given back by the decoder for this long: it is stuck
-const uint32_t kKeyframeAskMs = 2000;  // a new IDR is asked for at most this often
+const uint32_t kKeyframeAskMs = 2000;  // the session is told an IDR is needed at most this often
 
 // Over the car's Wi-Fi the phone's frames often come in pairs, so close together that the screen shows only the second:
 // on 14 November 2026, 224 to 241 of every ~298 frames were shown, against 297 to 300 on the cable. A frame that comes
@@ -135,8 +135,9 @@ public:
     // an abort, libxsvideo may send no completion), so the picture would stay frozen for the session. The caller ends
     // the session; the next one starts a new decoder. Until then frames are dropped at once, not after a wait.
     bool takeStall();
-    // A frame was dropped since the last IDR, so the picture smears until the phone sends one: true at most every
-    // kKeyframeAskMs while that lasts. The caller asks the phone for one (video focus, which makes it start afresh).
+    // A frame was dropped since the last IDR, that IDR itself included, so the picture smears until the phone sends
+    // one: true at most every kKeyframeAskMs while that lasts. The caller hands it to the session, which asks the phone
+    // when it may (core/keyframe_request.hpp).
     bool takeKeyframeRequest(uint32_t nowMs);
 
 private:
@@ -163,7 +164,7 @@ private:
     uint64_t framesIn_, framesDropped_, idrSeen_, framesAtStart_;
     uint32_t lastReleaseMs_;  // a buffer last came back from the decoder (or the stream started); under mu_
     bool stalled_, stallTaken_;
-    bool needKeyframe_;       // a frame was dropped since the last IDR handed to the decoder
+    bool needKeyframe_;       // a frame (an IDR too) was dropped since the last IDR handed to the decoder
     uint32_t keyframeAskMs_;  // the last request (0: none)
     VideoStats stats_;        // under mu_
     FramePacer pacer_;        // under mu_; its spacing from cfg_.paceMs

@@ -53,7 +53,8 @@ the same session over USB.
   on, the model, year and ID from the `vehicle` file, and only the sensors the car feeds. `include/` has the
   description's template and the head unit certificate, neither written by this project.
 - **Car data for the session.** `aa_input.hpp` and `car_inbox` queue touches and key presses for the session.
-  `car_location.hpp` turns the car's position into Android Auto's location sensor.
+  `car_location.hpp` turns the car's position into Android Auto's location sensor. `keyframe_request.hpp` decides
+  when a lost video frame may ask the phone for a new IDR.
 - **Helpers.** `crash_handler` logs a trace on a crash, then runs the clean-up the platform registered.
   `mutex_lock.hpp` holds a pthread mutex for a scope.
 

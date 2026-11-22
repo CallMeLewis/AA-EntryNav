@@ -16,6 +16,7 @@
 #include "aa_tls.hpp"
 #include "car_inbox.hpp"
 #include "car_location.hpp"
+#include "keyframe_request.hpp"
 #include "played_acks.hpp"
 
 namespace aa {
@@ -99,6 +100,9 @@ public:
     void postRelativeEvent(uint32_t keycode, int delta);  // rotary steps (keycode 65536, ROTARY_CONTROLLER)
     // The car takes (false) or gives back (true) the screen: an unrequested video focus indication.
     void postVideoFocus(bool projected);
+    // The decoder lost a video frame and needs an IDR. The session thread asks the phone for one when it may
+    // (keyframe_request.hpp): only while the phone has the screen, after any focus change posted before.
+    void postKeyframeRequest();
     // The car's day or night, kept across sessions: a NIGHT_MODE event once the phone started that sensor.
     void postNightMode(bool night);
     // The car's latest fix (monotonic capture time); an invalid one when the car's feed expired.
@@ -143,6 +147,7 @@ private:
     bool sendLocation();
     bool sendSensorEvent(uint32_t type);
     bool sendVideoFocus(bool projected, bool unrequested);
+    void askKeyframe();
 
     // One handler per route (aa_channels.cpp); dispatch() is false when the session must end.
     bool dispatch(uint8_t channel, const Message& message);
@@ -200,6 +205,8 @@ private:
     uint64_t setupUntilMs_;       // the handshake must end by then (kSetupMs); 0 once it has
     unsigned undecrypted_;        // encrypted frames in a row that did not decrypt (kMaxUndecrypted)
     bool videoReady_;             // the phone set the video channel up: a focus can go
+    bool projected_;              // the last video focus sent was FOCUSED
+    KeyframeRequest keyframe_;    // when a lost frame may ask the phone for an IDR
     uint32_t mediaSessions_[32];  // per channel, the session id of its start indication, echoed in our acks
     uint32_t mediaMessages_;      // media messages received, every channel
     uint32_t audioMessages_[2];   // guidance (8), media (9)

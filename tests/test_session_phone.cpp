@@ -1193,6 +1193,62 @@ std::string unansweredGoodbye() {
     return std::string();
 }
 
+// The video focus indications the head unit sent from log line `from` on, in order: 'f' FOCUSED, 'n' UNFOCUSED.
+std::string focusTrail(const std::vector<std::string>& log, size_t from) {
+    static const std::string kFocus = "hu ch=6 fl=0b 8008 080";
+    std::string trail;
+    for (size_t i = from; i < log.size(); ++i) {
+        const size_t at = log[i].find(kFocus);
+        if (at != std::string::npos && log[i].size() > at + kFocus.size()) {
+            trail += log[i][at + kFocus.size()] == '1' ? 'f' : 'n';
+        }
+    }
+    return trail;
+}
+
+// A frame the decoder lost: nothing in the video's first 5 s, then the focus off and on, once in 10 s, and never
+// while iDrive has the screen. On the clock, so kept out of the golden. An empty verdict means it passed.
+std::string keyframeAfterLoss() {
+    std::vector<std::string> log;
+    Link link;
+    Phone phone(link.phoneFd, log);
+    phone.handshake();
+    phone.discover();
+    phone.send(6, kSealedCtl, bytes({0x00, 0x07, 0x08, 0x00, 0x10, 0x06}));
+    phone.send(6, kSealed, bytes({0x80, 0x00, 0x08, 0x03}));  // video setup: FOCUSED at once
+    phone.settle();
+    size_t from = log.size();
+    link.session.postKeyframeRequest();
+    phone.settle();
+    if (!focusTrail(log, from).empty()) {
+        return "asked during the video's first seconds: " + focusTrail(log, from);
+    }
+    phone.headUnitPings(5200, true);
+    // iDrive takes the screen in the same turn: the step aside goes, the request does not.
+    from = log.size();
+    link.session.postVideoFocus(false);
+    link.session.postKeyframeRequest();
+    phone.settle();
+    if (focusTrail(log, from) != "n") {
+        return "with iDrive on screen, focus trail '" + focusTrail(log, from) + "' instead of the step aside alone";
+    }
+    // Android Auto back, then a lost frame: off and on, after the focus it was given.
+    from = log.size();
+    link.session.postVideoFocus(true);
+    link.session.postKeyframeRequest();
+    phone.settle();
+    if (focusTrail(log, from) != "fnf") {
+        return "after 5 s, focus trail '" + focusTrail(log, from) + "' instead of the focus, then off and on";
+    }
+    from = log.size();
+    link.session.postKeyframeRequest();
+    phone.settle();
+    if (!focusTrail(log, from).empty() || !link.session.isActive()) {
+        return "a second request within 10 s was not held back";
+    }
+    return std::string();
+}
+
 struct Scenario {
     const char* name;
     void (*run)(std::vector<std::string>&);
@@ -1275,6 +1331,7 @@ int main(int argc, char** argv) {
     const std::string quiet = writing ? std::string() : quietPhone();
     const std::string bye = writing ? std::string() : unansweredGoodbye();
     const std::string unplayed = writing ? std::string() : unplayedMusic();
+    const std::string keyframe = writing ? std::string() : keyframeAfterLoss();
     takeEvents();
     fflush(stdout);
     dup2(console, 1);
@@ -1322,6 +1379,11 @@ int main(int argc, char** argv) {
         printf("FAIL session, music nobody plays: %s\n", unplayed.c_str());
         return 1;
     }
+    if (!keyframe.empty()) {
+        printf("FAIL session, IDR after a lost frame: %s\n", keyframe.c_str());
+        return 1;
+    }
+    puts("PASS session, IDR after a lost frame: focus off and on, not in the video's first 5 s, once in 10 s");
     puts("PASS session, music nobody plays: its messages are acked at the limit, not before, and the session goes on");
     puts(
         "PASS session, goodbye: a phone that does not answer keeps its session past the wait, no session returns at "

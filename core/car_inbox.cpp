@@ -31,6 +31,7 @@ CarInbox::CarInbox()
       keyDrops_(0),
       rotaryDrops_(0),
       focus_(kFocusNone),
+      keyframe_(false),
       night_(-1),
       nightStarted_(false),
       nightChanged_(false),
@@ -142,6 +143,18 @@ void CarInbox::postFocus(bool projected) {
     wake();
 }
 
+void CarInbox::postKeyframeRequest() {
+    bool first;
+    {
+        MutexLock lock(mutex_);
+        first = !keyframe_;
+        keyframe_ = true;
+    }
+    if (first) {  // one wake for any number of requests before the session thread takes them
+        wake();
+    }
+}
+
 void CarInbox::postNight(bool night) {
     bool due;
     {
@@ -196,6 +209,8 @@ void CarInbox::take(CarBatch& batch) {
     batch.keys.swap(keys_);
     batch.focus = focus_;
     focus_ = kFocusNone;
+    batch.keyframe = keyframe_;
+    keyframe_ = false;
     batch.nightChanged = nightChanged_ && nightStarted_;
     nightChanged_ = false;
     batch.microphone.swap(microphone_);
@@ -258,6 +273,7 @@ void CarInbox::reset() {
     keys_.clear();
     keyDrops_ = rotaryDrops_ = 0;
     focus_ = kFocusNone;
+    keyframe_ = false;
     nightStarted_ = nightChanged_ = false;
     location_.reset();
     microphoneOpen_ = false;

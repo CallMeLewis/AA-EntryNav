@@ -146,6 +146,12 @@ int main() {
     assert(video.takeKeyframeRequest(1000 + 2 * evo::kKeyframeAskMs));
     assert(video.postVideoFrame(kIdr, sizeof(kIdr), 0));  // an IDR does
     assert(!video.takeKeyframeRequest(1000 + 3 * evo::kKeyframeAskMs));
+    // A lost IDR: the frames after it build on it, so a new one is asked for too.
+    decodeFailures = 1;
+    assert(!video.postVideoFrame(kIdr, sizeof(kIdr), 0));
+    assert(video.takeKeyframeRequest(1000 + 4 * evo::kKeyframeAskMs));
+    assert(video.postVideoFrame(kIdr, sizeof(kIdr), 0));
+    assert(!video.takeKeyframeRequest(1000 + 5 * evo::kKeyframeAskMs));
 
     // The decoder keeps every buffer: frames are dropped after a short wait, then, once nothing came back for
     // kVideoStallMs, at once, and the stall is reported once.

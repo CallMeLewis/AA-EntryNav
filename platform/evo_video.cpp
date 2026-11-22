@@ -301,7 +301,7 @@ bool EvoVideo::postVideoFrame(const uint8_t* data, size_t len, uint64_t pts) {
     if (bi < 0) {
         ++framesDropped_;
         ++stats_.dropped;
-        needKeyframe_ = needKeyframe_ || !idr;
+        needKeyframe_ = true;
         logStatsIfDue(monoMs());
         pthread_mutex_unlock(&mu_);
         return false;
@@ -311,7 +311,7 @@ bool EvoVideo::postVideoFrame(const uint8_t* data, size_t len, uint64_t pts) {
     if (need > b.size) {
         ++framesDropped_;
         ++stats_.dropped;
-        needKeyframe_ = needKeyframe_ || !idr;
+        needKeyframe_ = true;
         pthread_mutex_unlock(&mu_);
         ELOG("Video", "frame %zu B > buffer %u B", need, b.size);
         return false;
@@ -348,7 +348,7 @@ bool EvoVideo::postVideoFrame(const uint8_t* data, size_t len, uint64_t pts) {
         pthread_mutex_lock(&mu_);
         b.inFlight = false;
         lastReleaseMs_ = monoMs();
-        needKeyframe_ = needKeyframe_ || !idr;
+        needKeyframe_ = true;
         if (prependCfg) {
             configSent_ = false;  // the decoder never got SPS/PPS: put them in front of the next IDR again
         }
