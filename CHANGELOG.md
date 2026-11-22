@@ -7,6 +7,18 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+## [0.1.8-test.2] - 2026-11-22
+
+<!-- Flare Drive:
+A phone on Wi-Fi whose connection drops now starts Android Auto again by itself, and Android Auto waits for the
+reverse camera to close before coming back. The volume pill no longer opens by itself, and a picture broken by a lost
+frame mends sooner.
+-->
+
+Phones on Wi-Fi reconnect by themselves after a drop, Android Auto waits for the reverse camera to close, the volume
+pill stays closed until you change the volume, and a broken picture mends sooner after a lost frame. The service and
+the iDrive app change.
+
 ### Fixed
 
 - **A phone on Wi-Fi whose connection drops starts Android Auto again by itself.** Some phones kept their Bluetooth
@@ -328,7 +340,8 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 - **Changing the car's clock no longer upsets Android Auto's timing.** When GPS corrected the clock while driving, a
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
-[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.8-test.1...HEAD
+[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.8-test.2...HEAD
+[0.1.8-test.2]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.8-test.2
 [0.1.8-test.1]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.8-test.1
 [0.1.7]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.7
 [0.1.6]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.6
