@@ -5,7 +5,8 @@
 // and no port another program could be given by chance), from root or the service's own user only, one text command
 // per datagram:
 //   ping (answered "pong"), show, hide, await, quit, gear <n>, daynight <n>, call <0|1>, popup <0|1>,
-//   drivemode [<n>], pdc <n> (accepted, not used by the service).
+//   drivemode [<n>], pdc <n> (accepted, not used by the service), skip <1|-1> (next or previous track from iDrive's
+//   cluster menu), clusterskip <0|1> (that menu is shown: each push of the steering wheel roller skips again).
 // drivemode: iDrive's driving mode display covers Android Auto's state (its optional <n>, sent by iDrive apps before
 // 0.1.3, is ignored).
 // await: from then on a phone that connects is served with its picture aside, until "show" (the app brought iDrive to

@@ -132,6 +132,7 @@ EvoKnob::EvoKnob()
       asideKeyCb_(nullptr),
       asideKeyUser_(nullptr),
       phoneToIdrive_(false),
+      wheelRepeat_(false),
       telDown_(false),
       voiceDown_(false),
       voiceSent_(false),
@@ -381,7 +382,7 @@ void EvoKnob::onMessage(const VmostMsgView& m) {
         const int push = decodeRotaryPress(m);
         if (push == 1 && !rollerDown_) {
             rollerDown_ = true;
-            const int skip = wheel_.pushed(now);
+            const int skip = wheel_.pushed(now, wheelRepeat_);
             const bool send = skip && mode_ == INPUT_FORWARD && wheelCb_ && !phoneToIdrive_;
             if (++wheelLogs_ <= 200) {
                 ELOG("Knob", "steering wheel roller pushed: %s",

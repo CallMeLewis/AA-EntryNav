@@ -45,6 +45,12 @@ constexpr char kFlarePin[] = "/var/local/data/AA/flare-pin";
 constexpr char kAppLog[] = "/var/local/data/AA/app.log";
 constexpr char kAppLogOld[] = "/var/local/data/AA/app.old.log";
 constexpr char kAppDisable[] = "/var/local/data/AA/app.disable";  // present: the app stays off (set by hand)
+// present as iDrive starts: the app logs iDrive's media players and skip devices, read only (hmiapp/ent_probe.hpp).
+// A temporary diagnostic, set by hand.
+constexpr char kEntProbe[] = "/var/local/data/AA/ent-probe";
+// present with kEntProbe as iDrive starts: an experiment, iDrive's CarPlay player counts as available while Android
+// Auto's sound plays on CarPlay's audio source, so that the cluster stops saying "no active entertainment source".
+constexpr char kClusterPlayer[] = "/var/local/data/AA/cluster-player";
 constexpr char kAppGuard[] = "/var/local/data/AA/app-guard";   // crash guard: 3 short iDrive runs and the app stays off
 constexpr char kBootGuard[] = "/var/local/data/AA/bootguard";  // automatic starts within 15 minutes
 
@@ -58,7 +64,9 @@ constexpr char kAppKeyFile[] = "/tmp/aa-entrynav-appkey";              // a key 
 constexpr char kMediaJumpFile[] = "/tmp/aa-entrynav-media";            // MEDIA over iDrive: the app shows AA
 constexpr char kDayNightFile[] = "/tmp/aa-entrynav-daynight";          // day or night, written by the app
 constexpr char kCarFile[] = "/tmp/aa-entrynav-car";                    // the car's own details, by the app
-constexpr char kWirelessLock[] = "/tmp/aa-entrynav-wireless.lock";     // one wireless start at a time
+// The track the phone plays, by the service, while a session runs: three lines, title, artist and album, in UTF-8.
+constexpr char kTrackFile[] = "/tmp/aa-entrynav-track";
+constexpr char kWirelessLock[] = "/tmp/aa-entrynav-wireless.lock";  // one wireless start at a time
 constexpr char kWlandApConf[] = "/tmp/wland/ap.conf";  // BMW's hotspot settings, written by wland (platform/evo_ap.cpp)
 // The service's udev rule while Android Auto over a cable is on (usb_link.hpp: kUsbUdevRuleDir/kUsbUdevRuleName). The
 // service removes it as it stops; the supervisor removes it again once the service has ended however it ended, since

@@ -156,6 +156,9 @@ public:
     }
     // During a phone call (iDrive's call screen) COM and the steering wheel phone button stay with iDrive.
     void setPhoneToIdrive(bool v) { phoneToIdrive_ = v; }
+    // The cluster shows a menu of previous and next (the iDrive app's cluster player): a push after a roll keeps that
+    // direction for the next push (WheelSkip::pushed).
+    void setWheelRepeat(bool v) { wheelRepeat_ = v; }
     void stop();
     void summary() const;
     void onMessage(const VmostMsgView& m);  // called from the vMOST callback, on our thread
@@ -206,6 +209,7 @@ private:
     HardKeyCallback asideKeyCb_;
     void* asideKeyUser_;
     std::atomic<bool> phoneToIdrive_;
+    std::atomic<bool> wheelRepeat_;
     bool telDown_;
     bool voiceDown_;
     bool voiceSent_;         // this hold has reached Android Auto

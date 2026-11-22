@@ -17,6 +17,7 @@
 #include "car_inbox.hpp"
 #include "car_location.hpp"
 #include "keyframe_request.hpp"
+#include "media_metadata.hpp"
 #include "played_acks.hpp"
 
 namespace aa {
@@ -39,6 +40,8 @@ using NavStatusCallback = void (*)(uint16_t, const uint8_t*, size_t, void*);
 using AudioDataCallback = void (*)(uint8_t, const uint8_t*, size_t, uint64_t, void*);
 // A sound stream starts (true, with its configuration's index in the channel's list) or stops.
 using AudioStreamCallback = void (*)(uint8_t, bool, uint32_t, void*);
+// The phone plays another track, or the same one with other texts (media status channel, core/media_metadata.hpp).
+using TrackCallback = void (*)(const TrackInfo&, void*);
 
 class AASession {
 public:
@@ -71,6 +74,10 @@ public:
     void setVideoFocusCallback(VideoFocusCallback cb, void* user_data = nullptr);
     void setMicRequestCallback(MicRequestCallback cb, void* user_data = nullptr);
     void setNavStatusCallback(NavStatusCallback cb, void* user_data = nullptr);
+    void setTrackCallback(TrackCallback cb, void* user_data = nullptr) {
+        track_.fn = cb;
+        track_.user = user_data;
+    }
     // Sound over Wi-Fi: the phone is told about the media sink and a real guidance sink (core/sdr_builder.hpp), and
     // their PCM goes to these callbacks. Without this call sound stays on the car's Bluetooth and is only counted.
     void setAudioCallbacks(AudioDataCallback data, AudioStreamCallback stream, void* user_data = nullptr);
@@ -188,6 +195,8 @@ private:
     Callback<NavStatusCallback> navigation_;
     Callback<AudioDataCallback> audio_;
     Callback<AudioStreamCallback> audioStream_;
+    Callback<TrackCallback> track_;
+    TrackInfo lastTrack_;  // session thread only: the texts last handed to track_
     const char* vehicleFile_;
     bool hdVideo_;
     bool ackWhenPlayed_;

@@ -37,8 +37,8 @@ bool parseControlCommand(const char* data, size_t len, ControlCommand& out) {
     if (n < 1 || n > 2) {
         return false;
     }
-    static const char* const known[] = {"ping", "show",     "hide",      "quit", "gear", "await",
-                                        "pdc",  "daynight", "drivemode", "call", "popup"};
+    static const char* const known[] = {"ping",     "show",      "hide", "quit",  "gear", "await",      "pdc",
+                                        "daynight", "drivemode", "call", "popup", "skip", "clusterskip"};
     bool ok = false;
     for (unsigned i = 0; i < sizeof(known) / sizeof(known[0]); ++i) {
         if (!strcmp(verb, known[i])) {
@@ -49,7 +49,8 @@ bool parseControlCommand(const char* data, size_t len, ControlCommand& out) {
         return false;
     }
     const bool needsArg = !strcmp(verb, "gear") || !strcmp(verb, "pdc") || !strcmp(verb, "daynight") ||
-                          !strcmp(verb, "call") || !strcmp(verb, "popup");
+                          !strcmp(verb, "call") || !strcmp(verb, "popup") || !strcmp(verb, "skip") ||
+                          !strcmp(verb, "clusterskip");
     if (needsArg != (n == 2) && strcmp(verb, "drivemode")) {
         return false;
     }

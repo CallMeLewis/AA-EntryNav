@@ -89,6 +89,8 @@ public:
     static void micRequest(bool open, void* user);
     static void micData(const uint8_t* pcm, size_t len, void* user);
     static void navStatus(uint16_t msgId, const uint8_t* body, size_t len, void* user);
+    // The phone's track: written to contract::kTrackFile for the iDrive app (its cluster player shows the title).
+    static void track(const aa::TrackInfo& info, void* user);
     static void ended(void* user);
     static void connected(int fd, void* user);  // a phone on Wi-Fi: startSession(fd, user)
     // A phone on Wi-Fi connected again while its session runs there: that session ends and this one starts.
@@ -154,9 +156,12 @@ public:
     unsigned sppLinks, tcpLinks;
     std::atomic<unsigned> videoFrames;  // counted on the session thread without mu
     bool wppReply, wppAccepted;
-    bool sessionOnCable;         // the session that runs, or ran last, came over the cable (startSession)
-    bool replacing;              // replaced() is ending the session for the phone's new connection: not a loss
-    unsigned lostWireless;       // sessions over the Wi-Fi lost so far (lostSessions)
+    bool sessionOnCable;    // the session that runs, or ran last, came over the cable (startSession)
+    bool replacing;         // replaced() is ending the session for the phone's new connection: not a loss
+    unsigned lostWireless;  // sessions over the Wi-Fi lost so far (lostSessions)
+    // iDrive's cluster shows a menu of previous and next (the app's cluster player experiment, "clusterskip 1"): each
+    // push of the roller skips again (EvoKnob::setWheelRepeat). Control thread only.
+    std::atomic<bool> clusterSkips;
     std::atomic<bool> usbStop;   // set with stopping: read by the cable thread while it waits for the phone
     std::atomic<bool> usbBusy;   // set by the cable thread while it connects a phone or carries its session
     std::atomic<bool> usbPhone;  // set by the cable thread while a phone is on the cable, connected or not

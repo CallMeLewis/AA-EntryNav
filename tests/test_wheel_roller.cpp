@@ -66,6 +66,20 @@ int main() {
         s.rolled(1, 0x100 + evo::WheelSkip::kSettleMs);
         assert(s.pushed(0x200 + evo::WheelSkip::kSettleMs) == 1);
     }
+    {  // With the cluster's skip menu (repeat): the roll sets the direction, then each push skips again, each within
+       // kPushWithinMs of the one before; a new roll changes it, and a pause closes it
+        evo::WheelSkip w;
+        w.rolled(1, 1000);
+        assert(w.pushed(1500, true) == 1);
+        assert(w.pushed(1500 + evo::WheelSkip::kPushWithinMs, true) == 1);
+        assert(w.pushed(1600 + evo::WheelSkip::kPushWithinMs, true) == 1);
+        w.rolled(-1, 9000);
+        assert(w.pushed(9100, true) == -1 && w.pushed(9200, true) == -1);
+        assert(w.pushed(9201 + evo::WheelSkip::kPushWithinMs, true) == 0);
+        assert(w.pushed(9300 + evo::WheelSkip::kPushWithinMs, true) == 0);  // closed: a roll first
+        w.rolled(1, 20000);
+        assert(w.pushed(20100) == 1 && w.pushed(20200) == 0);  // without repeat, one push per roll as before
+    }
     printf("wheel roller: OK\n");
     return 0;
 }

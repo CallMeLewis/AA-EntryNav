@@ -55,6 +55,9 @@ int main() {
     CHECK(evo::parseControlCommand("call", 4, c) == false);
     CHECK(evo::parseControlCommand("popup 1", 7, c) && c.verb == "popup" && c.arg == 1);  // iDrive popup
     CHECK(evo::parseControlCommand("popup", 5, c) == false);
+    CHECK(evo::parseControlCommand("skip -1", 7, c) && c.verb == "skip" && c.arg == -1);  // iDrive's cluster menu
+    CHECK(evo::parseControlCommand("clusterskip 1", 13, c) && c.verb == "clusterskip" && c.arg == 1);
+    CHECK(!evo::parseControlCommand("skip", 4, c) && !evo::parseControlCommand("clusterskip", 11, c));
     CHECK(!evo::parseControlCommand("gear", 4, c) && !evo::parseControlCommand("show 1", 6, c));
     CHECK(!evo::parseControlCommand("reboot", 6, c) && !evo::parseControlCommand("", 0, c));
     CHECK(!evo::parseControlCommand("gear 2 x", 8, c));

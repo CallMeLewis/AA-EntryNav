@@ -45,6 +45,7 @@ ServiceApp::ServiceApp(uint16_t p, bool v, volatile sig_atomic_t* quit)
       sessionOnCable(false),
       replacing(false),
       lostWireless(0),
+      clusterSkips(false),
       usbStop(false),
       usbBusy(false),
       usbPhone(false),
@@ -55,6 +56,7 @@ ServiceApp::ServiceApp(uint16_t p, bool v, volatile sig_atomic_t* quit)
 }
 
 ServiceApp::~ServiceApp() {
+    unlink(contract::kTrackFile);  // stop() ends a session without its ended callback
     pill.stop();
     server.stop();
     mic.stop();
@@ -439,6 +441,31 @@ void ServiceApp::command(const ControlCommand& c, void* user) {
     if (mediaKey) {
         ELOG("ServiceApp", "Android Auto shown for MEDIA: its media app opens");
     }
+    if (c.verb == "clusterskip") {
+        const bool on = c.arg != 0;
+        if (a->clusterSkips.exchange(on) != on) {
+            // Seen on the car on 22 November 2026: the menu's own previous and next skip nothing on this car, so the
+            // roller still skips here, and with the menu's highlight on next or previous each push skips again.
+            if (a->knob) {
+                a->knob->setWheelRepeat(on);
+            }
+            ELOG("ServiceApp", "iDrive's cluster shows %s",
+                 on ? "its skip menu: each push skips again" : "no skip menu");
+        }
+    }
+    if (c.verb == "skip") {  // next or previous from iDrive's cluster menu, while Android Auto's sound plays
+        const bool session = a->session.isActive();
+        const bool route = a->audio.holdsRoute();  // the audio's own lock: never under mu
+        if (session && route && c.arg) {
+            const uint32_t key = c.arg > 0 ? aa::AAK_MEDIA_NEXT : aa::AAK_MEDIA_PREVIOUS;
+            a->session.postKeyEvent(key, true);
+            a->session.postKeyEvent(key, false);
+        }
+        ELOG("ServiceApp", "iDrive's cluster menu: %s track%s", c.arg > 0 ? "next" : "previous",
+             session && route ? ""
+             : !session       ? " (no session: nothing sent)"
+                              : " (Android Auto's sound not on the car)");
+    }
     if (c.verb == "daynight") {
         a->applyDayNight(c.arg, "iDrive app");
     }
@@ -483,12 +510,42 @@ void ServiceApp::navStatus(uint16_t msgId, const uint8_t* body, size_t len, void
     evo::kombi::Arrows::onNavStatus(msgId, body, len, &a->kombi);
 }
 
+namespace {
+// One line of the track file: a text with its line breaks made spaces, so that each field stays on its own line.
+std::string trackLine(const std::string& text) {
+    std::string line = text;
+    for (size_t i = 0; i < line.size(); ++i) {
+        if (line[i] == '\n' || line[i] == '\r') {
+            line[i] = ' ';
+        }
+    }
+    return line + "\n";
+}
+}  // namespace
+
+// Session thread: a small file in /tmp, replaced whole, as the app's other files.
+void ServiceApp::track(const aa::TrackInfo& info, void*) {
+    const std::string text = trackLine(info.title) + trackLine(info.artist) + trackLine(info.album);
+    const std::string tmp = std::string(contract::kTrackFile) + ".tmp";
+    const int fd = replaceTmpFile(tmp.c_str(), 0644);
+    bool written = false;
+    if (fd >= 0) {
+        written = write(fd, text.data(), text.size()) == static_cast<ssize_t>(text.size());
+        close(fd);
+        written = written && rename(tmp.c_str(), contract::kTrackFile) == 0;
+    }
+    if (!written) {
+        ELOG("ServiceApp", "the track could not be written for the iDrive app");
+    }
+}
+
 void ServiceApp::ended(void* user) {
     ServiceApp* a = static_cast<ServiceApp*>(user);
     // No stop()/join here: this callback runs on the AA session thread.
     a->mic.request(false);
     a->audio.sessionEnded();
     a->kombi.onSessionEnded();
+    unlink(contract::kTrackFile);  // no track without a session
     const bool goodbye = a->session.phoneSaidGoodbye();
     pthread_mutex_lock(&a->mu);
     a->focus = false;

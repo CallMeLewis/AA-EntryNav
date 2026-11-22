@@ -91,7 +91,8 @@ evo-trial: $(TRIAL_OBJ)
 # position independent and hidden: HmiMain3D only looks up pluginAppInfo, the one symbol the library exports.
 HMI_SRC = hmiapp/entry_aa_app.cpp hmiapp/bmw_framework.cpp hmiapp/app_log.cpp hmiapp/app_guards.cpp \
           hmiapp/service_link.cpp hmiapp/car_signals.cpp hmiapp/hold_machine.cpp hmiapp/bt_audio.cpp \
-          hmiapp/car_coding.cpp hmiapp/flare_page.cpp hmiapp/qr_code.cpp hmiapp/qr_png.cpp
+          hmiapp/car_coding.cpp hmiapp/flare_page.cpp hmiapp/qr_code.cpp hmiapp/qr_png.cpp hmiapp/ent_probe.cpp \
+          hmiapp/hmi_thread.cpp hmiapp/cluster_title.cpp
 HMI_OBJ = $(HMI_SRC:.cpp=.o)
 HMI_LIBDIRS = -L$(SYSROOT)/opt/hmi/lib -Wl,-rpath-link,$(SYSROOT)/opt/hmi/lib
 hmiapp: hmiapp/libAAEntryNav.so
@@ -174,6 +175,7 @@ HOST_TESTS = \
     host-usb host-usb-link host-spawn-attr host-popup-peek host-hold-machine host-bt-audio-plan \
     host-car-identity host-pin-lock host-qr-code host-flare-link host-qr-png host-crash-guard host-setup \
     host-release-version host-log-profile host-pb host-volume-pill host-volume-filter host-audio-mixer host-prompt-path \
+    host-media-metadata host-utf16 \
     host-media-key-jump host-wheel-roller host-evo-audio host-aa-frame host-played-acks host-aa-messages host-tcp-server \
     host-session-phone host-wireless-phone host-parsers host-alps-spp host-bluez-adapter host-kombi-phone host-kombi-display \
     host-kombi-graph host-kombi-guide host-kombi-client host-kombi-nav host-bmw-guidance host-kombi-golden \
@@ -276,6 +278,12 @@ host-volume-pill:
 host-volume-filter:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_volume_filter.cpp -o tests/test-volume-filter
 	./tests/test-volume-filter
+host-media-metadata:
+	$(HOST_CXX) $(HOST_FLAGS) tests/test_media_metadata.cpp -o tests/test-media-metadata
+	./tests/test-media-metadata
+host-utf16:
+	$(HOST_CXX) $(HOST_FLAGS) tests/test_utf16.cpp -o tests/test-utf16
+	./tests/test-utf16
 host-audio-mixer:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_audio_mixer.cpp -o tests/test-audio-mixer
 	./tests/test-audio-mixer

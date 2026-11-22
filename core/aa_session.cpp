@@ -274,6 +274,7 @@ bool AASession::start(int client_fd) {
     playedWaiting_ = false;
     playedAcked_ = forcedLogged_ = 0;
     lastReceivedMs_ = 0;  // the previous session's thread is joined
+    lastTrack_ = TrackInfo();
     longestSilenceMs_.store(0);
     goodbye_.store(false);  // after the ended callback of a session ended above
     resetCounters();

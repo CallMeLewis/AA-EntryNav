@@ -61,13 +61,19 @@ public:
         }
     }
 
-    // The roller pushed. 1: skip to the next track, -1: the previous one, 0: nothing.
-    int pushed(uint32_t nowMs) {
+    // The roller pushed. 1: skip to the next track, -1: the previous one, 0: nothing. repeat: the cluster shows a menu
+    // of previous and next (the iDrive app's cluster player experiment), whose highlight the roll moved: the push keeps
+    // that direction for the next push within kPushWithinMs, as iDrive's own players do.
+    int pushed(uint32_t nowMs, bool repeat = false) {
         if (!settled(nowMs)) {
             return 0;
         }
         const int d = nowMs - rolledMs_ <= kPushWithinMs ? direction_ : 0;
-        direction_ = 0;
+        if (repeat && d) {
+            rolledMs_ = nowMs;
+        } else {
+            direction_ = 0;
+        }
         return d;
     }
 

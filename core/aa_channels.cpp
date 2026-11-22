@@ -428,6 +428,20 @@ void AASession::onNavigationStatus(uint16_t id, const Message& message) {
 
 // Playback state every second, track metadata and album art: only changes of state are logged.
 void AASession::onPlaybackStatus(uint16_t id, const Message& message) {
+    if (id == msg::kPlaybackMetadata) {
+        // The track: handed on when its texts change (the album art and duration alone do not count).
+        TrackInfo track;
+        const bool ok = parseMediaMetadata(bodyOf(message), bodySize(message), track);
+        if (!track.sameText(lastTrack_)) {
+            lastTrack_ = track;
+            printf("[AASession] media status ch12: track '%s' by '%s' (%u s)%s\n", track.title.c_str(),
+                   track.artist.c_str(), track.durationS, ok ? "" : ", message cut short");
+            if (track_.fn) {
+                track_.fn(track, track_.user);
+            }
+        }
+        return;
+    }
     if (id != msg::kPlaybackState) {
         return;
     }

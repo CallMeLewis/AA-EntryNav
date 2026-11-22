@@ -260,6 +260,7 @@ int main(int argc, char** argv) {
     app.session.setMicRequestCallback(evo::ServiceApp::micRequest, &app);
     app.mic.start(evo::ServiceApp::micData, &app);  // optional: without it the Assistant just hears nothing
     app.session.setNavStatusCallback(evo::ServiceApp::navStatus, &app);
+    app.session.setTrackCallback(evo::ServiceApp::track, &app);
     app.kombi.start(evo::kombi::probeBmwGuidance);  // HUD/cluster arrows; the BMW navigation always wins
     evo::CarGpsReader carGps;
     evo::CarGpsFeed gpsFeed;
