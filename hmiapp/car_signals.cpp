@@ -43,10 +43,11 @@ bool onGearChanged(void*, const bmw::BasicString<unsigned short>& value) {
     if (gear != g_lastGear) {
         alog("CDS %s = '%s' -> gear %d", kGearProperty, text, gear);
         g_lastGear = gear;
-        g_hold->gearChanged(gear);
-        char msg[32];
-        snprintf(msg, sizeof(msg), "gear %d", gear);
-        sendToService(msg);
+        if (g_hold->gearChanged(gear, monoSeconds())) {  // else the hold tells the service once the camera lets go
+            char msg[32];
+            snprintf(msg, sizeof(msg), "gear %d", gear);
+            sendToService(msg);
+        }
     }
     return true;
 }

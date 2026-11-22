@@ -117,6 +117,8 @@ struct Car {
         blankVisible(false);
     }
     void call(bool on) { hold.callChanged(on, now); }
+    // driving.gear: true when the app tells the service at once (car_signals.cpp).
+    bool gear(int value) { return hold.gearChanged(value, now); }
 
     std::string take() {
         std::string all;
@@ -138,7 +140,7 @@ struct Car {
 
 // A connected phone, gear 1, nothing on screen yet; the service already told the call and the gear.
 void connected(Car& c) {
-    c.hold.gearChanged(1);
+    c.gear(1);
     c.service("connected", 42, 0);
     c.poll();
     CHECK_OUT(c, "await, call 0, gear 1");
@@ -372,10 +374,10 @@ void waitsAsideForIdrive() {
         c.polls(10);
         CHECK_OUT(c, "");
         c.call(false);
-        c.hold.gearChanged(evo::app::kReverseGear);
+        c.gear(evo::app::kReverseGear);
         c.polls(10);
         CHECK_OUT(c, "");
-        c.hold.gearChanged(1);
+        c.gear(1);
         c.poll();
         CHECK_OUT(c, "event 51");
         c.menu(true);
@@ -523,7 +525,7 @@ void ownPopupNotLeftBehind() {
     {  // Android Auto over an iDrive screen, our popup open, then reverse: closed at once, nothing over the camera
         Car c;
         heldThenIdriveScreen(c);
-        c.hold.gearChanged(evo::app::kReverseGear);
+        c.gear(evo::app::kReverseGear);
         CHECK_OUT(c, "own popup 0");
         CHECK(c.logged("hold: reverse gear: our own popup closed until it ends"));
         c.overlay(0);  // the service hides the picture for the camera
@@ -686,7 +688,7 @@ void reverseGear() {
     {  // the camera: Android Auto steps aside by itself, iDrive is not moved
         Car c;
         heldOnBlank(c);
-        c.hold.gearChanged(2);
+        CHECK(c.gear(2));
         c.blankFocus(false);
         c.overlay(0);
         c.poll();
@@ -695,8 +697,16 @@ void reverseGear() {
         CHECK(!c.hold.holding());
         c.blankVisible(true);  // iDrive back on the blank state while in reverse: no show
         CHECK_OUT(c, "");
-        c.hold.gearChanged(1);
-        c.blankFocus(true);
+        // Out of reverse before the camera closed: the service still hears reverse, and only the latest gear follows.
+        CHECK(!c.gear(0));
+        CHECK(!c.gear(1));
+        c.polls(3);
+        c.blankVisible(true);
+        CHECK_OUT(c, "");
+        CHECK(c.hold.cameraUp());
+        c.blankFocus(true);  // the camera gave the focus back
+        CHECK_OUT(c, "gear 1");
+        CHECK(!c.hold.cameraUp());
         c.overlay(1);  // reverse ended, Android Auto back over the blank state
         c.poll();
         CHECK_OUT(c, "");
@@ -705,7 +715,7 @@ void reverseGear() {
     {  // in reverse, iDrive away from the blank state: no hard key step aside, no app key hold, no popup peek
         Car c;
         heldOnBlank(c);
-        c.hold.gearChanged(2);
+        c.gear(2);
         c.io.appKey = true;
         c.io.appKeyAt = c.now;
         c.blankLeft();
@@ -717,15 +727,92 @@ void reverseGear() {
        // long the service's state file is late to say it stepped aside
         Car c;
         heldOnBlank(c);
-        c.hold.gearChanged(2);
+        c.gear(2);
         c.blankFocus(false);
         c.polls(5);
         CHECK_OUT(c, "");
         CHECK(!c.hold.popupPeek());
         CHECK(!c.logged("state lost focus"));
-        c.hold.gearChanged(1);  // reverse ends with the focus still elsewhere: what took it is a popup again
+        CHECK(!c.gear(1));  // reverse ends with the focus still elsewhere: the camera may still be up
+        c.polls(HoldMachine::kCameraWaitS - 1);
+        CHECK_OUT(c, "");
+        CHECK(!c.hold.popupPeek());
+        c.poll();  // the camera never gave the focus back: the service hears the gear, and what holds it is a popup
+        CHECK_OUT(c, "gear 1, popup 1");
+    }
+    {  // out of reverse, the camera still up: iDrive showing the blank state under it is not a return to Android Auto
+        Car c;
+        heldOnBlank(c);
+        c.gear(2);
+        c.blankLeft();
+        c.overlay(0);
         c.poll();
-        CHECK_OUT(c, "popup 1");
+        CHECK(!c.gear(1));
+        c.blankVisible(true);
+        c.polls(5);
+        CHECK_OUT(c, "");
+        c.blankFocus(true);  // the camera closed: the gear, then Android Auto comes back by itself
+        CHECK_OUT(c, "gear 1");
+    }
+    {  // reverse again while the camera is still up, then a service that starts again: still told reverse
+        Car c;
+        heldOnBlank(c);
+        CHECK(c.gear(2));
+        c.blankLeft();
+        c.overlay(0);
+        c.poll();
+        CHECK(!c.gear(1));
+        CHECK(c.gear(2));
+        CHECK(!c.gear(1));
+        c.service("idle", 0, 0);
+        c.poll();
+        CHECK_OUT(c, "");
+        c.service("running", 43, 0);
+        c.poll();
+        CHECK_OUT(c, "await, call 0, gear 2");
+        c.blankFocus(true);
+        CHECK_OUT(c, "gear 1");
+    }
+    {  // our menu taking the focus lets the camera go before Android Auto, waiting aside, comes up
+        Car c;
+        heldOnBlank(c);
+        c.gear(2);
+        c.blankLeft();
+        c.overlay(0);
+        c.poll();
+        CHECK(!c.gear(1));
+        c.overlay(2);
+        c.poll();
+        c.menu(false);
+        CHECK_OUT(c, "");
+        c.menu(true);
+        CHECK_OUT(c, "gear 1, show, event 52");
+    }
+    {  // the driver chooses Android Auto (Open row) while the camera may still be up: it comes up
+        Car c;
+        heldOnBlank(c);
+        c.gear(2);
+        c.blankLeft();
+        c.overlay(0);
+        c.poll();
+        CHECK(!c.gear(1));
+        c.hold.showAndHold("Open row", c.now);
+        CHECK_OUT(c, "gear 1, show, event 52");
+        CHECK(!c.hold.cameraUp());
+    }
+    {  // reverse that did not take the screen from Android Auto: the gear goes to the service at once
+        Car c;
+        connected(c);
+        CHECK(c.gear(2));
+        CHECK(c.gear(1));
+        CHECK(!c.hold.cameraUp());
+    }
+    {  // the blank state already has the focus back when reverse ends: the gear goes at once
+        Car c;
+        heldOnBlank(c);
+        CHECK(c.gear(2));
+        CHECK(c.gear(1));
+        CHECK(!c.hold.cameraUp());
     }
     {  // Open row, then reverse before Android Auto came up: no menu over the camera; the 3 s start again after it
         Car c;
@@ -735,11 +822,11 @@ void reverseGear() {
         c.blankShown();
         CHECK_OUT(c, "show, event 52");
         c.poll();
-        c.hold.gearChanged(2);
+        c.gear(2);
         c.polls(10);
         CHECK_OUT(c, "");
         CHECK(c.hold.holding());
-        c.hold.gearChanged(1);
+        c.gear(1);
         c.polls(2);
         CHECK_OUT(c, "");  // Android Auto may still come up
         c.overlay(1);
@@ -754,9 +841,9 @@ void reverseGear() {
         c.hold.showAndHold("Open row", c.now);
         c.blankShown();
         c.take();
-        c.hold.gearChanged(2);
+        c.gear(2);
         c.polls(10);
-        c.hold.gearChanged(1);
+        c.gear(1);
         c.polls(2);
         CHECK_OUT(c, "");
         c.poll();
@@ -765,7 +852,7 @@ void reverseGear() {
     {  // in reverse, our menu taking the focus under a service not yet aside fires nothing
         Car c;
         heldOnBlank(c);
-        c.hold.gearChanged(2);
+        c.gear(2);
         c.blankVisible(false);
         c.menu(true);
         CHECK_OUT(c, "");
@@ -773,7 +860,7 @@ void reverseGear() {
     {  // a service that comes on screen in reverse (it had not heard of the gear yet): nothing over the camera
         Car c;
         connected(c);
-        c.hold.gearChanged(2);
+        c.gear(2);
         c.overlay(1);
         c.poll();
         CHECK_OUT(c, "");
@@ -873,7 +960,7 @@ void screenChangeForBluetoothAudio() {
     {  // in reverse the camera wins: nothing is held
         Car c;
         heldOnBlank(c);
-        c.hold.gearChanged(evo::app::kReverseGear);
+        c.gear(evo::app::kReverseGear);
         c.hold.expectScreenChange(c.now);
         c.blankLeft();
         CHECK_OUT(c, "");
@@ -1093,7 +1180,7 @@ void backToBlankWhileMinimized() {
         CHECK_OUT(f, "");
         f.call(false);
         f.blankLeft();
-        f.hold.gearChanged(2);
+        f.gear(2);
         f.blankFocus(true);
         CHECK_OUT(f, "");
     }
@@ -1113,7 +1200,7 @@ void startWhileRunning() {
 void serviceRestart() {
     {  // started in reverse: the call and the gear when it becomes reachable, again when the phone connects
         Car c;
-        c.hold.gearChanged(2);
+        c.gear(2);
         c.service("connecting", -1, 0);  // the supervisor in its preflight
         c.poll();
         CHECK_OUT(c, "");

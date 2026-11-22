@@ -48,7 +48,9 @@
 //   only took the focus closed, as park distance control without reverse): "show", like CarPlay, once per return.
 // - Reverse gear: the camera wins. No event 50, 51 or 52 over it, whatever the service's state file still says, no
 //   popup peek, no "show", no hard key step aside, no app key hold. The Open row's 3 s wait starts again once reverse
-//   ends.
+//   ends. The camera can stay up after the gear leaves reverse: when reverse took the screen from Android Auto, all of
+//   that goes on, and the service still hears reverse, until the blank state or our menu has the focus again, the
+//   driver chooses Android Auto (Open row, entry button), or 15 s pass. Reverse again meanwhile keeps that wait.
 // - Phone call: iDrive's call screen is not fought; when the call ends, event 52 within 10 s. A phone waiting aside
 //   waits through the call and the reverse gear too.
 // - Service (re)started, or phone connected: it is told the call and the gear again (started in reverse, Android Auto
@@ -95,13 +97,16 @@ public:
     static const int kDriveModeQuietS = 15;  // after a driving mode change, its display's focus loss is not fought
     static const int kAppKeyS = 2;           // an app key file this recent means NAV / MEDIA / COM was just pressed
     static const int kCallEndS = 10;         // a call that ended this recently takes iDrive back to the blank state
+    static const int kCameraWaitS = 15;      // out of reverse, the camera is given this long to give the focus back
     static const long kMenuRefireMs = 300;   // our menu's focus fires event 52 at most this often
 
     explicit HoldMachine(HoldIo& io);
 
     // ---- the car (CDS properties) ----
     void callChanged(bool inCall, long now);  // after each update of either phone line
-    void gearChanged(int gear);
+    // True when the caller tells the service the gear now. False while the camera may still be up after reverse: the
+    // machine sends the latest gear itself once it lets go.
+    bool gearChanged(int gear, long now);
     void driveModeChanged(long now);  // a real change between two valid driving modes
 
     // ---- the app's own requests ----
@@ -128,8 +133,11 @@ public:
     // so a notification that never came for the other one cannot leave a stale flag behind.
     bool blankShown() const { return aaVisible_ && !menuFocused_; }
     bool popupPeek() const { return popup_.active(); }
+    // The reverse camera is up, or may still be after reverse (gearPending_): nothing is done over it.
+    bool cameraUp() const { return gear_ == kReverseGear || gearPending_; }
 
 private:
+    void releaseGear(const char* why);
     void fireHold(const char* why, long now);
     void holdViaMenu(const char* why, long now);
     bool appKeyRecent();
@@ -184,6 +192,9 @@ private:
     bool inCall_;
     long callEnd_;  // when the last call ended, 0: handled
     int gear_;
+    bool reverseTookAa_;  // the reverse camera took the screen from Android Auto (held when reverse began)
+    bool gearPending_;    // out of reverse, the service still hears reverse until the camera lets go
+    long gearPendingSince_;
     long driveModeAt_;  // last driving mode change, 0: none
 
     // The service, as told about the car
