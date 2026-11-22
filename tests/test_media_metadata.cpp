@@ -1,5 +1,5 @@
 // Copyright (c) 2026 CallMeLewis
-// The phone's track metadata (core/media_metadata.hpp): its texts and duration, album art skipped, odd input survived.
+// The phone's track metadata (core/media_metadata.hpp): its texts, duration and album art, odd input survived.
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -34,6 +34,7 @@ int main() {
         CHECK(aa::parseMediaMetadata(&m[0], m.size(), t));
         CHECK(t.title == "Strobe" && t.artist == "deadmau5" && t.album == "For Lack of a Better Name");
         CHECK(t.playlist == "Drive" && t.durationS == 637);
+        CHECK(t.art.size() == sizeof(png) && t.art[1] == 'P' && t.artHash == aa::trackArtHash(png, sizeof(png)));
     }
     {  // UTF-8 passes through as it is; an overlong text is cut
         std::vector<uint8_t> m;
@@ -57,14 +58,23 @@ int main() {
         CHECK(!aa::parseMediaMetadata(&m[0], m.size(), t) && t.title == "Title" && t.artist.empty());
         CHECK(aa::parseMediaMetadata(nullptr, 0, t) && t.title.empty() && t.durationS == 0);
     }
-    {  // The same texts compare equal whatever the duration
+    {  // The same texts compare equal whatever the duration; a new picture is a change to show
         aa::TrackInfo a, b;
         a.title = b.title = "x";
         b.durationS = 9;
-        CHECK(a.sameText(b));
+        CHECK(a.sameText(b) && a.sameShown(b));
+        b.artHash = 7;
+        CHECK(a.sameText(b) && !a.sameShown(b));
         b.album = "y";
         CHECK(!a.sameText(b));
     }
-    puts("PASS media metadata: song, artist, album, playlist and duration read, album art skipped, cut input survived");
+    {  // No album art, or one past the limit, leaves art empty and its hash 0
+        std::vector<uint8_t> m;
+        appendString(m, 1, "Song");
+        appendBytes(m, 4, reinterpret_cast<const uint8_t*>(""), 0);
+        aa::TrackInfo t;
+        CHECK(aa::parseMediaMetadata(&m[0], m.size(), t) && t.art.empty() && t.artHash == 0);
+    }
+    puts("PASS media metadata: song, artist, album, playlist, duration and album art read, cut input survived");
     return 0;
 }

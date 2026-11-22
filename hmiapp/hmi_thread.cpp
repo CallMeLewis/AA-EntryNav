@@ -30,6 +30,7 @@ const char kClusterUnitClass[] = "_ZTV14CHmiICProcUnit+8";
 const unsigned kMaxTries = 120;  // one a second from the status poll
 
 typedef void* (*GetHmiProcUnit)();
+typedef GetHmiProcUnit GetHmiProcUnitFn;
 typedef unsigned short (*RegisterGroup)(const char* name);
 // The member function pointer goes as two words, its function then its adjustment.
 typedef void (*RegisterEvent)(void* queue, void* target, void* fn, int adj, unsigned short group, unsigned short id);
@@ -51,13 +52,22 @@ std::atomic<bool> g_pending(false);
 std::atomic<unsigned> g_runs(0);
 char g_target;  // the listener's target: nothing is read from it
 
-// iDrive's dispatcher calls this as a member function of g_target, on the cluster unit's thread.
+void* g_cluster = nullptr;  // the cluster's proc unit, once found
+GetHmiProcUnitFn g_getUnit = nullptr;
+std::atomic<unsigned> g_clusterRuns(0);
+
+// iDrive's dispatcher calls this as a member function of g_target, on each listening unit's thread: HmiMain3D's own
+// and the cluster's.
 void onEventEntry(void* /*target*/, const void* /*event*/) {
     g_pending = false;
-    if (g_runs++ == 0) {
+    const bool cluster = g_getUnit && g_cluster && g_getUnit() == g_cluster;
+    if (cluster && g_clusterRuns++ == 0) {
         g_thread = pthread_self();
         g_threadKnown = true;
-        alog("hmi thread: first job run, on the cluster's thread");
+        alog("hmi thread: first job run on the cluster's thread");
+    }
+    if (!cluster && g_runs++ == 0) {
+        alog("hmi thread: first job run on HmiMain3D's own thread");
     }
     if (g_job) {
         g_job();
@@ -153,6 +163,7 @@ bool registerOnCluster() {
         }
         return false;
     }
+    g_cluster = unit;
     reinterpret_cast<RegisterEvent>(g_registerFn)(unit, &g_target, reinterpret_cast<void*>(&onEventEntry), 0, g_group,
                                                   kRunId);
     g_registered = true;
@@ -185,15 +196,20 @@ bool captureHmiThread(HmiThreadJob job) {
     g_job = job;
     g_key = static_cast<uint32_t>(g_group) << 16 | kRunId;
     g_main = queue;
-    alog("hmi thread: event group 0x%04x (%s), sent through queue %p", g_group, kGroupName, queue);
+    g_getUnit = get;
+    // HmiMain3D's own unit listens too: the main menu and the media screens read its proxies.
+    reinterpret_cast<RegisterEvent>(g_registerFn)(queue, &g_target, reinterpret_cast<void*>(&onEventEntry), 0, g_group,
+                                                  kRunId);
+    alog("hmi thread: event group 0x%04x (%s), listening on HmiMain3D's queue %p", g_group, kGroupName, queue);
     registerOnCluster();
     return true;
 }
 
 bool requestHmiThread() {
-    if (!g_main || !registerOnCluster()) {
+    if (!g_main) {
         return false;
     }
+    registerOnCluster();  // until found: HmiMain3D's own unit listens meanwhile
     if (g_pending.exchange(true)) {
         return true;  // one already queued: it does this work too
     }
@@ -209,7 +225,7 @@ bool requestHmiThread() {
 }
 
 bool onHmiThread() {
-    return g_threadKnown && pthread_equal(pthread_self(), g_thread);
+    return g_threadKnown && pthread_equal(pthread_self(), g_thread);  // the cluster's thread
 }
 
 }  // namespace app

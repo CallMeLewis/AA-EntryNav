@@ -40,6 +40,7 @@
 #include "car_coding.hpp"
 #include "car_signals.hpp"
 #include "cluster_title.hpp"
+#include "cover_art.hpp"
 #include "ent_probe.hpp"
 #include "flare_page.hpp"
 #include "hmi_thread.hpp"
@@ -436,6 +437,7 @@ bmw::PluginApp* createApp(bmw::IDispatcher& dispatcher, const char* name, const 
     captureEntProbe();       // the same, and only with its file (ent_probe.hpp)
     if (clusterPlayerInstalled()) {
         captureHmiThread(&hmiThreadJob);  // the same: getHmiProcUnit answers there (hmi_thread.hpp)
+        coverInstall();                   // the same: CarPlay's screens live there (cover_art.hpp)
     }
     const PluginAppHooks hooks = {&appOnInit, &appOnError, &appOnFinalize};
     void* base = nullptr;
@@ -447,6 +449,7 @@ bmw::PluginApp* createApp(bmw::IDispatcher& dispatcher, const char* name, const 
 
 void destroyApp(void* app) {
     alog("destroy(%p)", app);
+    coverRelease();
     releaseEntProbe();  // whatever happens next: the library may go, and CarPlay's player calls into it
     if (!app) {
         return;

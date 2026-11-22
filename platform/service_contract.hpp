@@ -64,8 +64,10 @@ constexpr char kAppKeyFile[] = "/tmp/aa-entrynav-appkey";              // a key 
 constexpr char kMediaJumpFile[] = "/tmp/aa-entrynav-media";            // MEDIA over iDrive: the app shows AA
 constexpr char kDayNightFile[] = "/tmp/aa-entrynav-daynight";          // day or night, written by the app
 constexpr char kCarFile[] = "/tmp/aa-entrynav-car";                    // the car's own details, by the app
-// The track the phone plays, by the service, while a session runs: three lines, title, artist and album, in UTF-8.
+// The track the phone plays, by the service, while a session runs: four lines, title, artist and album in UTF-8, then
+// the album art's hash in hex (empty without one), which changes with the picture in kCoverFile.
 constexpr char kTrackFile[] = "/tmp/aa-entrynav-track";
+constexpr char kCoverFile[] = "/tmp/aa-entrynav-cover";  // the album art's bytes as the phone sent them (PNG or JPEG)
 constexpr char kWirelessLock[] = "/tmp/aa-entrynav-wireless.lock";  // one wireless start at a time
 constexpr char kWlandApConf[] = "/tmp/wland/ap.conf";  // BMW's hotspot settings, written by wland (platform/evo_ap.cpp)
 // The service's udev rule while Android Auto over a cable is on (usb_link.hpp: kUsbUdevRuleDir/kUsbUdevRuleName). The

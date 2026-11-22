@@ -57,6 +57,7 @@ ServiceApp::ServiceApp(uint16_t p, bool v, volatile sig_atomic_t* quit)
 
 ServiceApp::~ServiceApp() {
     unlink(contract::kTrackFile);  // stop() ends a session without its ended callback
+    unlink(contract::kCoverFile);
     pill.stop();
     server.stop();
     mic.stop();
@@ -521,20 +522,34 @@ std::string trackLine(const std::string& text) {
     }
     return line + "\n";
 }
+
+// A file in /tmp replaced whole, as the app's other files: the app never reads half of one.
+bool replaceFile(const char* path, const std::string& bytes) {
+    const std::string tmp = std::string(path) + ".tmp";
+    const int fd = replaceTmpFile(tmp.c_str(), 0644);
+    if (fd < 0) {
+        return false;
+    }
+    const bool written = write(fd, bytes.data(), bytes.size()) == static_cast<ssize_t>(bytes.size());
+    close(fd);
+    return written && rename(tmp.c_str(), path) == 0;
+}
 }  // namespace
 
-// Session thread: a small file in /tmp, replaced whole, as the app's other files.
+// Session thread: the album art first, so that the track file's new hash never names a picture not there yet.
 void ServiceApp::track(const aa::TrackInfo& info, void*) {
-    const std::string text = trackLine(info.title) + trackLine(info.artist) + trackLine(info.album);
-    const std::string tmp = std::string(contract::kTrackFile) + ".tmp";
-    const int fd = replaceTmpFile(tmp.c_str(), 0644);
-    bool written = false;
-    if (fd >= 0) {
-        written = write(fd, text.data(), text.size()) == static_cast<ssize_t>(text.size());
-        close(fd);
-        written = written && rename(tmp.c_str(), contract::kTrackFile) == 0;
+    char hash[16] = "";
+    if (!info.art.empty()) {
+        if (replaceFile(contract::kCoverFile, info.art)) {
+            snprintf(hash, sizeof(hash), "%08x", info.artHash);
+        } else {
+            ELOG("ServiceApp", "the album art could not be written for the iDrive app");
+        }
+    } else {
+        unlink(contract::kCoverFile);
     }
-    if (!written) {
+    const std::string text = trackLine(info.title) + trackLine(info.artist) + trackLine(info.album) + hash + "\n";
+    if (!replaceFile(contract::kTrackFile, text)) {
         ELOG("ServiceApp", "the track could not be written for the iDrive app");
     }
 }
@@ -546,6 +561,7 @@ void ServiceApp::ended(void* user) {
     a->audio.sessionEnded();
     a->kombi.onSessionEnded();
     unlink(contract::kTrackFile);  // no track without a session
+    unlink(contract::kCoverFile);
     const bool goodbye = a->session.phoneSaidGoodbye();
     pthread_mutex_lock(&a->mu);
     a->focus = false;
