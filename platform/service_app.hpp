@@ -108,6 +108,7 @@ public:
     bool wifiSessionRunning() override;
     void sppLinkOpened() override;
     void handshakeEnded(bool spoke, bool accepted) override;
+    unsigned lostSessions() override;
 
     // ---- UsbHost ----
     void cableState(bool present, bool busy) override {
@@ -151,6 +152,9 @@ public:
     unsigned sppLinks, tcpLinks;
     std::atomic<unsigned> videoFrames;  // counted on the session thread without mu
     bool wppReply, wppAccepted;
+    bool sessionOnCable;         // the session that runs, or ran last, came over the cable (startSession)
+    bool replacing;              // replaced() is ending the session for the phone's new connection: not a loss
+    unsigned lostWireless;       // sessions over the Wi-Fi lost so far (lostSessions)
     std::atomic<bool> usbStop;   // set with stopping: read by the cable thread while it waits for the phone
     std::atomic<bool> usbBusy;   // set by the cable thread while it connects a phone or carries its session
     std::atomic<bool> usbPhone;  // set by the cable thread while a phone is on the cable, connected or not

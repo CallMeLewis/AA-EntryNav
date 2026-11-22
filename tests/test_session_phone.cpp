@@ -836,6 +836,11 @@ void fullSession(std::vector<std::string>& log) {
     phone.send(0, kSealed, bytes({0x00, 0x0f, 0x08, 0x01}));
     phone.untilClosed();
     ended(link, log);
+    // The service tells this end from a lost session, after which it drops the phone's Bluetooth link.
+    if (!s.phoneSaidGoodbye()) {
+        fprintf(stderr, "FAIL the session forgot the phone's ByeByeRequest\n");
+        exit(1);
+    }
 }
 
 // Fragments in odd orders, short messages, a frame that does not decrypt, then the phone leaves.
@@ -892,6 +897,10 @@ void fragmentEdges(std::vector<std::string>& log) {
     phone.settle();
     phone.leave();
     ended(link, log);
+    if (link.session.phoneSaidGoodbye()) {
+        fprintf(stderr, "FAIL a phone that left without ByeByeRequest counted as a goodbye\n");
+        exit(1);
+    }
 }
 
 // Frames that do not decrypt. Fifteen in a row are dropped and the session goes on; a frame that decrypts starts the

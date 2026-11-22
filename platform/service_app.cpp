@@ -42,6 +42,9 @@ ServiceApp::ServiceApp(uint16_t p, bool v, volatile sig_atomic_t* quit)
       videoFrames(0),
       wppReply(false),
       wppAccepted(false),
+      sessionOnCable(false),
+      replacing(false),
+      lostWireless(0),
       usbStop(false),
       usbBusy(false),
       usbPhone(false),
@@ -121,6 +124,13 @@ void ServiceApp::handshakeEnded(bool spoke, bool accepted) {
     wppReply = wppReply || spoke;
     wppAccepted = wppAccepted || accepted;
     pthread_mutex_unlock(&mu);
+}
+
+unsigned ServiceApp::lostSessions() {
+    pthread_mutex_lock(&mu);
+    const unsigned v = lostWireless;
+    pthread_mutex_unlock(&mu);
+    return v;
 }
 
 ServiceApp::Turn ServiceApp::turn(bool service) {
@@ -475,13 +485,20 @@ void ServiceApp::ended(void* user) {
     a->mic.request(false);
     a->audio.sessionEnded();
     a->kombi.onSessionEnded();
+    const bool goodbye = a->session.phoneSaidGoodbye();
     pthread_mutex_lock(&a->mu);
     a->focus = false;
     a->asking = false;
     a->mediaJump.cancel();
+    // The wireless loop drops the phone's Bluetooth link after a loss (wireless_loop.hpp). The cable's sessions are
+    // not its business, and neither is one replaced() ends for the phone's new connection.
+    const bool lost = !goodbye && !a->sessionOnCable && !a->replacing;
+    if (lost) {
+        ++a->lostWireless;
+    }
     pthread_mutex_unlock(&a->mu);
     a->server.notifySessionEnded();
-    ELOG("ServiceApp", "session ended");
+    ELOG("ServiceApp", "session ended%s", goodbye ? " (the phone said goodbye)" : lost ? " (lost)" : "");
 }
 
 void ServiceApp::connected(int fd, void* user) {
@@ -500,12 +517,22 @@ bool ServiceApp::replaced(int fd, void* user) {
     ELOG("ServiceApp",
          "the phone connected again while its session runs: that session ends, the new connection "
          "takes over");
+    pthread_mutex_lock(&a->mu);
+    a->replacing = true;  // the phone is back already: its Bluetooth link stays up
+    pthread_mutex_unlock(&a->mu);
     a->session.end();
     const unsigned kEndWaitMs = 3000;
     for (unsigned waited = 0; a->session.isActive() && waited < kEndWaitMs; waited += 20) {
         usleep(20000);
     }
-    if (a->session.isActive()) {
+    const bool gone = !a->session.isActive();
+    if (gone) {
+        a->session.stop();  // joins its thread: the session is no longer active before its ended() has run
+    }
+    pthread_mutex_lock(&a->mu);
+    a->replacing = false;
+    pthread_mutex_unlock(&a->mu);
+    if (!gone) {
         ELOG("ServiceApp", "the old session did not end within %u ms: the new connection is turned away", kEndWaitMs);
         return false;
     }
@@ -541,6 +568,7 @@ bool ServiceApp::startSession(int fd, void* user, bool cable) {
     pthread_mutex_lock(&a->mu);
     ++a->tcpLinks;
     a->tcpPreparing = true;
+    a->sessionOnCable = cable;
     pthread_mutex_unlock(&a->mu);
     ELOG("ServiceApp", "phone TCP connection received; preparing the video and the AA session");
     a->session.stop();  // join callbacks before destroying/reinitializing video buffers

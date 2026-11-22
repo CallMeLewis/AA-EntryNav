@@ -80,6 +80,7 @@ AASession::AASession()
       ackWhenPlayed_(false),
       playedForceMs_(kPlayedForceMs),
       longestSilenceMs_(0),
+      goodbye_(false),
       lastReceivedMs_(0),
       setupUntilMs_(0),
       undecrypted_(0),
@@ -267,6 +268,7 @@ bool AASession::start(int client_fd) {
     playedAcked_ = forcedLogged_ = 0;
     lastReceivedMs_ = 0;  // the previous session's thread is joined
     longestSilenceMs_.store(0);
+    goodbye_.store(false);  // after the ended callback of a session ended above
     resetCounters();
     setRunning(true);
     if (pthread_create(&thread_, nullptr, &AASession::threadMain, this) != 0) {

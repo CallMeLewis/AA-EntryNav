@@ -16,8 +16,9 @@
 #include "service_contract.hpp"
 #include "wireless_setup.hpp"
 
-static std::atomic<int> starts(0), waits(0);
+static std::atomic<int> starts(0), waits(0), serves(0), dropped(0);
 static std::atomic<bool> fixtureLink(true), borrowed(false);
+static std::atomic<bool> phoneKeepsLink(false);  // the phone keeps its Bluetooth link after accepting the Wi-Fi
 static evo::ServiceApp* instance = 0;
 static volatile sig_atomic_t quitFlag = 0;
 namespace evo {
@@ -43,6 +44,11 @@ void AlpsSppLink::closeLink() {
     fixtureLink = false;
     borrowed = false;
 }
+bool AlpsSppLink::requestSppDisconnect() {  // the stack drops the link: the phone sees it go
+    ++dropped;
+    fixtureLink = false;
+    return true;
+}
 }  // namespace evo
 namespace aa {
 WirelessSetup::WirelessSetup(int fd, const ApInfo& ap, uint16_t port, int peekMs)
@@ -52,12 +58,19 @@ bool WirelessSetup::handshake(int) {
     pthread_mutex_lock(&instance->mu);
     instance->tcpPreparing = true;
     pthread_mutex_unlock(&instance->mu);
-    fixtureLink = false;
+    if (!phoneKeepsLink) {
+        fixtureLink = false;
+    }
     ++starts;
     return true;
 }
 bool WirelessSetup::serve(int) {
-    return false;
+    if (!phoneKeepsLink) {
+        return false;
+    }
+    ++serves;
+    usleep(10000);
+    return fixtureLink;
 }
 }  // namespace aa
 static void preparing(bool value) {
@@ -70,6 +83,41 @@ static void awaitStarts(int count) {
         usleep(10000);
     }
     assert(starts == count);
+}
+// The loop serves a link it handed the Wi-Fi to: a few more rounds of serve() have run.
+static void awaitServes() {
+    const int before = serves;
+    for (unsigned i = 0; i < 200 && serves < before + 3; ++i) {
+        usleep(10000);
+    }
+    assert(serves >= before + 3);
+}
+static bool linkDroppedWithin(unsigned ms) {
+    for (unsigned i = 0; i < ms / 10 && fixtureLink; ++i) {
+        usleep(10000);
+    }
+    return !fixtureLink;
+}
+// A session over the Wi-Fi on a socketpair. The fake handshake leaves a connection being prepared: cleared, so that
+// the session alone keeps the projection busy, as once startSession() returns.
+static int runSession(evo::ServiceApp& app) {
+    int pair[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    assert(app.session.start(pair[0]) && app.session.isActive());
+    pthread_mutex_lock(&app.mu);
+    app.tcpPreparing = false;
+    pthread_mutex_unlock(&app.mu);
+    return pair[1];
+}
+// The phone's side of the connection closes: the session ends by itself, without ByeByeRequest.
+static void loseSession(evo::ServiceApp& app, int phone) {
+    usleep(50000);
+    assert(fixtureLink);  // a running session leaves the link alone
+    close(phone);
+    for (unsigned i = 0; i < 200 && app.session.isActive(); ++i) {
+        usleep(10000);
+    }
+    assert(!app.session.isActive());
 }
 // The phone opens its Bluetooth link again. The loop closes the link it had after each handshake, on its own thread,
 // and that close would take this new link with it: wait for it first.
@@ -85,6 +133,7 @@ static void onScreen(evo::ServiceApp& app, bool on, uint32_t later = 0) {
     app.peek.turn(evo::monoMs() + later, on);
 }
 int main() {
+    signal(SIGPIPE, SIG_IGN);  // as the service does (crash_handler.cpp): a session can write to a phone just gone
     evo::ServiceApp app(50000, false, &quitFlag);
     instance = &app;
     {  // iDrive popup: picture aside with a time limit, back as soon as it closes, nothing when not on screen
@@ -231,15 +280,75 @@ int main() {
     assert(starts == 3);
     app.usbBusy = false;
     awaitStarts(4);
+    {  // A phone that keeps its Bluetooth link after accepting the Wi-Fi (upstream #88: MINI F56, Galaxy Z Fold)
+        app.session.setDisconnectCallback(evo::ServiceApp::ended, &app);
+        phoneKeepsLink = true;
+        preparing(false);
+        offerLink();
+        awaitStarts(5);
+        awaitServes();
+        // Its session is lost: the stack drops the link, the phone opens it again and gets a new handshake.
+        int phone = runSession(app);
+        loseSession(app, phone);
+        assert(app.lostSessions() == 1 && linkDroppedWithin(2000) && dropped == 1);
+        offerLink();
+        awaitStarts(6);
+        awaitServes();
+        // A session on the cable is not the wireless loop's business.
+        pthread_mutex_lock(&app.mu);
+        app.sessionOnCable = true;
+        pthread_mutex_unlock(&app.mu);
+        phone = runSession(app);
+        loseSession(app, phone);
+        assert(app.lostSessions() == 1 && !linkDroppedWithin(300) && dropped == 1 && starts == 6);
+        pthread_mutex_lock(&app.mu);
+        app.sessionOnCable = false;
+        pthread_mutex_unlock(&app.mu);
+        // A session replaced() ends for the phone's new connection is no loss: the phone is back already.
+        phone = runSession(app);
+        int next[2];
+        assert(socketpair(AF_UNIX, SOCK_STREAM, 0, next) == 0);
+        assert(evo::ServiceApp::replaced(next[0], &app));  // not ready: the new connection is closed after the end
+        close(next[1]);
+        close(phone);
+        pthread_mutex_lock(&app.mu);
+        assert(!app.replacing);
+        pthread_mutex_unlock(&app.mu);
+        assert(app.lostSessions() == 1 && !linkDroppedWithin(300) && dropped == 1);
+        // A loss seen once a new phone connection is being prepared: left alone, even after that start.
+        phone = runSession(app);
+        preparing(true);
+        loseSession(app, phone);
+        assert(app.lostSessions() == 2 && !linkDroppedWithin(300));
+        preparing(false);
+        assert(!linkDroppedWithin(300) && dropped == 1);
+        // The link comes back while a session runs over the Wi-Fi, which is then lost: dropped as well.
+        fixtureLink = false;  // the phone closes this link, and the loop its end
+        for (unsigned i = 0; i < 200 && borrowed; ++i) {
+            usleep(10000);
+        }
+        assert(!borrowed);
+        phone = runSession(app);
+        offerLink();
+        awaitStarts(7);
+        preparing(false);
+        awaitServes();
+        loseSession(app, phone);
+        assert(app.lostSessions() == 3 && linkDroppedWithin(2000) && dropped == 2);
+        pthread_mutex_lock(&app.mu);
+        assert(app.sppLinks == 5);  // that last handshake was not a new start
+        pthread_mutex_unlock(&app.mu);
+        phoneKeepsLink = false;
+    }
     app.requestStop();
     pthread_join(thread, 0);
     pthread_mutex_lock(&app.mu);
-    assert(app.wirelessDone && app.sppLinks == 3 && app.wppReply && app.wppAccepted);
+    assert(app.wirelessDone && app.sppLinks == 5 && app.wppReply && app.wppAccepted);
     pthread_mutex_unlock(&app.mu);
     puts(
         "PASS actual wireless loop: no handshake during TCP preparation or the cable's turn, rearmed after each; a "
         "link "
-        "back during a Wi-Fi session offered the same Wi-Fi again; app commands, waiting aside for \"show\", and "
-        "volume "
-        "through the peeks; a key leaving Android Auto removes the app key file; PC socketpair only");
+        "back during a Wi-Fi session offered the same Wi-Fi again; a lost Wi-Fi session drops a Bluetooth link the "
+        "phone kept, a cable session or a replaced one does not; app commands, waiting aside for \"show\", "
+        "and volume through the peeks; a key leaving Android Auto removes the app key file; PC socketpair only");
 }

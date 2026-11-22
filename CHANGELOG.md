@@ -7,6 +7,13 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A phone on Wi-Fi whose connection drops starts Android Auto again by itself.** Some phones kept their Bluetooth
+  link to the car after the Wi-Fi went quiet or the connection broke, and never asked again, so iDrive stayed on
+  Connecting until Android Auto was stopped and started. The car now drops that link and the phone connects again.
+  Leaving Android Auto on the phone still ends it as before.
+
 ## [0.1.8-test.1] - 2026-11-19
 
 <!-- Flare Drive:
