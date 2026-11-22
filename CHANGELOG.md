@@ -7,6 +7,30 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+## [0.1.8-test.3] - 2026-11-22
+
+<!-- Flare Drive:
+An experiment for music over Wi-Fi shows the current song in the instrument cluster and puts the song, artist and album
+on iDrive's Media/Radio tile. Once you roll the steering-wheel roller, each push skips another track without rolling
+again. It stays off until you switch it on by hand, as there is no Flare Drive switch for it.
+-->
+
+An experiment switched on by hand shows the song in the instrument cluster and on iDrive's Media/Radio tile while music
+plays over Wi-Fi, and lets the steering-wheel roller skip on every push. The service and the iDrive app change.
+
+### Added
+
+- **The instrument cluster and iDrive's Media/Radio tile show the current song while music plays over Wi-Fi.** With
+  sound over Wi-Fi (`audio-wifi`), Android Auto plays music on the source iDrive keeps for CarPlay. Create both
+  `/var/local/data/AA/ent-probe` and `/var/local/data/AA/cluster-player` over SSH and restart the head unit to switch
+  this experiment on; there is no Flare Drive switch. The instrument cluster then shows its media menu with the song
+  title instead of "no active entertainment source". iDrive's main menu Media/Radio tile shows the song, artist and
+  album instead of "Unknown artist / Unknown track", and should show the album art. Delete either file and restart the
+  head unit to switch it off. Without both files, nothing changes.
+- **The steering-wheel roller skips a track on every push once rolled.** With `ent-probe` and `cluster-player` in place
+  while music plays over Wi-Fi, roll up or down once and each push skips another track in that direction. Before, you
+  had to roll again before each push.
+
 ## [0.1.8-test.2] - 2026-11-22
 
 <!-- Flare Drive:
@@ -340,7 +364,8 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 - **Changing the car's clock no longer upsets Android Auto's timing.** When GPS corrected the clock while driving, a
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
-[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.8-test.2...HEAD
+[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.8-test.3...HEAD
+[0.1.8-test.3]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.8-test.3
 [0.1.8-test.2]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.8-test.2
 [0.1.8-test.1]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.8-test.1
 [0.1.7]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.7
