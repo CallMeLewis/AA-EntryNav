@@ -71,6 +71,7 @@ Each one is a switch in Flare Drive, or a file in `/var/local/data/AA` on the he
 | **Wireless off**, so only the cable works and the car's Bluetooth and Wi-Fi are left alone | `wireless-off` |
 | iDrive **switches to Bluetooth audio** as the phone connects | `select-bt-audio` |
 | **Sound over Wi-Fi** instead of Bluetooth: music on the car's speakers with the volume knob, and announcements over the radio turn it down rather than stop it | `audio-wifi` |
+| **Current song in the cluster and Media/Radio tile** while music plays over Wi-Fi, with every steering-wheel roller push skipping a track (files only, no Flare Drive switch) | `ent-probe` and `cluster-player` |
 
 ## Building it yourself
 

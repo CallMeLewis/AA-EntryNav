@@ -46,6 +46,8 @@ rm /var/local/data/AA/kombi-off      # arrows again
 |---|---|
 | `kombi-off` | Android Auto sends nothing to the cluster or the head-up display |
 | `kombi-single-maneuver` | The cluster gets only the next turn, not the whole route. This is for the X3 G01, whose cluster (software 146) rejects the full route and then shows no arrow at all. Read when the service starts |
+| `ent-probe` | On its own, adds log lines about iDrive's media players. Together with `cluster-player`, turns on the cluster and Media/Radio tile song experiment ([details](#song-in-the-cluster-and-idrive-experimental)). Read as iDrive starts |
+| `cluster-player` | With `ent-probe`, shows the current song in the instrument cluster and on iDrive's Media/Radio tile while music plays over Wi-Fi, and lets every push of the steering-wheel roller skip a track ([details](#song-in-the-cluster-and-idrive-experimental)). Needs `ent-probe`, and a head unit restart after creating or deleting either file |
 
 ### Files AA-EntryNav writes
 
@@ -198,6 +200,39 @@ the `select-bt-audio` file, the iDrive app picks that source for you when the ph
 ```sh
 touch /var/local/data/AA/select-bt-audio    # from the next phone connection
 rm /var/local/data/AA/select-bt-audio
+```
+
+## Song in the cluster and iDrive (experimental)
+
+With sound over Wi-Fi (`audio-wifi`), Android Auto plays music on the source iDrive keeps for Apple CarPlay. Without
+this experiment, the instrument cluster says "no active entertainment source" and iDrive's main menu Media/Radio tile
+shows "Unknown artist / Unknown track".
+
+Create both `ent-probe` and `cluster-player` in `/var/local/data/AA` and restart the head unit to switch this
+experiment on. There is no Flare Drive switch for it. iDrive reads both files as it starts, and nothing changes unless
+both exist.
+
+- **Instrument cluster.** The cluster no longer says "no active entertainment source". It shows its media menu with the
+  song title instead.
+- **Steering-wheel roller.** Roll up or down once, then each push skips another track in that direction. Without the
+  experiment, you have to roll again before each push.
+- **Media/Radio tile.** iDrive's main menu Media/Radio tile shows the song, the artist and the album instead of
+  "Unknown artist / Unknown track", and should show the album art.
+- **`ent-probe` alone.** Creating only `ent-probe` and restarting the head unit leaves the cluster, tile and roller as
+  before, and only adds log lines about iDrive's media players.
+
+To switch it on:
+
+```sh
+touch /var/local/data/AA/ent-probe /var/local/data/AA/cluster-player
+reboot
+```
+
+Delete either file (or both) and restart the head unit to switch it off:
+
+```sh
+rm -f /var/local/data/AA/ent-probe /var/local/data/AA/cluster-player
+reboot
 ```
 
 ## Flare Drive QR code
