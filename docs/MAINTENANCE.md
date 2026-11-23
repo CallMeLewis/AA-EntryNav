@@ -203,7 +203,7 @@ rm /var/local/data/AA/select-bt-audio
 > This works in the reference car since 0.1.4. The PIN screen and the picture use parts of iDrive that no other app on
 > this head unit uses. With logs on, the app's log records each step.
 
-The Android Auto menu has a *Flare Drive* row above *Help*. It asks for a PIN, then shows a QR code. Flare Drive scans
+The Android Auto menu has a *Flare Drive* row above *Help*. It asks for a PIN, then shows a QR code. [Flare Drive](https://github.com/CallMeLewis/flare-drive-app) scans
 the code to join the car's Wi-Fi and find the head unit. The code holds the Wi-Fi name and password, read from wland's
 `/tmp/wland/ap.conf`, and the head unit's address on `wlan0`. It never holds the root password. On first use you choose
 a PIN of 4 to 8 digits and type it twice.

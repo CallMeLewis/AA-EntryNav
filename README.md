@@ -20,7 +20,7 @@ and leaves BMW's files as they are.
 
 ## Installing
 
-The easy way is **Flare Drive**, the companion Android app. It downloads a signed release and checks that your car
+The easy way is **[Flare Drive](https://github.com/CallMeLewis/flare-drive-app)**, the companion Android app. It downloads a signed release and checks that your car
 can run it before installing. Updates and removal happen there too, along with the switches for the experimental
 features below. The [CHANGELOG](CHANGELOG.md) lists what changed in each release.
 

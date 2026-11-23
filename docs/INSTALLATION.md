@@ -1,6 +1,6 @@
 # Installing by hand
 
-Flare Drive installs AA-EntryNav for you. This guide does the same job over SSH with `setup.sh`, the script that comes
+[Flare Drive](https://github.com/CallMeLewis/flare-drive-app) installs AA-EntryNav for you. This guide does the same job over SSH with `setup.sh`, the script that comes
 in every release archive. The script adds two folders to the head unit's system partition, `/opt/aa` and
 `/opt/hmi/data/ro/Plugins/AAEntryNav`, and replaces none of BMW's files. It makes the partition writable only after
 every check has passed, and only for the few seconds the copy takes.
