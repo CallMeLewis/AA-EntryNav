@@ -55,82 +55,6 @@ broken picture mends sooner. The service and the iDrive app change.
 - **A picture broken by a lost video frame mends sooner.** When the car loses a frame, the phone is now asked to
   restart its picture from a whole new frame, at most once every 10 seconds, instead of waiting for its next one.
 
-## [0.1.8-test.3] - 2026-11-22
-
-<!-- Flare Drive:
-An experiment for music over Wi-Fi shows the current song in the instrument cluster and puts the song, artist and album
-on iDrive's Media/Radio tile. Once you roll the steering-wheel roller, each push skips another track without rolling
-again. It stays off until you switch it on by hand, as there is no Flare Drive switch for it.
--->
-
-An experiment switched on by hand shows the song in the instrument cluster and on iDrive's Media/Radio tile while music
-plays over Wi-Fi, and lets the steering-wheel roller skip on every push. The service and the iDrive app change.
-
-### Added
-
-- **The instrument cluster and iDrive's Media/Radio tile show the current song while music plays over Wi-Fi.** With
-  sound over Wi-Fi (`audio-wifi`), Android Auto plays music on the source iDrive keeps for CarPlay. Create both
-  `/var/local/data/AA/ent-probe` and `/var/local/data/AA/cluster-player` over SSH and restart the head unit to switch
-  this experiment on; there is no Flare Drive switch. The instrument cluster then shows its media menu with the song
-  title instead of "no active entertainment source". iDrive's main menu Media/Radio tile shows the song, artist and
-  album instead of "Unknown artist / Unknown track", and should show the album art. Delete either file and restart the
-  head unit to switch it off. Without both files, nothing changes.
-- **The steering-wheel roller skips a track on every push once rolled.** With `ent-probe` and `cluster-player` in place
-  while music plays over Wi-Fi, roll up or down once and each push skips another track in that direction. Before, you
-  had to roll again before each push.
-
-## [0.1.8-test.2] - 2026-11-22
-
-<!-- Flare Drive:
-A phone on Wi-Fi whose connection drops now starts Android Auto again by itself, and Android Auto waits for the
-reverse camera to close before coming back. The volume pill no longer opens by itself, and a picture broken by a lost
-frame mends sooner.
--->
-
-Phones on Wi-Fi reconnect by themselves after a drop, Android Auto waits for the reverse camera to close, the volume
-pill stays closed until you change the volume, and a broken picture mends sooner after a lost frame. The service and
-the iDrive app change.
-
-### Fixed
-
-- **A phone on Wi-Fi whose connection drops starts Android Auto again by itself.** Some phones kept their Bluetooth
-  link to the car after the Wi-Fi went quiet or the connection broke, and never asked again, so iDrive stayed on
-  Connecting until Android Auto was stopped and started. The car now drops that link and the phone connects again.
-  Leaving Android Auto on the phone still ends it as before.
-- **Android Auto waits for the reverse camera to close.** The gear can leave reverse a moment before iDrive closes the
-  camera, and Android Auto came back over a camera still on screen. It now comes back once iDrive leaves the camera,
-  when you pick Android Auto yourself, or after 15 seconds at most.
-- **The volume pill no longer opens by itself.** It opens when you change the volume. Some cars sent another source's
-  volume, or the same level again, as the phone connected, and the pill opened with nothing pressed.
-- **A picture broken by a lost video frame mends sooner.** When the car loses a frame, the phone is now asked to
-  restart its picture from a whole new frame, at most once every 10 seconds, instead of waiting for its next one.
-
-## [0.1.8-test.1] - 2026-11-19
-
-<!-- Flare Drive:
-With sound over Wi-Fi, a short pause on the Wi-Fi or the cable no longer cuts the music, and the steering-wheel
-roller changes tracks. Roll it, then push.
--->
-
-Music over Wi-Fi keeps playing through short pauses on the link, and the steering-wheel roller changes tracks. Only
-the service changes.
-
-### Changed
-
-- **With sound over Wi-Fi, a short pause on the Wi-Fi or the cable no longer cuts the music.** About 0.4 s of music
-  now waits in the car, where 0.1 s did, and the phone sends it at the speed the car plays, so a phone whose clock
-  runs a little fast or slow no longer skips or leaves a gap. Pause, play and a new track are heard about 0.3 s
-  later. With logging on, the service log has a line for each gap as it happens (`media ran dry`).
-
-### Fixed
-
-- **The steering-wheel roller changes tracks while Android Auto's sound plays over Wi-Fi.** As with the radio, roll
-  then push: roll down and push for the next track, roll up and push for the previous one, whether Android Auto or
-  iDrive is on screen. A push skips one track however far you rolled, and a roll without a push does nothing. iDrive
-  took the music for CarPlay's and found no CarPlay player without an iPhone, so the roller did nothing. The cluster
-  still shows "no active entertainment source" for a few seconds. During a call, and with Bluetooth audio, the roller
-  is iDrive's as before. The service now reads the roller and its push with one plain read each when it starts.
-
 ## [0.1.7] - 2026-11-18
 
 <!-- Flare Drive:
@@ -414,9 +338,6 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 
 [Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.8...HEAD
 [0.1.8]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.8
-[0.1.8-test.3]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.8-test.3
-[0.1.8-test.2]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.8-test.2
-[0.1.8-test.1]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.8-test.1
 [0.1.7]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.7
 [0.1.6]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.6
 [0.1.5]: https://github.com/CallMeLewis/AA-EntryNav/tree/2b475f0c2594c6b7b4849ddca0093c84648b9385
