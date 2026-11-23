@@ -54,7 +54,8 @@ the same session over USB.
   description's template and the head unit certificate, neither written by this project.
 - **Car data for the session.** `aa_input.hpp` and `car_inbox` queue touches and key presses for the session.
   `car_location.hpp` turns the car's position into Android Auto's location sensor. `keyframe_request.hpp` decides
-  when a lost video frame may ask the phone for a new IDR.
+  when a lost video frame may ask the phone for a new IDR. `media_metadata.hpp` parses the phone's track title,
+  artist, album and album art.
 - **Helpers.** `crash_handler` logs a trace on a crash, then runs the clean-up the platform registered.
   `mutex_lock.hpp` holds a pthread mutex for a scope.
 
@@ -120,6 +121,11 @@ the same session over USB.
   service writes.
 - **Bluetooth audio.** With the `select-bt-audio` file, `bt_audio_plan.hpp` picks the moment and `bt_audio` sends
   iDrive's own source switch to Bluetooth audio.
+- **Cluster song and Media tile.** Active when `audio-wifi` exists as iDrive starts. `cluster_player` makes iDrive's
+  CarPlay player available while Android Auto's audio route plays and forwards cluster skips to the service.
+  `hmi_thread` posts work to `HmiMain3D`'s main thread and the cluster's `CHmiICProcUnit` thread. `cluster_title` and
+  `utf16.hpp` write the song title, artist and album from `/tmp/aa-entrynav-track` into CarPlay's AuxIn proxy, and
+  `cover_art` loads `/tmp/aa-entrynav-cover` as a bitmap for iDrive's Media tile.
 - **The car's own details.** `car_coding` reads the series and the driver's side from iDrive's coding, and
   `car_signals` takes the VIN's serial number from the car's data. `car_identity.hpp` turns them into vehicle file lines, which the app
   writes to `/tmp/aa-entrynav-car` for Flare Drive to offer. The app never writes the `vehicle` file itself.

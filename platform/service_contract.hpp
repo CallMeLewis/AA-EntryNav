@@ -45,12 +45,6 @@ constexpr char kFlarePin[] = "/var/local/data/AA/flare-pin";
 constexpr char kAppLog[] = "/var/local/data/AA/app.log";
 constexpr char kAppLogOld[] = "/var/local/data/AA/app.old.log";
 constexpr char kAppDisable[] = "/var/local/data/AA/app.disable";  // present: the app stays off (set by hand)
-// present as iDrive starts: the app logs iDrive's media players and skip devices, read only (hmiapp/ent_probe.hpp).
-// A temporary diagnostic, set by hand.
-constexpr char kEntProbe[] = "/var/local/data/AA/ent-probe";
-// present with kEntProbe as iDrive starts: an experiment, iDrive's CarPlay player counts as available while Android
-// Auto's sound plays on CarPlay's audio source, so that the cluster stops saying "no active entertainment source".
-constexpr char kClusterPlayer[] = "/var/local/data/AA/cluster-player";
 constexpr char kAppGuard[] = "/var/local/data/AA/app-guard";   // crash guard: 3 short iDrive runs and the app stays off
 constexpr char kBootGuard[] = "/var/local/data/AA/bootguard";  // automatic starts within 15 minutes
 

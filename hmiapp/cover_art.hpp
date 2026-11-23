@@ -1,6 +1,6 @@
 // Copyright (c) 2026 CallMeLewis
-// The phone's album art as iDrive's CarPlay cover, while the cluster player experiment runs (ent_probe.hpp): the main
-// menu's Media tile and the media screens show it.
+// The phone's album art as iDrive's CarPlay cover, while audio-wifi is active (cluster_player.hpp): the main menu's
+// Media tile and the media screens show it.
 //
 // Read in HmiMain3D (202306092158, 22 November 2026). The screens that show CarPlay's track have a
 // CEntInfoUpdaterCarPlay (base CEntInfoUpdaterAux), whose queryCoverArt (vtable slot 15) asks CARPLAY for the picture

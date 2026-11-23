@@ -1,6 +1,6 @@
 // Copyright (c) 2026 CallMeLewis
-// The read-only look at iDrive's media players and skip devices (ent_probe.hpp).
-#include "ent_probe.hpp"
+// iDrive's CarPlay player while Android Auto plays sound over Wi-Fi or cable (cluster_player.hpp).
+#include "cluster_player.hpp"
 
 #include <dlfcn.h>
 #include <pthread.h>
@@ -18,18 +18,50 @@ namespace app {
 
 namespace {
 
-const unsigned kHandlerHead = 0xec, kHandlerCurrent = 0xe8;                      // CEntModeButtonService
-const unsigned kSkipCurrent = 0x40, kSkipMapHeader = 0xa4, kSkipMapLeft = 0xac;  // CEntSkipService
-const unsigned kMaxNodes = 48;                                                   // more is a list misread
+const unsigned kHandlerHead = 0xec;                         // CEntModeButtonService
+const unsigned kSkipMapHeader = 0xa4, kSkipMapLeft = 0xac;  // CEntSkipService
+const unsigned kMaxNodes = 48;                              // more is a list misread
+
+const int kVtableHeader = 2, kCarPlaySlots = 22, kSlotAvailable = 11;
+const int kSkipSlots = 18, kSlotSkip = 1, kSlotPlaying = 4;
+const int kSourceCarPlay = 0x82, kClassEntertainment = 1, kSinkAny = 0xff;
 
 typedef void* (*GetCache)();
+typedef bool (*AvailableFn)(const void* handler);
+typedef int (*CurrentSourceFn)(const void* audio, int audioClass, int sink);
+typedef bool (*BuiltUpFn)(const void* audio, int source);
+typedef void* (*ClassNameFn)(void* device);
+typedef void (*SkipFn)(void* device, int direction);
+typedef bool (*PlayingFn)(void* device);
+typedef void (*NotifyFn)(void* modes);
 
 void* g_modes = nullptr;  // CEntModeButtonService
 void* g_skips = nullptr;  // CEntSkipService
 int g_pipe[2] = {-1, -1};
 pthread_mutex_t g_peekLock = PTHREAD_MUTEX_INITIALIZER;
-uint32_t g_lastDigest = 0;
-long g_lastLogS = 0;
+
+void* g_carPlay = nullptr;      // iDrive's CEntModeHandlerCarPlay
+void* g_carPlayVptr = nullptr;  // its own vtable pointer, put back on release
+void* g_vtableCopy[kVtableHeader + kCarPlaySlots];
+AvailableFn g_available = nullptr;
+GetCache g_audioGet = nullptr;
+void* g_audioVptr = nullptr;  // CHmiAudioService's vtable address point
+CurrentSourceFn g_currentSource = nullptr;
+BuiltUpFn g_builtUp = nullptr;
+unsigned g_asked = 0;
+int g_lastAnswer = -1;
+
+void* g_carPlaySkip = nullptr;
+void* g_carPlaySkipVptr = nullptr;
+void* g_skipVtableCopy[kVtableHeader + kSkipSlots];
+ClassNameFn g_className = nullptr;
+SkipFn g_skip = nullptr;
+PlayingFn g_playing = nullptr;
+NotifyFn g_notify = nullptr;
+bool g_notifying = false;
+
+int g_toldPid = 0;
+int g_toldSkip = -1;
 
 // Copies n bytes from addr in this process, or fails if any of them can't be read: write() checks the source and
 // answers EFAULT instead of faulting.
@@ -38,8 +70,8 @@ bool peek(const void* addr, void* out, size_t n) {
         return false;
     }
     pthread_mutex_lock(&g_peekLock);
-    const bool ok =
-        write(g_pipe[1], addr, n) == static_cast<ssize_t>(n) && read(g_pipe[0], out, n) == static_cast<ssize_t>(n);
+    const bool ok = g_pipe[0] >= 0 && write(g_pipe[1], addr, n) == static_cast<ssize_t>(n) &&
+                    read(g_pipe[0], out, n) == static_cast<ssize_t>(n);
     pthread_mutex_unlock(&g_peekLock);
     return ok;
 }
@@ -72,11 +104,15 @@ void className(const void* object, char* out, size_t size) {
     }
 }
 
+void* symbolOf(const char* name) {
+    return dlsym(RTLD_DEFAULT, name);
+}
+
 // The service object, from the interface pointer the plugin cache holds. That pointer can be a base other than the
 // first (CEntSkipService): its vtable pointer then lands further into the class's vtable group, and the word before
-// the typeinfo (offset to top) leads back to the whole object, whose offsets ent_probe.hpp gives.
+// the typeinfo (offset to top) leads back to the whole object, whose offsets cluster_player.hpp gives.
 void* serviceFrom(const char* getter, const char* vtableName) {
-    GetCache get = reinterpret_cast<GetCache>(dlsym(RTLD_DEFAULT, getter));
+    GetCache get = reinterpret_cast<GetCache>(symbolOf(getter));
     void* cache = get ? get() : nullptr;
     bool ok = true;
     void* service = cache ? ptr(cache, 8, &ok) : nullptr;
@@ -87,121 +123,12 @@ void* serviceFrom(const char* getter, const char* vtableName) {
     int32_t toTop = 0;
     ok = ok && (!known || peek(static_cast<char*>(vptr) - 8, &toTop, sizeof(toTop)));
     void* object = known && ok ? static_cast<char*>(service) + toTop : nullptr;
-    alog("ent probe: %s: get %p, cache %p, interface %p, vtable %s+%ld, object %p", vtableName,
-         reinterpret_cast<void*>(get), cache, service, info.dli_sname ? info.dli_sname : "?",
-         static_cast<long>(static_cast<char*>(vptr) - static_cast<char*>(info.dli_saddr)), object);
+    if (!object) {
+        alog("cluster player: %s not as expected (get %p, interface %p, vtable %s)", vtableName,
+             reinterpret_cast<void*>(get), service, info.dli_sname ? info.dli_sname : "?");
+    }
     return object;
 }
-
-// The handler list, or a digest of what it holds without logging (log false).
-uint32_t walkHandlers(bool log) {
-    if (!g_modes) {
-        return 0;
-    }
-    bool ok = true;
-    void* current = ptr(g_modes, kHandlerCurrent, &ok);
-    void* node = ptr(g_modes, kHandlerHead, &ok);
-    uint32_t digest = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(current));
-    unsigned count = 0;
-    for (; node && ok && count < kMaxNodes; ++count) {
-        void* handler = ptr(node, 8, &ok);
-        const uint32_t position = word(node, 0xc, &ok), type = word(node, 0x10, &ok);
-        digest = digest * 31 + static_cast<uint32_t>(reinterpret_cast<uintptr_t>(handler)) + type;
-        if (log) {
-            char name[96];
-            className(handler, name, sizeof(name));
-            alog("ent probe: player %u%s: handler %p %s, position %u, player type 0x%x", count,
-                 node == current ? " (current)" : "", handler, name, position, type);
-        }
-        node = ptr(node, 0, &ok);
-    }
-    if (log) {
-        alog("ent probe: %u player(s) registered, current node %p%s", count, current, ok ? "" : ", a read failed");
-    }
-    return digest + count;
-}
-
-// The skip devices by audio source, and the current one.
-uint32_t walkSkips(bool log) {
-    if (!g_skips) {
-        return 0;
-    }
-    bool ok = true;
-    void* current = ptr(g_skips, kSkipCurrent, &ok);
-    const char* header = static_cast<const char*>(g_skips) + kSkipMapHeader;
-    void* node = ptr(g_skips, kSkipMapLeft, &ok);
-    uint32_t digest = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(current));
-    unsigned count = 0;
-    while (node && node != header && ok && count < kMaxNodes) {
-        const uint32_t source = word(node, 0x10, &ok), waveband = word(node, 0x14, &ok);
-        void* device = ptr(node, 0x18, &ok);
-        digest = digest * 31 + source + static_cast<uint32_t>(reinterpret_cast<uintptr_t>(device));
-        if (log) {
-            char name[96];
-            className(device, name, sizeof(name));
-            alog("ent probe: skip device for source 0x%x waveband %u: %p %s%s", source, waveband, device, name,
-                 device == current ? " (current)" : "");
-        }
-        ++count;
-        // In-order successor in the red-black tree: node +4 parent, +8 left, +0xc right.
-        void* right = ptr(node, 0xc, &ok);
-        if (right) {
-            node = right;
-            for (void* left = ptr(node, 8, &ok); left && ok; left = ptr(node, 8, &ok)) {
-                node = left;
-            }
-        } else {
-            void* parent = ptr(node, 4, &ok);
-            while (ok && parent && parent != header && ptr(parent, 0xc, &ok) == node) {
-                node = parent;
-                parent = ptr(node, 4, &ok);
-            }
-            node = parent;
-        }
-    }
-    if (log) {
-        char name[96];
-        className(current, name, sizeof(name));
-        alog("ent probe: %u skip device(s), current %p %s%s", count, current, current ? name : "",
-             ok ? "" : ", a read failed");
-    }
-    return digest + count;
-}
-
-void logAll(const char* why) {
-    alog("ent probe: --- %s", why);
-    walkHandlers(true);
-    walkSkips(true);
-}
-
-// ---- the cluster player experiment (kClusterPlayer) -----------------------------------------------------------------
-// iDrive's CarPlay player (CEntModeHandlerCarPlay) stays registered and current while Android Auto's sound plays on
-// CarPlay's audio source, 0x82, but counts as unavailable without an iPhone (its device is not connected). Building
-// the mode event, CEntModeButtonService::notifyModeSequenceListeners then marks the current player not active, and the
-// cluster maps CarPlay not active to CDMM_NO_AUDIO: "no active entertainment source". Asked "available" through its
-// vtable slot 11 (+0x2c, isModeHandlerAvailable), the handler would be marked active (getPendingLUMSource is 0), and
-// the cluster takes CarPlay's mode (CICEntertainmentSourcesListController::PlayerTypeToICMode, type 0x1e).
-// So this one object gets a copy of its vtable whose slot 11 answers iDrive's own function, or yes while source 0x82
-// is iDrive's current audio source and built up. Without an iPhone, only Android Auto's route builds it; with one,
-// iDrive's own answer is already yes. iDrive asks on its own thread, when it rebuilds the event. destroyApp puts the
-// original vtable back.
-const int kVtableHeader = 2, kCarPlaySlots = 22, kSlotAvailable = 11;
-const int kSourceCarPlay = 0x82, kClassEntertainment = 1, kSinkAny = 0xff;
-
-typedef bool (*AvailableFn)(const void* handler);
-typedef int (*CurrentSourceFn)(const void* audio, int audioClass, int sink);
-typedef bool (*BuiltUpFn)(const void* audio, int source);
-
-void* g_carPlay = nullptr;      // iDrive's CEntModeHandlerCarPlay
-void* g_carPlayVptr = nullptr;  // its own vtable pointer, put back on release
-void* g_vtableCopy[kVtableHeader + kCarPlaySlots];
-AvailableFn g_available = nullptr;
-GetCache g_audioGet = nullptr;
-void* g_audioVptr = nullptr;  // CHmiAudioService's vtable address point
-CurrentSourceFn g_currentSource = nullptr;
-BuiltUpFn g_builtUp = nullptr;
-unsigned g_asked = 0;
-int g_lastAnswer = -1;
 
 // CarPlay's audio source is iDrive's current entertainment source and built up (CHmiCarPlayService's own test).
 bool carPlaySourcePlaying() {
@@ -227,46 +154,8 @@ bool carPlayAvailable(const void* handler) {
     return answer;
 }
 
-void* symbolOf(const char* name) {
-    return dlsym(RTLD_DEFAULT, name);
-}
-
-// iDrive rebuilds the mode event (and asks the question above) when its players change, not when an audio source is
-// built up: seen on the car on 22 November 2026, asked once as iDrive started and never again once Android Auto's
-// route came up. What does run on iDrive's thread as that route comes up is the skip service making CarPlay's skip
-// device (source 0x82) current, which calls its slot 0, getSkipDeviceClassName, for its log (and again on each skip).
-// That skip device gets the same kind of copy: slot 0 answers as before and, when whether CarPlay's source plays has
-// changed since the player was last asked, has the mode button service rebuild the event, which asks again.
-// With the cluster on CarPlay's menu, its previous and next go through the skip service to this device, which asks
-// CarPlay's database whether it plays (slot 4) and then skips it (slot 1): nothing, without an iPhone. So slot 4 also
-// says yes while CarPlay's source plays, and slot 1 then hands the skip to the service ("skip 1" or "skip -1"),
-// which sends the phone its next or previous track key. With an iPhone playing, both are iDrive's own.
-const int kSkipSlots = 18, kSlotSkip = 1, kSlotPlaying = 4;
-typedef void* (*ClassNameFn)(void* device);
-typedef void (*SkipFn)(void* device, int direction);
-typedef bool (*PlayingFn)(void* device);
-typedef void (*NotifyFn)(void* modes);
-
-void* g_carPlaySkip = nullptr;
-void* g_carPlaySkipVptr = nullptr;
-void* g_skipVtableCopy[kVtableHeader + kSkipSlots];
-ClassNameFn g_className = nullptr;
-SkipFn g_skip = nullptr;
-PlayingFn g_playing = nullptr;
-NotifyFn g_notify = nullptr;
-bool g_notifying = false;
-
-unsigned g_skipQuestions = 0, g_skipNames = 0;  // logged while few: where iDrive's own skip path stops
-
 bool carPlaySkipPlaying(void* device) {
-    const bool own = g_playing(device);
-    const bool answer = own || (device == g_carPlaySkip && carPlaySourcePlaying());
-    if (++g_skipQuestions <= 20) {
-        alog("cluster player: iDrive asks whether CarPlay's skip device plays: %s", own      ? "yes, its own"
-                                                                                    : answer ? "yes, Android Auto"
-                                                                                             : "no");
-    }
-    return answer;
+    return g_playing(device) || (device == g_carPlaySkip && carPlaySourcePlaying());
 }
 
 void carPlaySkip(void* device, int direction) {
@@ -278,11 +167,12 @@ void carPlaySkip(void* device, int direction) {
     alog("cluster player: iDrive's cluster menu: %s track, sent to the service", direction > 0 ? "next" : "previous");
 }
 
+// iDrive rebuilds the mode event when its players change, not when an audio source is built up. As Android Auto's
+// route comes up, the skip service makes CarPlay's skip device (source 0x82) current and calls slot 0
+// (getSkipDeviceClassName) for its log; when source 0x82's state differs from what the player last answered, we
+// trigger notifyModeSequenceListeners so the cluster refreshes its menu.
 void* carPlaySkipClassName(void* device) {
     void* name = g_className(device);
-    if (++g_skipNames <= 20) {
-        alog("cluster player: the skip service uses CarPlay's skip device (made current, or a skip)");
-    }
     if (device == g_carPlaySkip && !g_notifying && g_lastAnswer != -1 &&
         carPlaySourcePlaying() != (g_lastAnswer == 1)) {
         g_notifying = true;
@@ -298,7 +188,6 @@ void installSkipNudge() {
     void** vtable = static_cast<void**>(symbolOf("_ZTV29CDevExternalDevicesSkipDevice"));
     void* classNameFn = symbolOf("_ZN29CDevExternalDevicesSkipDevice22getSkipDeviceClassNameEv");
     g_notify = reinterpret_cast<NotifyFn>(symbolOf("_ZN21CEntModeButtonService27notifyModeSequenceListenersEv"));
-    // The skip device registered for source 0x82, from the skip service's map.
     bool ok = true;
     const char* header = g_skips ? static_cast<const char*>(g_skips) + kSkipMapHeader : nullptr;
     void* node = g_skips ? ptr(g_skips, kSkipMapLeft, &ok) : nullptr;
@@ -326,8 +215,7 @@ void installSkipNudge() {
     const bool known = ok && device && vtable && ptr(device, 0, &ok) == static_cast<void*>(vtable + kVtableHeader) &&
                        classNameFn && vtable[kVtableHeader] == classNameFn && g_notify;
     if (!known) {
-        alog("cluster player: no nudge (skip device for 0x%x %p, its class %s)", kSourceCarPlay, device,
-             known ? "as expected" : "not as expected");
+        alog("cluster player: no nudge (skip device for 0x%x %p, its class not as expected)", kSourceCarPlay, device);
         return;
     }
     memcpy(g_skipVtableCopy, vtable, sizeof(g_skipVtableCopy));
@@ -343,7 +231,6 @@ void installSkipNudge() {
     alog("cluster player: nudge installed on CarPlay's skip device %p", device);
 }
 
-// On HmiMain3D's thread, after the probe found the mode button service.
 void installClusterPlayer() {
     void** vtable = static_cast<void**>(symbolOf("_ZTV22CEntModeHandlerCarPlay"));
     void* availableFn = symbolOf("_ZNK19CEntModeHandlerBase22isModeHandlerAvailableEv");
@@ -353,13 +240,11 @@ void installClusterPlayer() {
     g_currentSource = reinterpret_cast<CurrentSourceFn>(
         symbolOf("_ZNK16CHmiAudioService21getCurrentAudioSourceEN8HmiAudio11EAudioClassENS0_10EAudioSinkE"));
     g_builtUp = reinterpret_cast<BuiltUpFn>(symbolOf("_ZNK16CHmiAudioService20isAudioSourceBuiltUpE12EAudioSource"));
-    // The audio service must be the class those two functions belong to.
     void* cache = g_audioGet ? g_audioGet() : nullptr;
     void* audio = cache ? *reinterpret_cast<void**>(static_cast<char*>(cache) + 8) : nullptr;
     g_audioVptr = audioVtable ? static_cast<void*>(audioVtable + kVtableHeader) : nullptr;
     const bool audioKnown =
         audio && g_audioVptr && *static_cast<void**>(audio) == g_audioVptr && g_currentSource && g_builtUp;
-    // Find the CarPlay player among the registered ones.
     bool ok = true;
     void* node = g_modes ? ptr(g_modes, kHandlerHead, &ok) : nullptr;
     for (unsigned i = 0; node && ok && i < kMaxNodes && !g_carPlay; ++i) {
@@ -388,11 +273,11 @@ void installClusterPlayer() {
 
 }  // namespace
 
-bool entProbePeek(const void* addr, void* out, size_t n) {
+bool clusterPlayerPeek(const void* addr, void* out, size_t n) {
     return peek(addr, out, n);
 }
 
-void entProbeClassName(const void* object, char* out, size_t size) {
+void clusterPlayerClassName(const void* object, char* out, size_t size) {
     className(object, out, size);
 }
 
@@ -400,7 +285,7 @@ bool clusterPlayerInstalled() {
     return g_carPlay != nullptr;
 }
 
-void releaseEntProbe() {
+void releaseClusterPlayer() {
     if (g_carPlay && *static_cast<void**>(g_carPlay) == &g_vtableCopy[kVtableHeader]) {
         *static_cast<void**>(g_carPlay) = g_carPlayVptr;
         alog("cluster player: CarPlay's player has its own vtable back");
@@ -411,46 +296,50 @@ void releaseEntProbe() {
     }
     g_carPlay = nullptr;
     g_carPlaySkip = nullptr;
+    g_modes = nullptr;
+    g_skips = nullptr;
+    pthread_mutex_lock(&g_peekLock);
+    if (g_pipe[0] >= 0) {
+        close(g_pipe[0]);
+        g_pipe[0] = -1;
+    }
+    if (g_pipe[1] >= 0) {
+        close(g_pipe[1]);
+        g_pipe[1] = -1;
+    }
+    pthread_mutex_unlock(&g_peekLock);
 }
 
-void captureEntProbe() {
-    if (access(contract::kEntProbe, F_OK) != 0) {
+void captureClusterPlayer() {
+    if (access(contract::kAudioWifi, F_OK) != 0) {
         return;
     }
     if (pipe(g_pipe) != 0) {
-        alog("ent probe: no pipe: not run");
+        alog("cluster player: no pipe: not installed");
         return;
     }
     g_modes = serviceFrom("_ZN9hmiplugin3getI21IEntModeButtonServiceEENS_25CPluginInstanceCacheUsageIT_EEv",
                           "_ZTV21CEntModeButtonService");
     g_skips = serviceFrom("_ZN9hmiplugin3getI15IEntSkipServiceEENS_25CPluginInstanceCacheUsageIT_EEv",
                           "_ZTV15CEntSkipService");
-    logAll("as the app is created");
-    g_lastDigest = walkHandlers(false) * 7 + walkSkips(false);
-    if (access(contract::kClusterPlayer, F_OK) == 0) {
-        installClusterPlayer();
-    }
+    installClusterPlayer();
 }
 
-void entProbePoll(bool connected, long nowS) {
-    if (!g_modes && !g_skips) {
+void clusterPlayerPoll(int servicePid, bool connected) {
+    if (!g_carPlaySkip) {
         return;
     }
-    if (g_carPlaySkip && connected) {
-        // What iDrive was last told about CarPlay's player is what the cluster shows. Once a second: a service that
-        // started again learns it too.
-        sendToService(g_lastAnswer == 1 ? "clusterskip 1" : "clusterskip 0");
-    }
-    const uint32_t digest = walkHandlers(false) * 7 + walkSkips(false);
-    if (digest != g_lastDigest) {
-        logAll("changed");
-    } else if (connected && nowS - g_lastLogS >= 60) {
-        logAll("unchanged, a phone connected");
-    } else {
+    if (!connected || servicePid <= 0) {
+        g_toldPid = 0;
+        g_toldSkip = -1;
         return;
     }
-    g_lastDigest = digest;
-    g_lastLogS = nowS;
+    const int skip = g_lastAnswer == 1 ? 1 : 0;
+    if (servicePid != g_toldPid || skip != g_toldSkip) {
+        sendToService(skip ? "clusterskip 1" : "clusterskip 0");
+        g_toldPid = servicePid;
+        g_toldSkip = skip;
+    }
 }
 
 }  // namespace app

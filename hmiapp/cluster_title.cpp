@@ -13,8 +13,8 @@
 
 #include "../platform/service_contract.hpp"
 #include "app_log.hpp"
+#include "cluster_player.hpp"
 #include "cover_art.hpp"
-#include "ent_probe.hpp"
 #include "hmi_thread.hpp"
 #include "utf16.hpp"
 

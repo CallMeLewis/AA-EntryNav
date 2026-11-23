@@ -243,6 +243,8 @@ int main(int argc, char** argv) {
         // The phone's music is acked as the car plays it: about 0.4 s of it then waits here, against a pause on the
         // Wi-Fi, and the phone cannot send faster or slower than the car plays for long.
         app.session.setAckMediaWhenPlayed(true);
+        // Track title, artist, album and cover art for the cluster and iDrive's Media tile (hmiapp/cluster_title.hpp).
+        app.session.setTrackCallback(evo::ServiceApp::track, &app);
     }
     if (cableOnly) {
         ELOG("Main", "cable only: no hotspot, no listener on the Wi-Fi; media over %s",
@@ -260,7 +262,6 @@ int main(int argc, char** argv) {
     app.session.setMicRequestCallback(evo::ServiceApp::micRequest, &app);
     app.mic.start(evo::ServiceApp::micData, &app);  // optional: without it the Assistant just hears nothing
     app.session.setNavStatusCallback(evo::ServiceApp::navStatus, &app);
-    app.session.setTrackCallback(evo::ServiceApp::track, &app);
     app.kombi.start(evo::kombi::probeBmwGuidance);  // HUD/cluster arrows; the BMW navigation always wins
     evo::CarGpsReader carGps;
     evo::CarGpsFeed gpsFeed;

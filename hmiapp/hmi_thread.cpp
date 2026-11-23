@@ -10,7 +10,7 @@
 #include <atomic>
 
 #include "app_log.hpp"
-#include "ent_probe.hpp"
+#include "cluster_player.hpp"
 
 namespace evo {
 namespace app {
@@ -80,7 +80,7 @@ void* symbol(const char* name) {
 
 uint32_t word(const void* base, unsigned offset, bool* ok) {
     uint32_t v = 0;
-    if (!entProbePeek(static_cast<const char*>(base) + offset, &v, sizeof(v))) {
+    if (!clusterPlayerPeek(static_cast<const char*>(base) + offset, &v, sizeof(v))) {
         *ok = false;
     }
     return v;
@@ -135,7 +135,7 @@ void* findClusterUnit() {
             void* unit = at(word(at(p), 0, &ok));
             char name[96];
             if (ok && unit && unit != g_main) {
-                entProbeClassName(unit, name, sizeof(name));
+                clusterPlayerClassName(unit, name, sizeof(name));
                 if (strcmp(name, kClusterUnitClass) == 0) {
                     return unit;
                 }

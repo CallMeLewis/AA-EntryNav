@@ -2,6 +2,10 @@
 
 Write commit messages following [docs/commit-messages.md](docs/commit-messages.md). Write the CHANGELOG and each release's Flare Drive note following [docs/release-notes.md](docs/release-notes.md). Run all generated prose through the `unslop` skill before finalizing.
 
+## Settings
+
+Keep settings easy for drivers to use without SSH. Prefer automatic behaviour with safe defaults over adding a new file in `/var/local/data/AA`. Never gate a user-facing feature behind a diagnostic flag or require multiple files to turn one feature on. Whenever a user-facing setting file is added or changed in `platform/service_contract.hpp`, wire it into Flare Drive (`../flare-drive`) so drivers can change it from the app.
+
 ## Publishing
 
 `tools/publish_release.py publish` sends each release to Flare Drive's plugin catalog through `flare-publish` (Flare Drive's `tools/flare_publish.py`, in the repo beside this one). The publishing Worker checks and stores it, and the per-plugin list for Flare Drive 2.2.1 and earlier is rebuilt from the catalog. `notes` and `stability` change the catalog the same way. Read [Flare Drive's docs/publishing.md](../flare-drive/docs/publishing.md) (https://github.com/CallMeLewis/flare-drive/blob/main/docs/publishing.md) before publishing or changing a release: it describes the whole process, and Flare Drive's `CLAUDE.md` asks to keep it current.

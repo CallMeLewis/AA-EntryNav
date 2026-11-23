@@ -49,7 +49,8 @@ A change must keep all of these true:
 - If the iDrive app's crash guard can't record a start, it keeps the app switched off (`hmiapp/crash_guard.hpp`).
 - Any new traffic AA-EntryNav sends on the car's network goes in the CHANGELOG and the installation guide.
 - Settings come from constants, command-line arguments and the switch files in `/var/local/data/AA`. Environment
-  variables set nothing.
+  variables set nothing. Prefer automatic behaviour over new setting files, never gate a user feature behind a
+  diagnostic flag or multiple files, and give every user-facing setting a control in Flare Drive.
 - Leave `vehicleId` in `core/sdr_builder.cpp` alone. The phone files its settings for the car under that value. A car
   that needs its own ID gets it from the `id=` line of the `vehicle` file. `tests/test_sdr_g20.cpp` pins the bytes the
   phone receives.

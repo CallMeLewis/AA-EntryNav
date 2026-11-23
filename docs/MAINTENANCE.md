@@ -35,7 +35,7 @@ rm /var/local/data/AA/kombi-off      # arrows again
 | File | While it exists |
 |---|---|
 | `video-720` | A phone on the cable draws a 1280x720 picture and the head unit shows it pixel for pixel. Without the file a phone on the cable draws 1920x1080 and the head unit scales it down to the screen, which smooths the edges. A head unit that can't decode 1920x1080 drops back to 1280x720 by itself. A phone on Wi-Fi always draws 1280x720 |
-| `audio-wifi` | Music and announcements come over Wi-Fi and play on the car's speakers, an experiment ([details](#sound-over-wi-fi-experimental)). Without the file, sound uses Bluetooth |
+| `audio-wifi` | Music and announcements come through Android Auto and play on the car's speakers, and the cluster and Media/Radio tile show the song and album art ([details](#sound-over-wi-fi-experimental)). Without the file, sound uses Bluetooth |
 | `select-bt-audio` | iDrive switches to Bluetooth audio when the phone connects, an experiment ([details](#bluetooth-audio-when-the-phone-connects-experimental)). Read at each connection. It does nothing while `audio-wifi` exists |
 | `usb` | A phone plugged into the car's USB port can run Android Auto too, an experiment ([details](#usb-cable-experimental)). Without the file the service leaves the USB bus alone |
 | `wireless-off` | The cable is the only way in. Android Auto leaves the car's Bluetooth and Wi-Fi hotspot as they are. It needs `usb`. With `wireless-off` alone, Android Auto doesn't start |
@@ -46,8 +46,6 @@ rm /var/local/data/AA/kombi-off      # arrows again
 |---|---|
 | `kombi-off` | Android Auto sends nothing to the cluster or the head-up display |
 | `kombi-single-maneuver` | The cluster gets only the next turn, not the whole route. This is for the X3 G01, whose cluster (software 146) rejects the full route and then shows no arrow at all. Read when the service starts |
-| `ent-probe` | On its own, adds log lines about iDrive's media players. Together with `cluster-player`, turns on the cluster and Media/Radio tile song experiment ([details](#song-in-the-cluster-and-idrive-experimental)). Read as iDrive starts |
-| `cluster-player` | With `ent-probe`, shows the current song in the instrument cluster and on iDrive's Media/Radio tile while music plays over Wi-Fi, and lets every push of the steering-wheel roller skip a track ([details](#song-in-the-cluster-and-idrive-experimental)). Needs `ent-probe`, and a head unit restart after creating or deleting either file |
 
 ### Files AA-EntryNav writes
 
@@ -111,25 +109,22 @@ pairing right now, and whether that phone is paired.
 ## Sound over Wi-Fi (experimental)
 
 > [!WARNING]
-> Tried once in the reference car, by hand, on 14 November 2026. Try it parked, with the volume low.
+> Works in the reference car. Try it parked, with the volume low.
 
-The `audio-wifi` file has the phone send its music and announcements over Wi-Fi rather than Bluetooth. The service mixes
+The `audio-wifi` file has the phone send its music and announcements through Android Auto rather than Bluetooth. The service mixes
 the two, turning the music down while an announcement plays, and plays the result through the car's sound library.
-Calls stay on Bluetooth. Flare Drive's "sound over Wi-Fi" switch writes an empty file, which uses the defaults below.
+Calls stay on Bluetooth. Flare Drive's "Sound through Android Auto" switch writes an empty file, which uses the defaults below.
 
 The car only plays a sound output once its audio manager has connected it to the speakers. Before the first sound of a
 session, the service asks for that connection on the car's network, as BMW's CarPlay does for its music: route `0x315`,
 the `entertainment` output. It gives the route back when the session ends or Android Auto stops. While the route is
 ours, iDrive shows no Bluetooth audio selected, and the volume knob sets the level.
 
-iDrive takes the music for CarPlay's but finds no CarPlay player without an iPhone, so its own wheel controls skip
-nothing and the cluster says "no active entertainment source" ([why](aa-media-source-re.md)). The service handles the
-steering-wheel roller itself, the way iDrive's own players use it: roll down then push for the next track, roll up
-then push for the previous one, within 4 seconds, whoever has the screen and outside calls. A push skips one track
-however far the roll went. The service log shows `steering wheel roller rolled down`, `steering wheel roller pushed:
-next track offered` and `steering wheel roller: next track`. The cluster still shows its message for a few seconds. With Bluetooth audio the roller is
-iDrive's, as before. The [wheel capture guide](wheel-media-capture.md) records the roller and button messages without
-changing the source.
+When `audio-wifi` exists as iDrive starts, the iDrive app also handles the cluster and Media/Radio tile for Android Auto's music (after turning `audio-wifi` on for the first time, restart the head unit once for this part to take effect):
+
+- **Instrument cluster.** The cluster shows its media menu with the song title instead of "no active entertainment source" ([why](aa-media-source-re.md)).
+- **Media/Radio tile.** iDrive's main menu Media/Radio tile shows the song, artist, album and album art instead of "Unknown artist / Unknown track".
+- **Steering-wheel roller.** Roll down then push for the next track, or roll up then push for the previous one, within 4 seconds, whoever has the screen and outside calls. Once rolled, each push skips another track in that direction. Before a head unit restart, roll again before each push. With Bluetooth audio the roller is iDrive's, as before. The [wheel capture guide](wheel-media-capture.md) records the roller and button messages without changing the source.
 
 Each line of the file is optional:
 
@@ -200,39 +195,6 @@ the `select-bt-audio` file, the iDrive app picks that source for you when the ph
 ```sh
 touch /var/local/data/AA/select-bt-audio    # from the next phone connection
 rm /var/local/data/AA/select-bt-audio
-```
-
-## Song in the cluster and iDrive (experimental)
-
-With sound over Wi-Fi (`audio-wifi`), Android Auto plays music on the source iDrive keeps for Apple CarPlay. Without
-this experiment, the instrument cluster says "no active entertainment source" and iDrive's main menu Media/Radio tile
-shows "Unknown artist / Unknown track".
-
-Create both `ent-probe` and `cluster-player` in `/var/local/data/AA` and restart the head unit to switch this
-experiment on. There is no Flare Drive switch for it. iDrive reads both files as it starts, and nothing changes unless
-both exist.
-
-- **Instrument cluster.** The cluster no longer says "no active entertainment source". It shows its media menu with the
-  song title instead.
-- **Steering-wheel roller.** Roll up or down once, then each push skips another track in that direction. Without the
-  experiment, you have to roll again before each push.
-- **Media/Radio tile.** iDrive's main menu Media/Radio tile shows the song, the artist and the album instead of
-  "Unknown artist / Unknown track", and should show the album art.
-- **`ent-probe` alone.** Creating only `ent-probe` and restarting the head unit leaves the cluster, tile and roller as
-  before, and only adds log lines about iDrive's media players.
-
-To switch it on:
-
-```sh
-touch /var/local/data/AA/ent-probe /var/local/data/AA/cluster-player
-reboot
-```
-
-Delete either file (or both) and restart the head unit to switch it off:
-
-```sh
-rm -f /var/local/data/AA/ent-probe /var/local/data/AA/cluster-player
-reboot
 ```
 
 ## Flare Drive QR code

@@ -39,9 +39,9 @@
 #include "bt_audio_plan.hpp"
 #include "car_coding.hpp"
 #include "car_signals.hpp"
+#include "cluster_player.hpp"
 #include "cluster_title.hpp"
 #include "cover_art.hpp"
-#include "ent_probe.hpp"
 #include "flare_page.hpp"
 #include "hmi_thread.hpp"
 #include "hold_machine.hpp"
@@ -330,7 +330,7 @@ void statusRun(void*) {
     const long now = monoSeconds();  // one moment for both
     switchToBluetoothAudio(d, now);
     flarePagePoll(app);
-    entProbePoll(connected, now);
+    clusterPlayerPoll(d.pid, connected);
     clusterTitlePoll(now);
     g_hold.poll(d, now);
     postRunnable(app, g_statusRunnable, kStatusPollMs);
@@ -434,7 +434,7 @@ bmw::PluginApp* createApp(bmw::IDispatcher& dispatcher, const char* name, const 
     // HmiMain3D's own thread: the only one where its event queue can be looked up (bt_audio.hpp).
     captureHmiQueue();
     captureVariantServer();  // the same: the plugin cache it comes from is per thread (car_coding.hpp)
-    captureEntProbe();       // the same, and only with its file (ent_probe.hpp)
+    captureClusterPlayer();  // the same, and active with audio-wifi (cluster_player.hpp)
     if (clusterPlayerInstalled()) {
         captureHmiThread(&hmiThreadJob);  // the same: getHmiProcUnit answers there (hmi_thread.hpp)
         coverInstall();                   // the same: CarPlay's screens live there (cover_art.hpp)
@@ -450,7 +450,7 @@ bmw::PluginApp* createApp(bmw::IDispatcher& dispatcher, const char* name, const 
 void destroyApp(void* app) {
     alog("destroy(%p)", app);
     coverRelease();
-    releaseEntProbe();  // whatever happens next: the library may go, and CarPlay's player calls into it
+    releaseClusterPlayer();  // whatever happens next: the library may go, and CarPlay's player calls into it
     if (!app) {
         return;
     }

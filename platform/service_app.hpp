@@ -159,8 +159,8 @@ public:
     bool sessionOnCable;    // the session that runs, or ran last, came over the cable (startSession)
     bool replacing;         // replaced() is ending the session for the phone's new connection: not a loss
     unsigned lostWireless;  // sessions over the Wi-Fi lost so far (lostSessions)
-    // iDrive's cluster shows a menu of previous and next (the app's cluster player experiment, "clusterskip 1"): each
-    // push of the roller skips again (EvoKnob::setWheelRepeat). Control thread only.
+    // iDrive's cluster shows CarPlay's previous and next menu (the app's cluster player, "clusterskip 1"): each push
+    // of the roller skips again (EvoKnob::setWheelRepeat). Control thread only.
     std::atomic<bool> clusterSkips;
     std::atomic<bool> usbStop;   // set with stopping: read by the cable thread while it waits for the phone
     std::atomic<bool> usbBusy;   // set by the cable thread while it connects a phone or carries its session

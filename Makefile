@@ -91,7 +91,7 @@ evo-trial: $(TRIAL_OBJ)
 # position independent and hidden: HmiMain3D only looks up pluginAppInfo, the one symbol the library exports.
 HMI_SRC = hmiapp/entry_aa_app.cpp hmiapp/bmw_framework.cpp hmiapp/app_log.cpp hmiapp/app_guards.cpp \
           hmiapp/service_link.cpp hmiapp/car_signals.cpp hmiapp/hold_machine.cpp hmiapp/bt_audio.cpp \
-          hmiapp/car_coding.cpp hmiapp/flare_page.cpp hmiapp/qr_code.cpp hmiapp/qr_png.cpp hmiapp/ent_probe.cpp \
+          hmiapp/car_coding.cpp hmiapp/flare_page.cpp hmiapp/qr_code.cpp hmiapp/qr_png.cpp hmiapp/cluster_player.cpp \
           hmiapp/hmi_thread.cpp hmiapp/cluster_title.cpp hmiapp/cover_art.cpp
 HMI_OBJ = $(HMI_SRC:.cpp=.o)
 HMI_LIBDIRS = -L$(SYSROOT)/opt/hmi/lib -Wl,-rpath-link,$(SYSROOT)/opt/hmi/lib

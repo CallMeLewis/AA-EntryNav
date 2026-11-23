@@ -1,7 +1,7 @@
 // Copyright (c) 2026 CallMeLewis
-// The phone's track (title, artist, album) as iDrive's CarPlay track, while the cluster player experiment runs
-// (ent_probe.hpp): the cluster's CarPlay menu shows the title, and the main menu's Media tile and the media screens
-// show title, artist and album.
+// The phone's track (title, artist, album) as iDrive's CarPlay track, while audio-wifi is active
+// (cluster_player.hpp): the cluster's CarPlay menu shows the title, and the main menu's Media tile and the media
+// screens show title, artist and album.
 //
 // Both read the AuxIn proxy of CarPlay's instance, CPxyAuxiliaryInput::getServiceProxy(0x70) + 0x38c0, its
 // CAuxIn_CurrentAudioFileInfo; without an iPhone CARPLAY never fills it. Read in libhmil6services.so (22 November
