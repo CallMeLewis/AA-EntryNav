@@ -7,6 +7,8 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-11-23
+
 <!-- Flare Drive:
 With Sound through Android Auto, the instrument cluster and Media/Radio tile now show the song and album art, music
 plays through short pauses, and the steering-wheel roller skips tracks. Phones on Wi-Fi reconnect after a drop, Android
@@ -410,7 +412,8 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 - **Changing the car's clock no longer upsets Android Auto's timing.** When GPS corrected the clock while driving, a
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
-[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.8-test.3...HEAD
+[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.8
 [0.1.8-test.3]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.8-test.3
 [0.1.8-test.2]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.8-test.2
 [0.1.8-test.1]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.8-test.1
