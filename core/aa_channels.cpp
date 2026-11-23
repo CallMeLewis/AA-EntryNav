@@ -180,7 +180,7 @@ void AASession::onTlsHandshake(const Message& message) {
 void AASession::onDiscovery() {
     printf("[AASession] >>> Received ServiceDiscoveryRequest from phone! Sending ServiceDiscoveryResponse...\n");
     const Message response = message::discoveryResponse(
-        buildCarServiceDiscovery(kDhuSdpProtobuf, kDhuSdpProtobufLen, vehicleFile_, audio_.fn != nullptr, hdVideo_));
+        buildCarServiceDiscovery(kDhuSdpProtobuf, kDhuSdpProtobufLen, vehicleFile_, audio_.fn != nullptr, canvas_));
     if (sendSealed(channel::kControl, response)) {
         printf("[AASession] >>> Sent ServiceDiscoveryResponse (%u bytes)\n", static_cast<unsigned>(response.size()));
     }

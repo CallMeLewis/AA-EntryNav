@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "alps_spp.hpp"
+#include "canvas.hpp"
 #include "evo_ap.hpp"
 #include "evo_elf.hpp"
 #include "evo_gps.hpp"
@@ -269,10 +270,16 @@ std::string apDiagnosis() {
     }
     return s + ", wlan0 " + ip;
 }
+// The car's screen, when a picture fits it (core/canvas.hpp).
+bool screenFits(evo::EvoIlm& ilm, uint32_t& w, uint32_t& h) {
+    aa::Canvas canvas;
+    return ilm.screenSize(w, h) && aa::canvasFor(w, h, false, canvas);
+}
 // The picture's target: our layer and a free surface id. All a start over the cable alone needs.
 bool videoTargetReady() {
     evo::EvoIlm ilm;
-    if (!ilm.validateTarget(surface, layer, 1280, 480)) {
+    uint32_t w = 0, h = 0;
+    if (!screenFits(ilm, w, h) || !ilm.validateTarget(surface, layer, w, h)) {
         ELOG("Supervisor", "preflight: video target unavailable: no Bluetooth change");
         return false;
     }
@@ -432,7 +439,19 @@ int compatReport() {
         return 0;
     }
     evo::EvoIlm ilm;
-    compatLine(ilm.validateTarget(surface, layer, 1280, 480) ? "ok" : "block", "video");
+    uint32_t screenW = 0, screenH = 0;
+    if (!ilm.screenSize(screenW, screenH)) {
+        compatLine("block", "video", "screen size unreadable");
+    } else {
+        char screen[48];
+        snprintf(screen, sizeof(screen), "screen %ux%u", screenW, screenH);
+        aa::Canvas canvas;
+        if (!aa::canvasFor(screenW, screenH, false, canvas)) {
+            compatLine("block", "video", std::string(screen) + " not supported");
+        } else {
+            compatLine(ilm.validateTarget(surface, layer, screenW, screenH) ? "ok" : "block", "video", screen);
+        }
+    }
     bool topFirst = false;
     if (!ilm.renderOrderTopFirst(topFirst)) {
         compatLine("block", "order");

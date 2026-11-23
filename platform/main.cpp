@@ -210,14 +210,32 @@ int main(int argc, char** argv) {
     evo::ServiceApp app(kAaPort, video, &quit);
     app.session.setTouchForwarding(input == evo::INPUT_FORWARD);
     app.session.setVehicleFile(evo::contract::kVehicle);  // the car's model and year, written at installation
-    // Over the cable, the 1080p canvas shrunk onto the panel, unless the video-720 file asks for the 720p one shown
-    // 1:1. A phone on Wi-Fi always gets 720p. Should the decoder refuse 1080p, the service falls back to 720p by
-    // itself (ServiceApp::startSession).
-    app.videoConfig = evo::EvoVideoConfig(access(evo::contract::kVideo720, F_OK) != 0);
+    // The picture fits the car's screen (core/canvas.hpp). Unreadable or with no canvas to fit it, the reference
+    // car's 1280x480 stays, and the picture's own check refuses a screen of another size (EvoVideo::init).
     if (video) {
-        ELOG("Main", "picture: %ux%u from a phone on the cable%s; 1280x720 on Wi-Fi", app.videoConfig.width,
-             app.videoConfig.height,
-             app.videoConfig.hd() ? ", shrunk onto the panel (video-720 for 1280x720)" : " (video-720), shown 1:1");
+        evo::EvoIlm ilm;
+        uint32_t w = 0, h = 0;
+        aa::Canvas canvas;
+        if (!ilm.screenSize(w, h)) {
+            ELOG("Main", "screen size unreadable: %ux%u assumed", app.panelWidth, app.panelHeight);
+        } else if (!aa::canvasFor(w, h, false, canvas)) {
+            ELOG("Main", "no Android Auto picture fits the %ux%u screen: the picture will not start", w, h);
+        } else {
+            app.panelWidth = w;
+            app.panelHeight = h;
+        }
+    }
+    // Over the cable, the hd canvas shrunk onto the panel, unless the video-720 file asks for the standard one, or the
+    // screen has none. A phone on Wi-Fi always gets the standard canvas. Should the decoder refuse the hd one, the
+    // service falls back to the standard one by itself (ServiceApp::startSession).
+    app.videoConfig = evo::EvoVideoConfig(access(evo::contract::kVideo720, F_OK) != 0, app.panelWidth, app.panelHeight);
+    if (video) {
+        const evo::EvoVideoConfig wifi(false, app.panelWidth, app.panelHeight);
+        ELOG("Main", "%ux%u screen; picture: %ux%u from a phone on the cable%s; %ux%u on Wi-Fi", app.panelWidth,
+             app.panelHeight, app.videoConfig.width, app.videoConfig.height,
+             app.videoConfig.hd() ? ", shrunk onto the panel (video-720 for the standard canvas)"
+                                  : ", the standard canvas",
+             wifi.width, wifi.height);
     }
     // Declared after app: destroyed (and joined) before the session their callbacks post to.
     evo::EvoTouch touch;

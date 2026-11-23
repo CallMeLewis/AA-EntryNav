@@ -3,8 +3,23 @@
 ## The head unit it needs
 
 AA-EntryNav runs on one head unit only: BMW's **EntryNav2**, which its own system calls EntryEVO. The car also needs
-the **1280x480 screen** and the **Wi-Fi that CarPlay uses**. NBT Evo, ID7 and MGU are different systems, and the
-programs can't run on them. Installing by hand also takes SSH access to the head unit as root, with its password.
+the **Wi-Fi that CarPlay uses**. NBT Evo, ID7 and MGU are different systems, and the programs can't run on them.
+Installing by hand also takes SSH access to the head unit as root, with its password.
+
+## Screen sizes
+
+The service reads the screen's size when it starts and asks the phone for a picture that fits it:
+
+| Screen | Picture on Wi-Fi | Picture on the cable |
+|---|---|---|
+| 1280x480 | 1280x720, top 480 rows shown as they are | 1920x1080, top 720 rows scaled down |
+| 800x480 | 800x480, shown as it is | 800x480, shown as it is |
+| 800x400 | 800x480, top 400 rows shown as they are | 1280x720, top 640 rows scaled down |
+
+The phone draws nothing in the rows the screen doesn't show. Only the 1280x480 screen has been tried in a car. Other
+sizes work if one of Android Auto's three pictures (800x480, 1280x720, 1920x1080) is at least as wide as the screen and
+fills its height at the same scale. On any other screen the compatibility check stops with `video (screen WxH not
+supported)`.
 
 ## Cars tried so far
 

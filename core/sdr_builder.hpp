@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "canvas.hpp"
+
 namespace aa {
 
 // The fuel the car takes, as Android Auto's FuelType: Maps uses it for fuel stops.
@@ -45,19 +47,6 @@ bool validCarYear(const std::string& s);
 // Accepted id: a UUID as /proc/sys/kernel/random/uuid prints it, 8-4-4-4-12 lowercase hex digits.
 bool validVehicleId(const std::string& s);
 
-// The picture the phone draws. The panel is 1280x480 and shows the canvas's top shownHeight rows, the full width:
-//   720p    1280x720 shown 1:1, density 140 (seen on the car: the rail icons no longer overlap)
-//   1080p   1920x1080, its top 1920x720 shrunk onto the panel by the car's compositor. Density 210 keeps every
-//           button the same size on the panel; the phone draws 1.5 times the detail, so diagonal edges come out
-//           smoother and colours bleed less around thin lines.
-struct Canvas {
-    uint32_t resolution;     // the VideoConfig's code: 2 for 1280x720, 3 for 1920x1080
-    uint32_t width, height;  // also the touchscreen's size: touches arrive in canvas pixels
-    uint32_t shownHeight;    // rows shown on the panel; the rest is the bottom inset
-    uint32_t density;
-};
-const Canvas& canvasFor(bool hd);
-
 // The steps of buildCarServiceDiscovery, in its order; each prints what it changed.
 // The identity strings replaced, at the top level and in the head unit info (field 17); everything else untouched.
 std::vector<uint8_t> buildServiceDiscovery(const uint8_t* base, size_t baseLen, const SdrIdentity& id);
@@ -87,10 +76,10 @@ void setDiscoveryTrim(DiscoveryTrim trim);
 // platform plays the phone's sound itself, so the template's sinks stay as they are (media on channel 9, 48 kHz
 // stereo; guidance on channel 8, 16 kHz mono first) and neither removeMediaChannel nor retypeGuidanceSink runs.
 // The car's Bluetooth address is never in it: told it, Android Auto takes the phone's Bluetooth over (pairing
-// waited for a code from the car, reconnection never finished; reference car, 14 November 2026). hdVideo: the 1080p
-// canvas, else 720p (canvasFor).
+// waited for a code from the car, reconnection never finished; reference car, 14 November 2026). canvas: the picture
+// the phone draws (core/canvas.hpp).
 std::vector<uint8_t> buildCarServiceDiscovery(const uint8_t* base, size_t baseLen, const char* vehicleFile,
-                                              bool wifiAudio = false, bool hdVideo = false);
+                                              bool wifiAudio = false, const Canvas& canvas = canvasFor(false));
 
 }  // namespace aa
 

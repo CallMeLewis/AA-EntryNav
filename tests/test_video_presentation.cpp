@@ -185,6 +185,21 @@ int main() {
     bad.shownHeight = 400;
     assert(!video.init(bad));
 
+    // An 800x400 panel: 800x480 decoded with its top 400 rows shown 1:1, or 1280x720 with its top 640 rows shrunk.
+    const evo::EvoVideoConfig small(false, 800, 400);
+    assert(!small.hd() && small.canvas.resolution == 1 && small.bufSize == 1u << 20);
+    assert(video.init(small) && video.start());
+    assert(streamWidth == 800 && streamHeight == 480 && height == 400 && srcWidth == 800 && srcHeight == 400);
+    video.stop();
+    const evo::EvoVideoConfig smallHd(true, 800, 400);
+    assert(smallHd.hd() && smallHd.canvas.resolution == 2 && smallHd.bufSize == 2u << 20);
+    assert(video.init(smallHd) && video.start());
+    assert(streamWidth == 1280 && streamHeight == 720 && height == 400 && srcWidth == 1280 && srcHeight == 640);
+    video.stop();
+    // An 800x480 panel has no hd canvas; a screen no canvas fits gets a stream init() refuses.
+    assert(!evo::EvoVideoConfig(true, 800, 480).hd() && evo::EvoVideoConfig(true, 800, 480).width == 800);
+    assert(!video.init(evo::EvoVideoConfig(false, 1024, 600)));
+
     // The Wi-Fi's frame pacing: off on the cable; on the Wi-Fi, a frame right behind the previous one waits for the
     // rest of the spacing, a frame that waited never makes the next one wait, and evenly spaced frames never wait.
     assert(evo::EvoVideoConfig().paceMs == 0 && evo::EvoVideoConfig(true).paceMs == 0);

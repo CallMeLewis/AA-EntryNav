@@ -746,11 +746,22 @@ int main() {
         panel.p[1].y = 0;
         panel.action = 5;
         panel.index = 1;
-        const aa::TouchEventOut same = evo::toCanvas(panel, 1280, 480);
+        const aa::TouchEventOut same = evo::toCanvas(panel, 1280, 480, 1280, 480);
         CHECK(same.n == 2 && same.p[0].x == 1279 && same.p[0].y == 479 && same.p[1].x == 640 && same.p[1].y == 0);
-        const aa::TouchEventOut hd = evo::toCanvas(panel, 1920, 720);
+        const aa::TouchEventOut hd = evo::toCanvas(panel, 1280, 480, 1920, 720);
         CHECK(hd.n == 2 && hd.p[0].x == 1918 && hd.p[0].y == 718 && hd.p[1].x == 960 && hd.p[1].y == 0);
         CHECK(hd.action == 5 && hd.index == 1 && hd.p[1].id == panel.p[1].id);
+    }
+    {  // An 800x400 panel: as they are on the 800x480 canvas, times 1.6 on the 1280x720 one.
+        aa::TouchEventOut panel;
+        memset(&panel, 0, sizeof(panel));
+        panel.n = 1;
+        panel.p[0].x = 799;
+        panel.p[0].y = 399;
+        const aa::TouchEventOut same = evo::toCanvas(panel, 800, 400, 800, 400);
+        CHECK(same.p[0].x == 799 && same.p[0].y == 399);
+        const aa::TouchEventOut hd = evo::toCanvas(panel, 800, 400, 1280, 640);
+        CHECK(hd.p[0].x == 1278 && hd.p[0].y == 638);
     }
     puts(
         "PASS older BMW controller (C10/C20), one controller protocol per car; input: IPv4/UDP of the copy, touch "
@@ -758,6 +769,6 @@ int main() {
         "vMOST message -> controller decoder; keys as CarPlay has them (tap ignored, NAV/MEDIA/COM and steering wheel "
         "phone button -> AA apps, COM to iDrive during a call, BACK and a left tilt keep Android Auto up); console and "
         "steering wheel volume buttons decoded; steering wheel roller: roll then push -> one track skip; volume level "
-        "(20.00.C08); touches on the 720p and 1080p canvases");
+        "(20.00.C08); touches on the 720p and 1080p canvases, and from an 800x400 panel");
     return 0;
 }

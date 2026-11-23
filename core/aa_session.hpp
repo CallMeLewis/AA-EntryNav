@@ -14,6 +14,7 @@
 #include "aa_input.hpp"
 #include "aa_messages.hpp"
 #include "aa_tls.hpp"
+#include "canvas.hpp"
 #include "car_inbox.hpp"
 #include "car_location.hpp"
 #include "keyframe_request.hpp"
@@ -96,10 +97,10 @@ public:
     // The file holding the car's model and year (SdrIdentity::loadVehicleFile), read at each service discovery; kept
     // as given, so it must outlive the session. None by default: the reference car.
     void setVehicleFile(const char* path) { vehicleFile_ = path; }
-    // The phone draws the 1080p canvas instead of the 720p one (canvasFor in core/sdr_builder.hpp), and touches are
-    // then expected in its pixels. Off by default. Set before start(): it goes into the service discovery.
-    void setHdVideo(bool on) { hdVideo_ = on; }
-    bool hdVideo() const { return hdVideo_; }
+    // The picture the phone draws (core/canvas.hpp), and the pixels touches are then expected in. The reference
+    // screen's standard canvas by default. Set before start(): it goes into the service discovery.
+    void setCanvas(const Canvas& canvas) { canvas_ = canvas; }
+    const Canvas& canvas() const { return canvas_; }
 
     // Car input for the phone, from any thread: queued, then sent by the session thread.
     void postTouchEvent(const TouchEventOut& ev);
@@ -198,7 +199,7 @@ private:
     Callback<TrackCallback> track_;
     TrackInfo lastTrack_;  // session thread only: the texts last handed to track_
     const char* vehicleFile_;
-    bool hdVideo_;
+    Canvas canvas_;
     bool ackWhenPlayed_;
     uint64_t playedForceMs_;
     pthread_mutex_t playedLock_;

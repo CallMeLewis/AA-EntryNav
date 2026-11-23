@@ -19,8 +19,8 @@ read-only except while `setup.sh` installs. Settings and logs go to `/var/local/
    name and password of the car's Wi-Fi.
 3. The phone joins that Wi-Fi and opens a TCP connection. Everything after that runs inside TLS.
 4. The service describes the car to the phone. The phone answers with an H.264 stream, and the service shows it on
-   its own LayerManager layer. Over Wi-Fi the stream is 1280x720. Over the cable it is 1920x1080, unless the
-   `video-720` file asks for 1280x720.
+   its own LayerManager layer. The stream's size follows the screen's (`core/canvas.hpp`). On the 1280x480 screen it
+   is 1280x720 over Wi-Fi, and 1920x1080 over the cable unless the `video-720` file asks for 1280x720.
 5. Touch, the controller and buttons, GPS, day and night, the microphone and turn-by-turn guidance each get a channel
    of their own.
 6. A phone that sends nothing for 2 seconds gets a ping every second. If 5 seconds pass without a word, the service

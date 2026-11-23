@@ -9,8 +9,8 @@
   </p>
 </div>
 
-AA-EntryNav adds Android Auto to BMWs with the **EntryNav2** head unit, the one with a 1280×480 screen and CarPlay
-over Wi-Fi. NBT Evo, ID7 and MGU units are different systems and can't run it. Start it from iDrive's *Media* menu and
+AA-EntryNav adds Android Auto to BMWs with the **EntryNav2** head unit, the one with CarPlay over Wi-Fi. It's tried
+on the 1280×480 screen and sizes the picture for 800×480 and 800×400 screens too. NBT Evo, ID7 and MGU units are different systems and can't run it. Start it from iDrive's *Media* menu and
 your phone connects over the car's own Bluetooth and Wi-Fi, or over a USB cable. It adds two folders to the head unit
 and leaves BMW's files as they are.
 

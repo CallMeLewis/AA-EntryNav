@@ -281,7 +281,7 @@ void webCommand(const std::string& text) {
         touch.p[0].y = c < 0 ? 0 : c > 479 ? 479 : c;
         touch.action = a;
         touch.index = 0;
-        const aa::Canvas& canvas = aa::canvasFor(g_session->hdVideo());  // the page's pixels on the phone's canvas
+        const aa::Canvas& canvas = g_session->canvas();  // the page's pixels on the phone's canvas
         touch.p[0].x = touch.p[0].x * static_cast<int>(canvas.width) / 1280;
         touch.p[0].y = touch.p[0].y * static_cast<int>(canvas.shownHeight) / 480;
         g_session->postTouchEvent(touch);
@@ -659,7 +659,7 @@ int main(int argc, char** argv) {
         session.setAudioCallbacks(onAudio, evo::EvoAudio::onStream, &audio);
         session.setNavStatusCallback(onNav);
         // PC_VIDEO=720: the 1280x720 picture shown 1:1, as with the car's video-720 file; else 1920x1080 shrunk.
-        session.setHdVideo(!(getenv("PC_VIDEO") && !strcmp(getenv("PC_VIDEO"), "720")));
+        session.setCanvas(aa::canvasFor(!(getenv("PC_VIDEO") && !strcmp(getenv("PC_VIDEO"), "720"))));
         // A vehicle file (model=, year=, id=) as the service reads on the car, when one is given.
         if (getenv("PC_VEHICLE_FILE")) {
             session.setVehicleFile(getenv("PC_VEHICLE_FILE"));

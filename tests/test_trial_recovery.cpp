@@ -124,6 +124,11 @@ bool AlpsSppLink::requestSppDisconnect() {
     return true;
 }
 EvoIlm::EvoIlm() {}
+bool EvoIlm::screenSize(uint32_t& w, uint32_t& h) {
+    w = 1280;
+    h = 480;
+    return true;
+}
 bool EvoIlm::validateTarget(uint32_t, uint32_t, uint32_t, uint32_t, bool) {
     return true;
 }

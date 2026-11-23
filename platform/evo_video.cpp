@@ -17,19 +17,27 @@ static bool xsvCommand(const char* name, int result) {
     return result >= 0;
 }
 
-EvoVideoConfig::EvoVideoConfig(bool hd)
-    : width(hd ? 1920 : 1280),
-      height(hd ? 1080 : 720),
-      shownWidth(hd ? 1920 : 1280),
-      shownHeight(hd ? 720 : 480),
-      displayWidth(1280),
-      displayHeight(480),
+EvoVideoConfig::EvoVideoConfig(bool hd, uint32_t panelWidth, uint32_t panelHeight)
+    : canvas(),
+      width(0),
+      height(0),
+      shownWidth(0),
+      shownHeight(0),
+      displayWidth(panelWidth),
+      displayHeight(panelHeight),
       fps(0),
       surfaceId(kAaSurfaceId),
       layerId(kAaLayerId),
       bufCount(8),
-      bufSize(hd ? 2u << 20 : 1u << 20),
-      paceMs(0) {}
+      bufSize(1u << 20),
+      paceMs(0) {
+    if (aa::canvasFor(panelWidth, panelHeight, hd, canvas)) {
+        width = shownWidth = canvas.width;
+        height = canvas.height;
+        shownHeight = canvas.shownHeight;
+        bufSize = this->hd() ? 2u << 20 : 1u << 20;
+    }
+}
 
 EvoVideo::EvoVideo()
     : h_(nullptr),

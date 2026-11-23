@@ -20,7 +20,7 @@ const uint32_t kMediaSinkField = 3;      // in a service
 const uint32_t kInputSourceField = 4;    // in a service
 const uint32_t kAudioTypeField = 2;      // in a media sink
 const uint32_t kVideoConfigField = 4;    // in a media sink
-const uint32_t kResolutionField = 1;     // in a video config: 2 for 1280x720, 3 for 1920x1080
+const uint32_t kResolutionField = 1;     // in a video config: 1 for 800x480, 2 for 1280x720, 3 for 1920x1080
 const uint32_t kDensityField = 5;        // in a video config, with kRealDensityField
 const uint32_t kRealDensityField = 9;
 const uint32_t kUiConfigField = 11;    // in a video config: the insets as its field 1, then theme and the like
@@ -356,12 +356,6 @@ std::vector<uint8_t> buildServiceDiscovery(const uint8_t* base, size_t baseLen, 
     return ok ? out : Bytes(base, base + baseLen);
 }
 
-const Canvas& canvasFor(bool hd) {
-    static const Canvas k720 = {2, 1280, 720, 480, 140};
-    static const Canvas k1080 = {3, 1920, 1080, 720, 210};
-    return hd ? k1080 : k720;
-}
-
 bool tuneMainDisplay(std::vector<uint8_t>& sdr, const Canvas& canvas) {
     bool changed = false;
     const bool ok = rewriteChannel(
@@ -507,7 +501,7 @@ void setDiscoveryTrim(DiscoveryTrim trim) {
 }
 
 std::vector<uint8_t> buildCarServiceDiscovery(const uint8_t* base, size_t baseLen, const char* vehicleFile,
-                                              bool wifiAudio, bool hdVideo) {
+                                              bool wifiAudio, const Canvas& canvas) {
     SdrIdentity identity;
     if (vehicleFile) {
         identity.loadVehicleFile(vehicleFile);
@@ -515,8 +509,8 @@ std::vector<uint8_t> buildCarServiceDiscovery(const uint8_t* base, size_t baseLe
     std::vector<uint8_t> sdr = buildServiceDiscovery(base, baseLen, identity);
     printf("[SDR] ServiceDiscovery identity: %s %s %s\n", identity.carMake.c_str(), identity.carModel.c_str(),
            identity.carYear.c_str());
-    tuneMainDisplay(sdr, canvasFor(hdVideo));
-    declareTouchscreen(sdr, canvasFor(hdVideo));
+    tuneMainDisplay(sdr, canvas);
+    declareTouchscreen(sdr, canvas);
     describeCar(sdr, identity);
     if (wifiAudio) {
         printf("[SDR] sound over Wi-Fi: media sink (channel %u) and guidance sink (channel %u) kept\n",

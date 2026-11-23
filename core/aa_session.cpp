@@ -76,7 +76,7 @@ AASession::AASession()
       running_(false),
       thread_(0),
       vehicleFile_(nullptr),
-      hdVideo_(false),
+      canvas_(canvasFor(false)),
       ackWhenPlayed_(false),
       playedForceMs_(kPlayedForceMs),
       longestSilenceMs_(0),

@@ -95,7 +95,7 @@ bool hdMatches() {
     evo::setCarGpsSourceForTest("/nonexistent");
     const std::vector<uint8_t> golden(kSdrG20WithoutCarGps, kSdrG20WithoutCarGps + sizeof(kSdrG20WithoutCarGps));
     const std::vector<uint8_t> hd =
-        aa::buildCarServiceDiscovery(kDhuSdpProtobuf, kDhuSdpProtobufLen, nullptr, false, true);
+        aa::buildCarServiceDiscovery(kDhuSdpProtobuf, kDhuSdpProtobufLen, nullptr, false, aa::canvasFor(true));
     Display sd, hdd;
     if (!display(golden, sd) || !display(hd, hdd)) {
         printf("FAIL 1080p: display or touchscreen not found\n");
@@ -126,17 +126,61 @@ bool hdMatches() {
     return true;
 }
 
+// Smaller screens: the canvas each gets, and the description the phone is told for it.
+bool smallScreens() {
+    struct Case {
+        uint32_t panelW, panelH;
+        bool hd;
+        uint32_t resolution, width, height, shownHeight, density;
+    };
+    const Case cases[] = {
+        {1280, 480, false, 2, 1280, 720, 480, 140}, {1280, 480, true, 3, 1920, 1080, 720, 210},
+        {800, 480, false, 1, 800, 480, 480, 140},   {800, 480, true, 1, 800, 480, 480, 140},
+        {800, 400, false, 1, 800, 480, 400, 140},   {800, 400, true, 2, 1280, 720, 640, 224},
+    };
+    for (unsigned i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        const Case& c = cases[i];
+        aa::Canvas canvas;
+        if (!aa::canvasFor(c.panelW, c.panelH, c.hd, canvas) || canvas.resolution != c.resolution ||
+            canvas.width != c.width || canvas.height != c.height || canvas.shownHeight != c.shownHeight ||
+            canvas.density != c.density) {
+            printf("FAIL %ux%u%s: canvas %u %ux%u, %u rows, density %u\n", c.panelW, c.panelH, c.hd ? " hd" : "",
+                   canvas.resolution, canvas.width, canvas.height, canvas.shownHeight, canvas.density);
+            return false;
+        }
+        Display d;
+        if (!display(aa::buildCarServiceDiscovery(kDhuSdpProtobuf, kDhuSdpProtobufLen, nullptr, false, canvas), d) ||
+            d.resolution != c.resolution || d.density != c.density || d.realDensity != c.density ||
+            d.bottomInset != c.height - c.shownHeight || d.touchWidth != c.width || d.touchHeight != c.height) {
+            printf("FAIL %ux%u%s: description read back wrongly\n", c.panelW, c.panelH, c.hd ? " hd" : "");
+            return false;
+        }
+    }
+    // Screens no canvas fits: too wide, or rows that don't come out whole.
+    const uint32_t refused[][2] = {{2560, 480}, {1024, 600}, {1000, 480}, {0, 480}, {1280, 0}};
+    for (unsigned i = 0; i < sizeof(refused) / sizeof(refused[0]); ++i) {
+        aa::Canvas canvas;
+        if (aa::canvasFor(refused[i][0], refused[i][1], false, canvas) ||
+            aa::canvasFor(refused[i][0], refused[i][1], true, canvas)) {
+            printf("FAIL %ux%u: a canvas was given\n", refused[i][0], refused[i][1]);
+            return false;
+        }
+    }
+    return true;
+}
+
 }  // namespace
 
 int main() {
     // With the car GPS (LOCATION, NIGHT_MODE, DRIVING_STATUS) and without it.
     if (!matches(true, kSdrG20WithCarGps, sizeof(kSdrG20WithCarGps)) ||
-        !matches(false, kSdrG20WithoutCarGps, sizeof(kSdrG20WithoutCarGps)) || !hdMatches()) {
+        !matches(false, kSdrG20WithoutCarGps, sizeof(kSdrG20WithoutCarGps)) || !hdMatches() || !smallScreens()) {
         return 1;
     }
     printf(
         "PASS car description identical to the golden record (%u bytes with car GPS, %u without); only the head "
-        "unit name and build change; 1080p changes only the resolution, densities, inset and touchscreen\n",
+        "unit name and build change; 1080p changes only the resolution, densities, inset and touchscreen; 800x480 "
+        "and 800x400 screens get their canvas, screens none fits get none\n",
         static_cast<unsigned>(sizeof(kSdrG20WithCarGps)), static_cast<unsigned>(sizeof(kSdrG20WithoutCarGps)));
     return 0;
 }

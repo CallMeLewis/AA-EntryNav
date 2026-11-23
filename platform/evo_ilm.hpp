@@ -57,6 +57,8 @@ public:
     // Read-only.
     bool surfacesOnLayer(uint32_t layerId, std::vector<uint32_t>& out);
     bool surfaceExists(uint32_t surfaceId);
+    // The size of screen 0, the car's display. False when unreadable.
+    bool screenSize(uint32_t& w, uint32_t& h);
     // Fail closed on an unreadable inventory, occupied ID, hidden/off-screen or non-fullscreen layer.
     bool validateTarget(uint32_t surfaceId, uint32_t layerId, uint32_t w, uint32_t h, bool requireFree = true);
     bool surfaceAbsent(uint32_t surfaceId);

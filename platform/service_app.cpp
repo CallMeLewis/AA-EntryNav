@@ -22,8 +22,10 @@ namespace evo {
 ServiceApp::ServiceApp(uint16_t p, bool v, volatile sig_atomic_t* quit)
     : knob(nullptr),
       server(p),
-      shownWidth(1280),
-      shownHeight(480),
+      panelWidth(aa::kPanelWidth),
+      panelHeight(aa::kPanelHeight),
+      shownWidth(aa::kPanelWidth),
+      shownHeight(aa::kPanelHeight),
       port(p),
       videoEnabled(v),
       stopping(false),
@@ -236,7 +238,7 @@ void ServiceApp::codec(const uint8_t* data, size_t len, void* user) {
 
 void ServiceApp::touchEvent(const aa::TouchEventOut& ev, void* user) {
     ServiceApp* a = static_cast<ServiceApp*>(user);
-    a->session.postTouchEvent(toCanvas(ev, a->shownWidth, a->shownHeight));
+    a->session.postTouchEvent(toCanvas(ev, a->panelWidth, a->panelHeight, a->shownWidth, a->shownHeight));
 }
 
 // Volume key (knob or steering wheel). With the pill working, the level message that follows shows it.
@@ -654,8 +656,8 @@ bool ServiceApp::startSession(int fd, void* user, bool cable) {
     a->session.stop();  // join callbacks before destroying/reinitializing video buffers
     bool videoOk = true;
     // 1080p over the cable only. Over the car's Wi-Fi a phone that is asked for 1080p alone sets the session up, never
-    // starts the picture and hangs up within seconds, so a phone on Wi-Fi always gets 720p.
-    EvoVideoConfig config(false);
+    // starts the picture and hangs up within seconds, so a phone on Wi-Fi always gets the standard canvas.
+    EvoVideoConfig config(false, a->panelWidth, a->panelHeight);
     if (a->videoEnabled) {
         pthread_mutex_lock(&a->videoMu);
         if (cable) {
@@ -666,24 +668,26 @@ bool ServiceApp::startSession(int fd, void* user, bool cable) {
         a->video.stop();
         videoOk = a->video.init(config) && a->video.start();
         if (!videoOk && config.hd()) {
-            // The decoder or the buffers refused 1080p: 720p from now on, for this run of the service.
-            ELOG("ServiceApp", "the 1920x1080 picture did not start: 1280x720 from now on");
+            // The decoder or the buffers refused the hd canvas: the standard one from now on, for this run of the
+            // service.
+            ELOG("ServiceApp", "the %ux%u picture did not start: the standard canvas from now on", config.width,
+                 config.height);
             a->video.stop();
-            a->videoConfig = EvoVideoConfig(false);
+            a->videoConfig = EvoVideoConfig(false, a->panelWidth, a->panelHeight);
             config = a->videoConfig;  // only the cable asks for 1080p, and the cable needs no pacing
             videoOk = a->video.init(config) && a->video.start();
         }
         pthread_mutex_unlock(&a->videoMu);
         if (!cable) {
-            ELOG("ServiceApp", "phone on Wi-Fi: 1280x720%s, frames that come close together spaced %u ms apart",
-                 a->videoConfig.hd() ? " (1920x1080 is for the cable)" : "", kWifiFrameSpacingMs);
+            ELOG("ServiceApp", "phone on Wi-Fi: %ux%u%s, frames that come close together spaced %u ms apart",
+                 config.width, config.height, a->videoConfig.hd() ? " (the hd canvas is for the cable)" : "",
+                 kWifiFrameSpacingMs);
         }
     }
     // The phone is told the canvas the decoder took; touches follow it.
-    const bool hd = a->videoEnabled && config.hd();
-    a->shownWidth = hd ? config.shownWidth : config.displayWidth;
-    a->shownHeight = hd ? config.shownHeight : config.displayHeight;
-    a->session.setHdVideo(hd);
+    a->shownWidth = config.shownWidth;
+    a->shownHeight = config.shownHeight;
+    a->session.setCanvas(config.canvas);
     pthread_mutex_lock(&a->mu);
     if (!videoOk) {
         close(fd);

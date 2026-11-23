@@ -8,11 +8,19 @@ Each version links to the commit or tag its archive was built from.
 ## [Unreleased]
 
 <!-- Flare Drive:
-With Sound through Android Auto, turning the car off and on no longer leaves Android Auto silent. The sound comes back
-by itself without reconnecting your phone.
+Android Auto now fits smaller screens too, including 800x480 and 800x400 alongside 1280x480. With Sound through Android
+Auto, turning the car off and on no longer leaves Android Auto silent. The sound comes back by itself without
+reconnecting your phone.
 -->
 
-Sound through Android Auto now comes back after the car is turned off and on. The service and the iDrive app change.
+Android Auto now fits 800x480 and 800x400 screens alongside 1280x480, and Sound through Android Auto comes back after
+you turn the car off and on. The service, the supervisor and the iDrive app change.
+
+### Added
+
+- **Android Auto fits smaller screens too.** It now reads the car's screen size and asks the phone for a picture that
+  fits, covering 800x480 and 800x400 screens alongside 1280x480. Buttons keep their size on screen, touch follows the
+  picture, and the compatibility check stops on any screen size that Android Auto cannot fill.
 
 ### Fixed
 
