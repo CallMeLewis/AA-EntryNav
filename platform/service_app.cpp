@@ -467,6 +467,9 @@ void ServiceApp::command(const ControlCommand& c, void* user) {
              : !session       ? " (no session: nothing sent)"
                               : " (Android Auto's sound not on the car)");
     }
+    if (c.verb == "carsource") {    // iDrive's entertainment source, from the app's cluster player (audio-wifi)
+        a->audio.carSource(c.arg);  // the audio's own lock: never under mu
+    }
     if (c.verb == "daynight") {
         a->applyDayNight(c.arg, "iDrive app");
     }

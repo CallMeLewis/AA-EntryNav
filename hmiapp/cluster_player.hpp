@@ -24,8 +24,8 @@ namespace app {
 // In createApp, on HmiMain3D's thread: installs the CarPlay player and skip-device hooks when audio-wifi exists.
 void captureClusterPlayer();
 
-// From the status poll: tells the service whether the cluster shows its skip menu, only when the state or the
-// service's PID changes.
+// From the status poll: tells the service whether the cluster shows its skip menu ("clusterskip") and what iDrive's
+// entertainment source is ("carsource"), each only when it or the service's PID changes.
 void clusterPlayerPoll(int servicePid, bool connected);
 
 // Whether the cluster player hooks are installed on iDrive's CarPlay player (set in createApp).

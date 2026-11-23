@@ -7,6 +7,19 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+<!-- Flare Drive:
+With Sound through Android Auto, turning the car off and on no longer leaves Android Auto silent. The sound comes back
+by itself without reconnecting your phone.
+-->
+
+Sound through Android Auto now comes back after the car is turned off and on. The service and the iDrive app change.
+
+### Fixed
+
+- **Sound through Android Auto comes back after you turn the car off and on.** Android Auto could stay on screen with
+  no sound until you disconnected and reconnected your phone. The sound now comes back by itself, and a radio you pick
+  in iDrive keeps playing.
+
 ## [0.1.8] - 2026-11-23
 
 <!-- Flare Drive:

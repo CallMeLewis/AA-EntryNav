@@ -156,6 +156,7 @@ struct RouteTicket {
     std::shared_ptr<void> keep;  // the RouteAnswers, alive until the answer is handled
     void* answers;
     uint32_t ask;
+    bool media;  // the media route, else the prompts'
 };
 }  // namespace
 
@@ -164,6 +165,15 @@ EvoAudio::EvoAudio()
       started_(false),
       quit_(false),
       routeAsked_(false),
+      routeAsk_(0),
+      routeGranted_(false),
+      routeSeen_(false),
+      routeTried_(false),
+      routeAwaitMusic_(false),
+      routeFailures_(0),
+      routeRetryMs_(0),
+      routeHeldMs_(0),
+      carSource_(-1),
       mediaPlayed_(nullptr),
       mediaPlayedUser_(nullptr),
       mediaDryMs_(0),
@@ -201,17 +211,19 @@ EvoAudio::~EvoAudio() {
 }
 
 namespace {
-void onPromptRoute(bool granted, void* user) {
+void onRouteAnswer(bool granted, void* user) {
     RouteTicket* t = static_cast<RouteTicket*>(user);
-    EvoAudio::forwardRouteAnswer(t->answers, t->ask, granted);
+    EvoAudio::forwardRouteAnswer(t->answers, t->ask, granted, t->media);
     delete t;
 }
 }  // namespace
 
-void EvoAudio::forwardRouteAnswer(void* answers, uint32_t ask, bool granted) {
+void EvoAudio::forwardRouteAnswer(void* answers, uint32_t ask, bool granted, bool media) {
     RouteAnswers* a = static_cast<RouteAnswers*>(answers);
     pthread_mutex_lock(&a->mu);
-    if (a->owner) {
+    if (a->owner && media) {
+        a->owner->mediaRouteAnswered(ask, granted);
+    } else if (a->owner) {
         a->owner->promptRouteAnswered(ask, granted);
     }
     pthread_mutex_unlock(&a->mu);
@@ -228,7 +240,8 @@ void EvoAudio::askPromptRoute(bool build, uint32_t ask, bool wait) {
     t->keep = answers_;
     t->answers = answers_.get();
     t->ask = ask;
-    requestAudioRoute(true, settings_.promptRoute, wait, onPromptRoute, t);
+    t->media = false;
+    requestAudioRoute(true, settings_.promptRoute, wait, onRouteAnswer, t);
 }
 
 void EvoAudio::promptRouteAnswered(uint32_t ask, bool granted) {
@@ -241,6 +254,172 @@ void EvoAudio::promptRouteAnswered(uint32_t ask, bool granted) {
     if (!granted && current && backoff) {
         ELOG(kTag, "the car refused prompt route 0x%x: prompts go into the mix for %u s", settings_.promptRoute,
              PromptPath::kBackoffMs / 1000);
+    }
+}
+
+uint32_t EvoAudio::routeFailed(uint32_t now) {
+    if (++routeFailures_ >= routeTimes_.tries) {
+        routeFailures_ = 0;
+        routeAwaitMusic_ = true;
+        routeRetryMs_ = 0;
+        return 0;
+    }
+    uint32_t pause = routeTimes_.retryMs;
+    for (unsigned i = 1; i < routeFailures_ && pause < routeTimes_.retryMaxMs; ++i) {
+        pause *= 2;
+    }
+    pause = std::min(pause, routeTimes_.retryMaxMs);
+    routeRetryMs_ = now + pause ? now + pause : 1;
+    return pause;
+}
+
+void EvoAudio::askMediaRoute(uint32_t now) {
+    if (!settings_.route) {
+        return;
+    }
+    pthread_mutex_lock(&mu_);
+    // Granted, yet the app, which reports iDrive's source, has not seen it play: the car did not connect it.
+    bool unconfirmed = false;
+    uint32_t pause = 0;
+    if (routeAsked_ && routeGranted_ && !routeSeen_ && carSource_ >= 0 && now - routeHeldMs_ >= routeTimes_.confirmMs) {
+        routeAsked_ = false;
+        routeGranted_ = false;
+        ++routeAsk_;
+        pause = routeFailed(now);
+        unconfirmed = true;
+    }
+    const bool ask =
+        !routeAsked_ && !routeAwaitMusic_ && (!routeRetryMs_ || static_cast<int32_t>(now - routeRetryMs_) >= 0);
+    uint32_t id = 0;
+    const unsigned failures = routeFailures_;
+    if (ask) {
+        routeAsked_ = true;
+        routeTried_ = true;
+        routeGranted_ = false;
+        routeSeen_ = carSource_ == kSourcePlays;  // already playing: the app reports changes only
+        routeHeldMs_ = now;
+        routeRetryMs_ = 0;
+        id = ++routeAsk_;
+    }
+    pthread_mutex_unlock(&mu_);
+    if (unconfirmed) {
+        if (pause) {
+            ELOG(kTag, "route 0x%x granted, but iDrive did not play its source within %u ms: asked again in %u s",
+                 settings_.route, routeTimes_.confirmMs, pause / 1000);
+        } else {
+            ELOG(kTag,
+                 "route 0x%x granted, but iDrive did not play its source within %u ms: asked again when the "
+                 "phone starts its music",
+                 settings_.route, routeTimes_.confirmMs);
+        }
+    }
+    if (!ask) {
+        return;
+    }
+    if (failures) {
+        ELOG(kTag, "asking the car's audio manager for route 0x%x again (%u failed)", settings_.route, failures);
+    } else {
+        ELOG(kTag, "asking the car's audio manager for route 0x%x", settings_.route);
+    }
+    RouteTicket* t = new RouteTicket;
+    t->keep = answers_;
+    t->answers = answers_.get();
+    t->ask = id;
+    t->media = true;
+    requestAudioRoute(true, settings_.route, false, onRouteAnswer, t);
+}
+
+void EvoAudio::mediaRouteAnswered(uint32_t ask, bool granted) {
+    const uint32_t now = monoMs();
+    pthread_mutex_lock(&mu_);
+    if (ask != routeAsk_ || !routeAsked_) {
+        pthread_mutex_unlock(&mu_);
+        return;  // the session ended, or the route was lost or asked for again since
+    }
+    bool failed = false;
+    uint32_t pause = 0;
+    if (granted) {
+        routeGranted_ = true;
+        if (!routeSeen_) {
+            routeHeldMs_ = now;
+        }
+    } else if (routeSeen_) {
+        routeGranted_ = true;  // no answer, yet iDrive plays its source: held
+    } else {
+        routeAsked_ = false;
+        ++routeAsk_;
+        pause = routeFailed(now);
+        failed = true;
+    }
+    pthread_mutex_unlock(&mu_);
+    if (failed && pause) {
+        ELOG(kTag, "route 0x%x asked again at the next sound in %u s", settings_.route, pause / 1000);
+    } else if (failed) {
+        ELOG(kTag, "route 0x%x failed %u times: asked again when the phone starts its music", settings_.route,
+             routeTimes_.tries);
+    }
+}
+
+void EvoAudio::carSource(int state) {
+    if (state < kSourceDropped || state > kSourceOther) {
+        return;
+    }
+    const uint32_t now = monoMs();
+    enum { kNothing, kAdopted, kLost } what = kNothing;
+    uint32_t pause = 0;
+    pthread_mutex_lock(&mu_);
+    carSource_ = state;
+    if (state == kSourcePlays) {
+        if (routeAsked_ && !routeSeen_) {
+            routeSeen_ = true;
+            if (!routeGranted_) {
+                routeHeldMs_ = now;
+            }
+        } else if (!routeAsked_ && routeTried_) {
+            // The car connected it after all (a build that went unanswered), or iDrive did: held again.
+            routeAsked_ = true;
+            routeGranted_ = true;
+            routeSeen_ = true;
+            routeHeldMs_ = now;
+            routeRetryMs_ = 0;
+            routeAwaitMusic_ = false;
+            ++routeAsk_;
+            what = kAdopted;
+        }
+    } else if (routeAsked_ && routeSeen_) {
+        const bool quick = now - routeHeldMs_ < routeTimes_.steadyMs;
+        routeAsked_ = false;
+        routeGranted_ = false;
+        routeSeen_ = false;
+        ++routeAsk_;
+        if (state == kSourceOther) {
+            routeFailures_ = 0;
+            routeAwaitMusic_ = true;
+            routeRetryMs_ = 0;
+        } else if (quick) {
+            pause = routeFailed(now);
+        } else {
+            routeFailures_ = 0;
+            routeRetryMs_ = 0;
+        }
+        what = kLost;
+        pthread_cond_signal(&cv_);
+    }
+    const bool awaitMusic = routeAwaitMusic_;
+    pthread_mutex_unlock(&mu_);
+    if (what == kAdopted) {
+        ELOG(kTag, "iDrive plays Android Auto's source again: route 0x%x counted as held", settings_.route);
+    } else if (what == kLost && state == kSourceOther) {
+        ELOG(kTag,
+             "another source took over from Android Auto's: route 0x%x asked again when the phone starts its "
+             "music",
+             settings_.route);
+    } else if (what == kLost && pause) {
+        ELOG(kTag, "the car took route 0x%x back soon after it played: asked again in %u s", settings_.route,
+             pause / 1000);
+    } else if (what == kLost) {
+        ELOG(kTag, "the car took route 0x%x back (its sound switched off, or restarted): asked again %s",
+             settings_.route, awaitMusic ? "when the phone starts its music" : "at the next sound");
     }
 }
 
@@ -306,6 +485,11 @@ void EvoAudio::releaseRoute(bool wait) {
     pthread_mutex_lock(&mu_);
     const bool asked = routeAsked_;
     routeAsked_ = false;
+    routeGranted_ = routeSeen_ = routeTried_ = routeAwaitMusic_ = false;
+    routeFailures_ = 0;
+    routeRetryMs_ = routeHeldMs_ = 0;
+    carSource_ = -1;
+    ++routeAsk_;  // an answer still on its way changes nothing
     pthread_mutex_unlock(&mu_);
     if (asked) {
         requestAudioRoute(false, settings_.route, wait);
@@ -369,14 +553,25 @@ void EvoAudio::stream(uint8_t channel, bool started, uint32_t config) {
         }
         pthread_mutex_lock(&mu_);
         mixer_.configure(s, rate, channels);  // a prompt that goes its own way can still come back to the mix
+        bool routeAgain = false;
         if (s == AudioMixer::kMedia) {
             musicOpen_ = known;
+            // The phone starts its music: a route another source took, or the car kept refusing, is asked again.
+            routeAgain = known && routeAwaitMusic_;
+            if (routeAgain) {
+                routeAwaitMusic_ = false;
+                routeFailures_ = 0;
+                routeRetryMs_ = 0;
+            }
         } else if (known && channels == 1) {
             startPrompt(rate, monoMs());
         } else {
             promptAlt_ = false;
         }
         pthread_mutex_unlock(&mu_);
+        if (routeAgain) {
+            ELOG(kTag, "the phone starts its music: route 0x%x asked again at its first sound", settings_.route);
+        }
         return;
     }
     if (!streamOf(channel, s)) {
@@ -718,17 +913,11 @@ void EvoAudio::loop() {
             }
             continue;
         }
+        // The car connects the PCM to the speakers once asked, which takes it a few seconds: the opens below are tried
+        // again meanwhile (another source may hold the PCM until then). Asked again while sound plays when the car
+        // refused it or took it back.
+        askMediaRoute(now);
         if (!out_.isOpen()) {
-            // The car connects the PCM to the speakers once asked, which takes it a few seconds: the opens below are
-            // tried again meanwhile (another source may hold the PCM until then).
-            pthread_mutex_lock(&mu_);
-            const bool ask = settings_.route && !routeAsked_;
-            routeAsked_ = routeAsked_ || ask;
-            pthread_mutex_unlock(&mu_);
-            if (ask) {
-                ELOG(kTag, "asking the car's audio manager for route 0x%x", settings_.route);
-                requestAudioRoute(true, settings_.route);
-            }
             if (refused && now - refusedAt < kRetryOpenAfterMs) {
                 continue;  // this period is lost: the queue must not fill up behind a PCM that does not open
             }

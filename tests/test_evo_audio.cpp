@@ -603,6 +603,146 @@ void prompts() {
     evo::setAudioRouteRequesterForTest(nullptr);
 }
 
+bool waitForRoutesOf(bool build, uint16_t route, size_t n) {
+    for (int i = 0; i < 400; ++i) {
+        size_t have = 0;
+        pthread_mutex_lock(&g_routesMu);
+        for (size_t j = 0; j < g_routes.size(); ++j) {
+            have += g_routes[j].build == build && g_routes[j].route == route;
+        }
+        pthread_mutex_unlock(&g_routesMu);
+        if (have >= n) {
+            return have == n;
+        }
+        usleep(5000);
+    }
+    return false;
+}
+
+size_t mediaBuilds() {
+    size_t n = 0;
+    pthread_mutex_lock(&g_routesMu);
+    for (size_t i = 0; i < g_routes.size(); ++i) {
+        n += g_routes[i].build && g_routes[i].route == 0x315;
+    }
+    pthread_mutex_unlock(&g_routesMu);
+    return n;
+}
+
+// Music as a phone sends it, 20 ms at a time on the real clock, for ms or until the media route has had `builds`
+// builds. The time it took.
+uint32_t playMusic(evo::EvoAudio& audio, uint32_t ms, size_t builds = 0) {
+    const std::vector<int16_t> chunk(960 * 2, 1000);
+    const uint32_t start = evo::monoMs();
+    while (evo::monoMs() - start < ms && (!builds || mediaBuilds() < builds)) {
+        send(audio, aa::channel::kMediaAudio, chunk);
+        usleep(20000);
+    }
+    return evo::monoMs() - start;
+}
+
+// The music's route, asked for again when the car refuses it, takes it back as its sound goes off and on, or gives
+// the source to another: at once in the first case, after a pause when it happens again soon, and only once the phone
+// starts its music again when another source took over.
+void mediaRoute() {
+    evo::setAudioRouteRequesterForTest(recordRoute);
+    setenv("FAKE_ASOUND_PACE", "1", 1);
+    evo::AudioSettings s;
+    s.pcm = "entertainment";
+    s.route = 0x315;
+    s.promptRoute = 0;
+    evo::EvoAudio::RouteTimes times;
+    times.retryMs = 200;
+    times.retryMaxMs = 400;
+    times.confirmMs = 300;
+    times.steadyMs = 1000;
+    times.tries = 3;
+    {
+        forget();
+        clearRoutes();
+        evo::EvoAudio audio;
+        audio.setRouteTimesForTest(times);
+        CHECK(audio.start(s));
+        audio.stream(aa::channel::kMediaAudio, true, 0);
+        playMusic(audio, 1000, 1);
+        CHECK(mediaBuilds() == 1 && audio.holdsRoute());
+        // Refused: asked again at the next sound, after the pause.
+        answerBuild(false);
+        CHECK(!audio.holdsRoute());
+        uint32_t took = playMusic(audio, 1000, 2);
+        CHECK(mediaBuilds() == 2 && took >= 180);
+        answerBuild(true);
+        audio.carSource(evo::EvoAudio::kSourcePlays);
+        CHECK(audio.holdsRoute());
+        // Held a while, then the car takes it back with CarPlay's source still current: asked again at once.
+        playMusic(audio, 1100);
+        CHECK(mediaBuilds() == 2);
+        audio.carSource(evo::EvoAudio::kSourceDropped);
+        CHECK(!audio.holdsRoute());
+        took = playMusic(audio, 1000, 3);
+        CHECK(mediaBuilds() == 3 && took < 150);
+        answerBuild(true);
+        audio.carSource(evo::EvoAudio::kSourcePlays);
+        // Taken back again soon after: after a pause.
+        audio.carSource(evo::EvoAudio::kSourceDropped);
+        took = playMusic(audio, 1000, 4);
+        CHECK(mediaBuilds() == 4 && took >= 180);
+        answerBuild(true);
+        audio.carSource(evo::EvoAudio::kSourcePlays);
+        // Another source took over: not asked while the music goes on, only once the phone starts it again.
+        audio.carSource(evo::EvoAudio::kSourceOther);
+        CHECK(!audio.holdsRoute());
+        playMusic(audio, 500);
+        CHECK(mediaBuilds() == 4);
+        audio.stream(aa::channel::kMediaAudio, false, 0);
+        audio.stream(aa::channel::kMediaAudio, true, 0);
+        playMusic(audio, 1000, 5);
+        CHECK(mediaBuilds() == 5);
+        answerBuild(true);
+        audio.carSource(evo::EvoAudio::kSourcePlays);
+        // iDrive brings Android Auto's source back by itself: held again, not asked for.
+        audio.carSource(evo::EvoAudio::kSourceOther);
+        audio.carSource(evo::EvoAudio::kSourcePlays);
+        CHECK(audio.holdsRoute());
+        playMusic(audio, 300);
+        CHECK(mediaBuilds() == 5);
+        // The session ends: the route is given back once.
+        audio.sessionEnded();
+        CHECK(!audio.holdsRoute() && waitForRoutesOf(false, 0x315, 1));
+
+        // Granted, but iDrive never plays its source: a failure, asked again after the pause.
+        clearRoutes();
+        audio.carSource(evo::EvoAudio::kSourceOther);
+        playMusic(audio, 1000, 1);
+        CHECK(mediaBuilds() == 1);
+        answerBuild(true);
+        took = playMusic(audio, 1500, 2);
+        CHECK(mediaBuilds() == 2 && took >= 450);
+        audio.sessionEnded();
+
+        // Refused `tries` times in a row: asked again only once the phone starts its music.
+        clearRoutes();
+        playMusic(audio, 1000, 1);
+        answerBuild(false);
+        playMusic(audio, 1000, 2);
+        answerBuild(false);
+        playMusic(audio, 1000, 3);
+        answerBuild(false);
+        playMusic(audio, 800);
+        CHECK(mediaBuilds() == 3);
+        audio.stream(aa::channel::kMediaAudio, false, 0);
+        audio.stream(aa::channel::kMediaAudio, true, 0);
+        playMusic(audio, 1000, 4);
+        CHECK(mediaBuilds() == 4 && audio.holdsRoute());
+        audio.stop();  // asked for, unanswered: given back
+        CHECK(waitForRoutesOf(false, 0x315, 1));
+        answerBuild(true);  // late: changes nothing
+        CHECK(!audio.holdsRoute());
+    }
+    unsetenv("FAKE_ASOUND_PACE");
+    evo::setAudioRouteRequesterForTest(nullptr);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -626,6 +766,7 @@ int main(int argc, char** argv) {
     realTime();
     pacedByAcks();
     prompts();
+    mediaRoute();
     troubles();
     forget();
     unlink(pathOf("settings").c_str());
@@ -638,6 +779,7 @@ int main(int argc, char** argv) {
         "PASS sound over Wi-Fi: settings file, PCM list, media and speech played through a stand-in libasound, "
         "unknown format silent, session end, media reported once played, sound in real time without a gap, music paced "
         "by its acks, PCM that does not open, underrun, no "
-        "library, prompts on their own PCM and route (granted, refused, with the music, at the session's end)");
+        "library, prompts on their own PCM and route (granted, refused, with the music, at the session's end), the "
+        "music's route asked again when refused, taken back or never played, and left to another source");
     return 0;
 }

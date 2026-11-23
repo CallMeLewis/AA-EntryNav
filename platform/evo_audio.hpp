@@ -81,14 +81,36 @@ public:
     // Our media route is asked of the car for this session: iDrive then takes CarPlay for the playing source.
     bool holdsRoute();
 
+    // What the iDrive app sees of iDrive's entertainment source ("carsource", hmiapp/cluster_player.cpp). Our route
+    // makes CarPlay's source current, and the car can take it away again: as it switches its sound off and on, or
+    // when another source is chosen. Lost after it played, the route is asked for again: at once when CarPlay's source
+    // is still current but its connection is gone, and only once the phone starts its music again when another
+    // source took over, so a radio chosen in iDrive keeps playing.
+    enum CarSource { kSourceDropped = 0, kSourcePlays = 1, kSourceOther = 2 };
+    void carSource(int state);
+    // The car's answer to a build of the media route.
+    void mediaRouteAnswered(uint32_t ask, bool granted);
+    // The media route's pauses. A build the car refuses or leaves unanswered is asked again at the next sound after
+    // retryMs, doubled at each failure up to retryMaxMs; after `tries` failures in a row, only once the phone starts
+    // its music. A route the car granted whose source the app has not seen play within confirmMs counts as a failure,
+    // and so does one lost sooner than steadyMs after it played, so a car that keeps taking it back is not asked
+    // without pause.
+    struct RouteTimes {
+        uint32_t retryMs, retryMaxMs, confirmMs, steadyMs;
+        unsigned tries;
+        RouteTimes() : retryMs(5000), retryMaxMs(60000), confirmMs(8000), steadyMs(60000), tries(8) {}
+    };
+    void setRouteTimesForTest(const RouteTimes& times) { routeTimes_ = times; }  // before start()
+
     // The session's callbacks (core/aa_session.hpp), user = the EvoAudio.
     static void onData(uint8_t channel, const uint8_t* pcm, size_t len, uint64_t pts, void* user);
     static void onStream(uint8_t channel, bool started, uint32_t config, void* user);
 
     // The car's answer to a build of the prompt route (route requests run on threads of their own).
     void promptRouteAnswered(uint32_t ask, bool granted);
-    // Hands such an answer to the EvoAudio behind `answers`, unless it has gone.
-    static void forwardRouteAnswer(void* answers, uint32_t ask, bool granted);
+    // Hands an answer for the prompt route (media false) or the media route to the EvoAudio behind `answers`, unless
+    // it has gone.
+    static void forwardRouteAnswer(void* answers, uint32_t ask, bool granted, bool media = false);
 
 private:
     struct RouteAnswers;  // where those answers go, emptied as the EvoAudio stops
@@ -110,7 +132,21 @@ private:
     pthread_cond_t cv_;
     bool started_, quit_;
     AudioMixer mixer_;  // under mu_
-    bool routeAsked_;   // under mu_: the route was asked for in this session
+    bool routeAsked_;   // under mu_: the route is asked for, or held, and not given back or lost
+    // The media route, under mu_ (see carSource and mediaRouteAnswered).
+    uint32_t routeAsk_;       // the current build; answers to an older one are ignored
+    bool routeGranted_;       // the car granted it, or the app saw its source play
+    bool routeSeen_;          // the app saw its source play since this build
+    bool routeTried_;         // a build was asked for in this session
+    bool routeAwaitMusic_;    // asked for again only once the phone starts its music
+    unsigned routeFailures_;  // refusals, missing answers and quick losses in a row
+    uint32_t routeRetryMs_;   // no build before this time, 0 for none
+    uint32_t routeHeldMs_;    // when it was granted or first seen playing
+    int carSource_;           // the app's last report, -1 for none in this session
+    RouteTimes routeTimes_;
+    void askMediaRoute(uint32_t nowMs);  // from the playback thread, while there is sound
+    // Under mu_: one more failure. The pause before the next build, or 0 when it now waits for the phone's music.
+    uint32_t routeFailed(uint32_t nowMs);
     MediaPlayed mediaPlayed_;
     void* mediaPlayedUser_;
     // Under mu_: the music ran dry while the phone had not stopped it, at that time (0: it plays or is stopped), and

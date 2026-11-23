@@ -140,6 +140,22 @@ Each line of the file is optional:
 The service log shows the request: `asking the car's audio manager for route 0x315`, then `route 0x315 connected to the
 speakers by the car's audio manager`, or why not. The output may refuse to open until the car has switched the route.
 
+The car can refuse the route or take it back, for example as it switches its sound off and on again with the car. The
+service then asks again while music plays:
+
+- **Refused or unanswered.** Asked again at the next sound after 5 s, then 10, 20 and 40 s, then every minute. After
+  8 failures in a row, it waits until the phone starts its music again.
+- **Taken back.** The iDrive app tells the service which source iDrive plays (`carsource` in the log). If CarPlay's
+  source, which the route makes current, stays current but loses its connection, the route is asked for again at once,
+  or after the same pauses when it happens again within a minute. If another source took over, such as the radio
+  chosen in iDrive, the route is asked for only once the phone starts its music again, so the radio keeps playing.
+- **Granted but never played.** If the iDrive app hasn't seen CarPlay's source play 8 s after the car granted the
+  route, that counts as a refusal.
+
+The log shows `the car took route 0x315 back`, `another source took over`, and each new request. The iDrive app's log
+shows `iDrive's entertainment source is 0x…` as it changes. This part needs `audio-wifi` in place as iDrive starts,
+like the cluster below. Tested on PC only.
+
 An announcement while Android Auto's music isn't playing, over the radio for example, doesn't take the music route,
 which would stop the radio. It plays on its own output under route `0x31a`, as CarPlay plays Maps over the radio, so
 the car lowers the radio for it instead. The route is asked for as the announcement starts, and the sound waits for the

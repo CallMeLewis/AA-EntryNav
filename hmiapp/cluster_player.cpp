@@ -62,6 +62,8 @@ bool g_notifying = false;
 
 int g_toldPid = 0;
 int g_toldSkip = -1;
+int g_toldSource = -1;
+int g_loggedSource = -1;  // iDrive's current source and its state, as last logged
 
 // Copies n bytes from addr in this process, or fails if any of them can't be read: write() checks the source and
 // answers EFAULT instead of faulting.
@@ -138,6 +140,21 @@ bool carPlaySourcePlaying() {
         return false;
     }
     return g_currentSource(audio, kClassEntertainment, kSinkAny) == kSourceCarPlay && g_builtUp(audio, kSourceCarPlay);
+}
+
+// For the service's "carsource": 1 CarPlay's source is current and built up, 0 it is current but not built up, 2
+// another source is current, -1 the audio service is not as expected. `current` gets iDrive's current source.
+int carPlaySourceState(int* current) {
+    void* cache = g_audioGet ? g_audioGet() : nullptr;
+    void* audio = cache ? *reinterpret_cast<void**>(static_cast<char*>(cache) + 8) : nullptr;
+    if (!audio || *static_cast<void**>(audio) != g_audioVptr) {
+        return -1;
+    }
+    *current = g_currentSource(audio, kClassEntertainment, kSinkAny);
+    if (*current != kSourceCarPlay) {
+        return 2;
+    }
+    return g_builtUp(audio, kSourceCarPlay) ? 1 : 0;
 }
 
 bool carPlayAvailable(const void* handler) {
@@ -326,19 +343,40 @@ void captureClusterPlayer() {
 }
 
 void clusterPlayerPoll(int servicePid, bool connected) {
-    if (!g_carPlaySkip) {
+    if (!g_carPlay) {
         return;
     }
     if (!connected || servicePid <= 0) {
         g_toldPid = 0;
         g_toldSkip = -1;
+        g_toldSource = -1;
         return;
     }
-    const int skip = g_lastAnswer == 1 ? 1 : 0;
-    if (servicePid != g_toldPid || skip != g_toldSkip) {
-        sendToService(skip ? "clusterskip 1" : "clusterskip 0");
+    if (servicePid != g_toldPid) {
         g_toldPid = servicePid;
+        g_toldSkip = -1;
+        g_toldSource = -1;
+    }
+    const int skip = g_lastAnswer == 1 ? 1 : 0;
+    if (g_carPlaySkip && skip != g_toldSkip) {
+        sendToService(skip ? "clusterskip 1" : "clusterskip 0");
         g_toldSkip = skip;
+    }
+    // iDrive's entertainment source, so the service can ask for its route again when the car takes it back.
+    int current = -1;
+    const int source = carPlaySourceState(&current);
+    if (source >= 0 && (current << 2 | source) != g_loggedSource) {
+        alog("cluster player: iDrive's entertainment source is 0x%x%s", current,
+             source == 1   ? " (CarPlay's, built up: Android Auto's sound)"
+             : source == 0 ? " (CarPlay's, not built up)"
+                           : "");
+        g_loggedSource = current << 2 | source;
+    }
+    if (source >= 0 && source != g_toldSource) {
+        char line[24];
+        snprintf(line, sizeof(line), "carsource %d", source);
+        sendToService(line);
+        g_toldSource = source;
     }
 }
 
