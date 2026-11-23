@@ -7,6 +7,8 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+## [0.1.9-test.1] - 2026-11-23
+
 <!-- Flare Drive:
 Android Auto now fits smaller screens too, including 800x480 and 800x400 alongside 1280x480. With Sound through Android
 Auto, turning the car off and on no longer leaves Android Auto silent. The sound comes back by itself without
@@ -357,7 +359,8 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 - **Changing the car's clock no longer upsets Android Auto's timing.** When GPS corrected the clock while driving, a
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
-[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.9-test.1...HEAD
+[0.1.9-test.1]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.9-test.1
 [0.1.8]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.8
 [0.1.7]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.7
 [0.1.6]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.6
