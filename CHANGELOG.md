@@ -7,6 +7,52 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+<!-- Flare Drive:
+With Sound through Android Auto, the instrument cluster and Media/Radio tile now show the song and album art, music
+plays through short pauses, and the steering-wheel roller skips tracks. Phones on Wi-Fi reconnect after a drop, Android
+Auto waits for the reverse camera to close, the volume pill stays closed until you change it, and a broken picture
+mends sooner.
+-->
+
+Music played through Android Auto now shows the song and album art in the cluster and on the Media/Radio tile, keeps
+playing through short pauses, and skips tracks with the steering-wheel roller. Phones on Wi-Fi reconnect after a drop,
+Android Auto waits for the reverse camera to close, the volume pill stays closed until you change the volume, and a
+broken picture mends sooner. The service and the iDrive app change.
+
+### Added
+
+- **The instrument cluster and iDrive's Media/Radio tile show the current song and album art while music plays through
+  Android Auto.** With Sound through Android Auto turned on in Flare Drive (or the `audio-wifi` file in place), the
+  cluster shows its media menu with the song title instead of "no active entertainment source", and iDrive's main menu
+  Media/Radio tile shows the song, artist, album and album art instead of "Unknown artist / Unknown track". This starts
+  from the next head-unit restart after turning Sound through Android Auto on.
+
+### Changed
+
+- **With Sound through Android Auto, a short pause on the Wi-Fi or the cable no longer cuts the music.** About 0.4 s of
+  music now waits in the car, where 0.1 s did, and the phone sends it at the speed the car plays, so a phone whose
+  clock runs a little fast or slow no longer skips or leaves a gap. Pause, play and a new track are heard about 0.3 s
+  later. With logging on, the service log has a line for each gap as it happens (`media ran dry`).
+
+### Fixed
+
+- **The steering-wheel roller changes tracks while Android Auto's sound plays through the car.** Roll down and push for
+  the next track, or roll up and push for the previous one, whether Android Auto or iDrive is on screen. Once you roll
+  in either direction, each push skips another track without rolling again (after a head-unit restart with Sound
+  through Android Auto on; before that, roll again before each push). During a call, and with Bluetooth audio, the
+  roller stays iDrive's as before.
+- **A phone on Wi-Fi whose connection drops starts Android Auto again by itself.** Some phones kept their Bluetooth
+  link to the car after the Wi-Fi went quiet or the connection broke, and never asked again, so iDrive stayed on
+  Connecting until Android Auto was stopped and started. The car now drops that link and the phone connects again.
+  Leaving Android Auto on the phone still ends it as before.
+- **Android Auto waits for the reverse camera to close.** The gear can leave reverse a moment before iDrive closes the
+  camera, and Android Auto came back over a camera still on screen. It now comes back once iDrive leaves the camera,
+  when you pick Android Auto yourself, or after 15 seconds at most.
+- **The volume pill no longer opens by itself.** It opens when you change the volume. Some cars sent another source's
+  volume, or the same level again, as the phone connected, and the pill opened with nothing pressed.
+- **A picture broken by a lost video frame mends sooner.** When the car loses a frame, the phone is now asked to
+  restart its picture from a whole new frame, at most once every 10 seconds, instead of waiting for its next one.
+
 ## [0.1.8-test.3] - 2026-11-22
 
 <!-- Flare Drive:
