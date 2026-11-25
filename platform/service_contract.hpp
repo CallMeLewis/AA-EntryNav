@@ -58,6 +58,10 @@ constexpr char kAppKeyFile[] = "/tmp/aa-entrynav-appkey";              // a key 
 constexpr char kMediaJumpFile[] = "/tmp/aa-entrynav-media";            // MEDIA over iDrive: the app shows AA
 constexpr char kDayNightFile[] = "/tmp/aa-entrynav-daynight";          // day or night, written by the app
 constexpr char kCarFile[] = "/tmp/aa-entrynav-car";                    // the car's own details, by the app
+// The step the iDrive app is at in its status poll and its HMI thread job, one fixed-size line each
+// (hmiapp/app_step.hpp), logged by the service when the app's heartbeat stops (platform/app_heartbeat.hpp).
+constexpr char kAppStepFile[] = "/tmp/aa-entrynav-app-step";
+constexpr int kAppStepLine = 64;  // bytes per line, newline included; a line not written yet is all zero
 // The track the phone plays, by the service, while a session runs: four lines, title, artist and album in UTF-8, then
 // the album art's hash in hex (empty without one), which changes with the picture in kCoverFile.
 constexpr char kTrackFile[] = "/tmp/aa-entrynav-track";

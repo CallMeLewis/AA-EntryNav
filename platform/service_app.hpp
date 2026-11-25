@@ -17,6 +17,7 @@
 
 #include "aa_session.hpp"
 #include "alps_spp.hpp"
+#include "app_heartbeat.hpp"
 #include "aside_wait.hpp"
 #include "evo_audio.hpp"
 #include "evo_control.hpp"
@@ -72,6 +73,10 @@ public:
     bool refreshAdvertisementIfIdle(bool service, SppSnapshotReader& reader, unsigned slot);
     // Car day/night (CDS vehicle.dayNightChangeOver via the iDrive app): 1 day, 2 night, 0 no change, 3 invalid.
     void applyDayNight(int v, const char* src);
+    // Main loop, service mode: logs once when the iDrive app's heartbeat stops (with HmiMain3D's threads and the app's
+    // step) and once when it comes back.
+    void watchApp();
+    static void logLines(const char* prefix, const std::string& lines);  // one log line each, after prefix
 
     // ---- callbacks, user = this ----
     static void frame(uint32_t, const uint8_t* data, size_t len, uint64_t pts, void* user);
@@ -164,6 +169,7 @@ public:
     // iDrive's cluster shows CarPlay's previous and next menu (the app's cluster player, "clusterskip 1"): each push
     // of the roller skips again (EvoKnob::setWheelRepeat). Control thread only.
     std::atomic<bool> clusterSkips;
+    AppHeartbeat appBeat;        // the iDrive app's "alive": set by the control thread, watched by the main loop
     std::atomic<bool> usbStop;   // set with stopping: read by the cable thread while it waits for the phone
     std::atomic<bool> usbBusy;   // set by the cable thread while it connects a phone or carries its session
     std::atomic<bool> usbPhone;  // set by the cable thread while a phone is on the cable, connected or not

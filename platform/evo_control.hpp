@@ -8,7 +8,8 @@
 //   drivemode [<n>], pdc <n> (accepted, not used by the service), skip <1|-1> (next or previous track from iDrive's
 //   cluster menu), clusterskip <0|1> (that menu is shown: each push of the steering wheel roller skips again),
 //   carsource <0|1|2> (iDrive's entertainment source: 1 CarPlay's, which Android Auto's sound uses, plays; 0 it is
-//   current but not connected; 2 another source is current; see EvoAudio::carSource).
+//   current but not connected; 2 another source is current; see EvoAudio::carSource), alive <n> (the app's status
+//   poll, once a second, n counting up: platform/app_heartbeat.hpp).
 // drivemode: iDrive's driving mode display covers Android Auto's state (its optional <n>, sent by iDrive apps before
 // 0.1.3, is ignored).
 // await: from then on a phone that connects is served with its picture aside, until "show" (the app brought iDrive to

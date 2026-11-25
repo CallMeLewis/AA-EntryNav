@@ -435,6 +435,7 @@ int main(int argc, char** argv) {
             // overlay 1: on screen; 2: connected and aside, waiting for the iDrive app's "show"
             // (hmiapp/service_state.hpp).
             control.writeState(state, turn.onScreen ? 1 : (turn.asks ? 2 : 0));
+            app.watchApp();
         }
         if (failed) {
             break;

@@ -26,6 +26,7 @@
 // Uninstall: delete the plugin folder and reboot.
 #include <dlfcn.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
@@ -34,6 +35,7 @@
 #include "../platform/service_contract.hpp"
 #include "app_guards.hpp"
 #include "app_log.hpp"
+#include "app_step.hpp"
 #include "bmw_framework.hpp"
 #include "bt_audio.hpp"
 #include "bt_audio_plan.hpp"
@@ -289,6 +291,7 @@ void statusRun(void*) {
     if (!app) {
         return;
     }
+    appStep(kStepStatus, "service");
     if (!g_autostartShown) {
         showAutostart(app);
     }
@@ -300,6 +303,7 @@ void statusRun(void*) {
     serviceStop();
     serviceAutostart(g_initTime);
     ServiceState d = readServiceState();
+    appStep(kStepStatus, "entry and menu");
     const bool connecting = d.is("connecting"), connected = d.is("connected");
     const bool waiting = d.is("waiting");  // cable only, no phone plugged in: nothing to animate
     unsigned want = connecting ? kTextConnecting : waiting ? kTextWaiting : kTextDefault;
@@ -328,11 +332,24 @@ void statusRun(void*) {
         g_shownRow = row;
     }
     const long now = monoSeconds();  // one moment for both
+    appStep(kStepStatus, "Bluetooth audio");
     switchToBluetoothAudio(d, now);
+    appStep(kStepStatus, "Flare page");
     flarePagePoll(app);
+    appStep(kStepStatus, "cluster player");
     clusterPlayerPoll(d.pid, connected);
+    appStep(kStepStatus, "cluster title");
     clusterTitlePoll(now);
+    appStep(kStepStatus, "hold");
     g_hold.poll(d, now);
+    // The heartbeat, once the whole poll has run: a step that never returns stops it (platform/app_heartbeat.hpp).
+    static unsigned s_beats = 0;
+    if (d.pid) {
+        char beat[24];
+        snprintf(beat, sizeof(beat), "alive %u", ++s_beats & 0x7fffffffu);
+        sendToService(beat);
+    }
+    appStep(kStepStatus, "done");
     postRunnable(app, g_statusRunnable, kStatusPollMs);
 }
 
@@ -418,8 +435,12 @@ void appOnFinalize(bmw::PluginApp* self) {
 // What the app has iDrive's HMI threads do (hmi_thread.hpp): the track title on the cluster and main menu, and on
 // HmiMain3D's own thread the read of iDrive's entertainment source.
 void hmiThreadJob() {
+    const AppStepSlot slot = onHmiThread() ? kStepHmiOther : kStepHmiMain;
+    appStep(slot, "cluster title");
     clusterTitleApply();
+    appStep(slot, "entertainment source");
     clusterPlayerSourceCheck();
+    appStep(slot, "done");
 }
 
 bmw::PluginApp* createApp(bmw::IDispatcher& dispatcher, const char* name, const bmw::Bundle& params,
@@ -453,6 +474,7 @@ void destroyApp(void* app) {
     alog("destroy(%p)", app);
     coverRelease();
     releaseClusterPlayer();  // whatever happens next: the library may go, and CarPlay's player calls into it
+    closeAppStep();
     if (!app) {
         return;
     }

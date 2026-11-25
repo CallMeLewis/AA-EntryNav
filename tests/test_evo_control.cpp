@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -17,6 +18,7 @@
 #include <string>
 #include <vector>
 
+#include "app_heartbeat.hpp"
 #include "control_address.hpp"
 #include "evo_control.hpp"
 #include "service_contract.hpp"
@@ -60,9 +62,73 @@ int main() {
     CHECK(evo::parseControlCommand("carsource 2", 11, c) && c.verb == "carsource" && c.arg == 2);  // iDrive's source
     CHECK(!evo::parseControlCommand("skip", 4, c) && !evo::parseControlCommand("clusterskip", 11, c));
     CHECK(!evo::parseControlCommand("carsource", 9, c));
+    CHECK(evo::parseControlCommand("alive 7", 7, c) && c.verb == "alive" && c.arg == 7);  // the app's heartbeat
+    CHECK(!evo::parseControlCommand("alive", 5, c));
     CHECK(!evo::parseControlCommand("gear", 4, c) && !evo::parseControlCommand("show 1", 6, c));
     CHECK(!evo::parseControlCommand("reboot", 6, c) && !evo::parseControlCommand("", 0, c));
     CHECK(!evo::parseControlCommand("gear 2 x", 8, c));
+
+    {  // The app's heartbeat: nothing before the first "alive", one "silent" after 5 s, one "back", wrap-around safe.
+        evo::AppHeartbeat beat;
+        uint32_t quiet = 0;
+        CHECK(beat.poll(60000, &quiet) == evo::AppHeartbeat::kNone);  // no app yet: never silent
+        const uint32_t t0 = 0xfffff000u;                              // monoMs about to wrap
+        beat.alive(t0);
+        CHECK(beat.poll(t0 + 4999, &quiet) == evo::AppHeartbeat::kNone);
+        CHECK(beat.poll(t0 + 5000, &quiet) == evo::AppHeartbeat::kSilent && quiet == 5000);
+        CHECK(beat.poll(t0 + 9000, &quiet) == evo::AppHeartbeat::kNone);  // said once
+        beat.alive(t0 + 12000);
+        CHECK(beat.poll(t0 + 12100, &quiet) == evo::AppHeartbeat::kBack && quiet == 12000);
+        CHECK(beat.poll(t0 + 13000, &quiet) == evo::AppHeartbeat::kNone);
+        beat.alive(t0 + 13000);
+        CHECK(beat.poll(t0 + 12999, &quiet) == evo::AppHeartbeat::kNone);  // an "alive" just after the poll's clock
+
+        // HmiMain3D's threads, from a /proc laid out as the kernel does: a comm with spaces and parentheses, a thread
+        // that runs (wchan 0) and one asleep in a futex.
+        char root[] = "/tmp/aa-entrynav-proc-test-XXXXXX";
+        CHECK(mkdtemp(root));
+        const std::string r = root;
+        const char* const dirs[] = {"/1", "/42", "/42/task", "/42/task/42", "/42/task/43", "/self"};
+        for (const char* d : dirs) {
+            CHECK(mkdir((r + d).c_str(), 0755) == 0);
+        }
+        struct File {
+            const char* path;
+            const char* text;
+        } const files[] = {
+            {"/1/comm", "init\n"},
+            {"/42/comm", "HmiMain3D\n"},
+            {"/42/task/42/comm", "HmiMain3D\n"},
+            {"/42/task/42/stat", "42 (HmiMain3D) R 1 42\n"},
+            {"/42/task/42/wchan", "0"},
+            {"/42/task/43/comm", "bmw (disp) 2\n"},
+            {"/42/task/43/stat", "43 (bmw (disp) 2) S 1 42\n"},
+            {"/42/task/43/wchan", "futex_wait_queue_me"},
+        };
+        for (const File& f : files) {
+            std::ofstream((r + f.path).c_str()) << f.text;
+        }
+        CHECK(evo::findProcess(root, "HmiMain3D") == 42 && evo::findProcess(root, "nothing") == 0);
+        const std::string threads = evo::describeThreads(root, 42);
+        CHECK(threads.find("42 HmiMain3D R 0\n") != std::string::npos);
+        CHECK(threads.find("43 bmw (disp) 2 S futex_wait_queue_me\n") != std::string::npos);
+        CHECK(evo::describeThreads(root, 7).empty() &&
+              evo::describeThreads(root, 42, 1).find("...") != std::string::npos);
+        // The real /proc: this test's own process and its thread.
+        char self[16];
+        snprintf(self, sizeof(self), "%d ", (int)getpid());
+        CHECK(evo::describeThreads("/proc", (int)getpid()).find(self) != std::string::npos);
+        // The app's step file: its first and third lines written, the second never (all zero).
+        std::string steps(3 * 64, '\0');
+        steps.replace(0, 64, std::string("status poll: hold (at 9 s)") + std::string(37, ' ') + "\n");
+        steps.replace(128, 64, std::string("hmi job, cluster: done (at 8 s)") + std::string(32, ' ') + "\n");
+        std::ofstream((r + "/steps").c_str()) << steps;
+        CHECK(evo::readAppSteps((r + "/steps").c_str(), 64) ==
+              "status poll: hold (at 9 s)\nhmi job, cluster: done (at 8 s)\n");
+        CHECK(evo::readAppSteps((r + "/none").c_str(), 64).empty());
+        const std::string rm = "rm -rf " + r;
+        CHECK(system(rm.c_str()) == 0);
+    }
 
     // The protocol version the app hands the supervisor: one spelling, and anything else (an older app gives none) is
     // refused.
@@ -182,6 +248,7 @@ int main() {
     puts(
         "PASS iDrive app control: abstract name with no port, ping/pong and commands through the app's own calls, "
         "unknown commands and other users refused, one service, no wait without a service or with a full queue, name "
-        "freed on stop, protocol version, state file written atomically and removed on stop");
+        "freed on stop, protocol version, state file written atomically and removed on stop, the app's heartbeat, "
+        "HmiMain3D's threads from /proc");
     return 0;
 }

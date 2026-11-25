@@ -474,6 +474,9 @@ void ServiceApp::command(const ControlCommand& c, void* user) {
              : !session       ? " (no session: nothing sent)"
                               : " (Android Auto's sound not on the car)");
     }
+    if (c.verb == "alive") {
+        a->appBeat.alive(monoMs());
+    }
     if (c.verb == "carsource") {    // iDrive's entertainment source, from the app's cluster player (audio-wifi)
         a->audio.carSource(c.arg);  // the audio's own lock: never under mu
     }
@@ -482,6 +485,41 @@ void ServiceApp::command(const ControlCommand& c, void* user) {
     }
     if (c.verb == "quit") {
         *a->quit_ = 1;
+    }
+}
+
+void ServiceApp::watchApp() {
+    uint32_t quietMs = 0;
+    const AppHeartbeat::Event e = appBeat.poll(monoMs(), &quietMs);
+    if (e == AppHeartbeat::kBack) {
+        ELOG("ServiceApp", "iDrive app back after %u s silent", (quietMs + 500) / 1000);
+        return;
+    }
+    if (e != AppHeartbeat::kSilent) {
+        return;
+    }
+    // HmiMain3D gone: iDrive is restarting. Still there: the app's poll thread, or iDrive's, has stopped. The step
+    // file says where the app was; each thread's wait channel says what it waits on.
+    const int pid = findProcess("/proc", "HmiMain3D");
+    ELOG("ServiceApp", "iDrive app silent %u s (clock at %u s): %s", (quietMs + 500) / 1000, monoMs() / 1000,
+         pid ? "HmiMain3D runs, its threads below" : "HmiMain3D is not running");
+    logLines("iDrive app step:", readAppSteps(contract::kAppStepFile, contract::kAppStepLine));
+    if (pid) {
+        char what[32];
+        snprintf(what, sizeof(what), "HmiMain3D %d thread", pid);
+        logLines(what, describeThreads("/proc", pid));
+    }
+}
+
+void ServiceApp::logLines(const char* prefix, const std::string& lines) {
+    size_t at = 0;
+    while (at < lines.size()) {
+        size_t end = lines.find('\n', at);
+        if (end == std::string::npos) {
+            end = lines.size();
+        }
+        ELOG("ServiceApp", "%s %s", prefix, lines.substr(at, end - at).c_str());
+        at = end + 1;
     }
 }
 
