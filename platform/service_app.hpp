@@ -110,6 +110,7 @@ public:
     bool cableBusy() override { return usbBusy; }
     bool wifiSessionRunning() override;
     void sppLinkOpened() override;
+    void prepareAccessPoint() override;
     void handshakeEnded(bool spoke, bool accepted) override;
     unsigned lostSessions() override;
 

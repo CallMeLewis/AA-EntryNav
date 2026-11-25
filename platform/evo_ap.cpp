@@ -6,6 +6,7 @@
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <cerrno>
@@ -18,15 +19,42 @@
 #include "service_contract.hpp"
 
 namespace evo {
-static bool queryHostapd(std::string& out) {
-    const char* const cli = "/usr/sbin/hostapd_cli";
+// One hostapd_cli command on the car's access point (wlan0), a bounded child; false when it could not run.
+static bool callHostapd(const std::vector<std::string>& command, std::string& out, int timeoutMs) {
     std::vector<std::string> args;
     args.push_back("-p");
     args.push_back("/var/run/hostapd");
     args.push_back("-i");
     args.push_back("wlan0");
-    args.push_back("get_config");
-    return runCommand(cli, args, out);
+    args.insert(args.end(), command.begin(), command.end());
+    return runCommand("/usr/sbin/hostapd_cli", args, out, timeoutMs);
+}
+static bool queryHostapd(std::string& out) {
+    return callHostapd(std::vector<std::string>(1, "get_config"), out, 2000);
+}
+// RELOAD derives the passphrase's key again: more time than a query.
+static const int kChangeTimeoutMs = 5000;
+static bool changeHostapd(const std::vector<std::string>& command, std::string& reply) {
+    return callHostapd(command, reply, kChangeTimeoutMs);
+}
+static HostapdStart currentHostapdStart() {
+    HostapdStart start;
+    struct stat st;
+    if (stat("/var/run/hostapd/wlan0", &st) == 0) {
+        start.device = st.st_dev;
+        start.inode = st.st_ino;
+        start.known = true;
+    }
+    return start;
+}
+UapsdOffer withdrawAccessPointUapsd() {
+    static HostapdStart rebuiltFor;  // the hostapd start whose beacon was rebuilt; the wireless loop's thread only
+    const HostapdStart now = currentHostapdStart();
+    const UapsdOffer offer = withdrawUapsd(changeHostapd, now.same(rebuiltFor));
+    if (offer == UapsdOffer::kWithdrawn) {
+        rebuiltFor = now;
+    }
+    return offer;
 }
 static bool macAddress(const std::string& value) {
     if (value.size() != 17) {

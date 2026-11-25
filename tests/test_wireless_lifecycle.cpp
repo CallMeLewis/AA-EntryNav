@@ -11,12 +11,16 @@
 #include <atomic>
 
 #include "alps_spp.hpp"
+#include "evo_ap.hpp"
 #include "evo_log.hpp"
 #include "service_app.hpp"
 #include "service_contract.hpp"
 #include "wireless_setup.hpp"
 
 static std::atomic<int> starts(0), waits(0), serves(0), dropped(0);
+// Access point preparations (no U-APSD), and the handshakes that came right after one.
+static std::atomic<int> prepared(0), preparedHandshakes(0);
+static std::atomic<bool> preparedPending(false);
 static std::atomic<bool> fixtureLink(true), borrowed(false);
 static std::atomic<bool> phoneKeepsLink(false);  // the phone keeps its Bluetooth link after accepting the Wi-Fi
 static evo::ServiceApp* instance = 0;
@@ -49,12 +53,21 @@ bool AlpsSppLink::requestSppDisconnect() {  // the stack drops the link: the pho
     fixtureLink = false;
     return true;
 }
+UapsdOffer withdrawAccessPointUapsd() {
+    assert(!preparedPending);  // each preparation is followed by its handshake
+    ++prepared;
+    preparedPending = true;
+    return UapsdOffer::kWithdrawn;
+}
 }  // namespace evo
 namespace aa {
 WirelessSetup::WirelessSetup(int fd, const ApInfo& ap, uint16_t port, int peekMs)
     : fd_(fd), ap_(ap), port_(port), peekMs_(peekMs), foreign_(false), spoke_(true) {}
 bool WirelessSetup::handshake(int) {
     assert(fd_ == 42 && peekMs_ == 300 && port_ == 50000);
+    if (preparedPending.exchange(false)) {
+        ++preparedHandshakes;
+    }
     pthread_mutex_lock(&instance->mu);
     instance->tcpPreparing = true;
     pthread_mutex_unlock(&instance->mu);
@@ -263,6 +276,7 @@ int main() {
     pthread_mutex_lock(&app.mu);
     assert(app.sppLinks == 1);  // not a new start
     pthread_mutex_unlock(&app.mu);
+    assert(prepared == 1);  // nor a new preparation of the access point: the phone is on the Wi-Fi already
     // A phone connection being prepared (the fake handshake leaves one): a returning link is held, not answered.
     offerLink();
     usleep(350000);
@@ -345,10 +359,13 @@ int main() {
     pthread_mutex_lock(&app.mu);
     assert(app.wirelessDone && app.sppLinks == 5 && app.wppReply && app.wppAccepted);
     pthread_mutex_unlock(&app.mu);
+    // The access point was prepared right before each new start's handshake, and before no other.
+    assert(prepared == 5 && preparedHandshakes == 5 && starts == 7);
     puts(
         "PASS actual wireless loop: no handshake during TCP preparation or the cable's turn, rearmed after each; a "
         "link "
         "back during a Wi-Fi session offered the same Wi-Fi again; a lost Wi-Fi session drops a Bluetooth link the "
-        "phone kept, a cable session or a replaced one does not; app commands, waiting aside for \"show\", "
+        "phone kept, a cable session or a replaced one does not; the access point prepared (no U-APSD) right before "
+        "each new start's handshake only; app commands, waiting aside for \"show\", "
         "and volume through the peeks; a key leaving Android Auto removes the app key file; PC socketpair only");
 }

@@ -16,7 +16,9 @@ read-only except while `setup.sh` installs. Settings and logs go to `/var/local/
 
 1. The iDrive app starts `evo-trial`, either when you pick *Start Android Auto* or by itself with iDrive.
 2. The service offers Android Auto on the car's Bluetooth. When the phone connects there, the service hands it the
-   name and password of the car's Wi-Fi.
+   name and password of the car's Wi-Fi. Just before, it has the car's Wi-Fi stop offering U-APSD, a power saving
+   mode that made the Wi-Fi chip hold the phone's frames back (`platform/ap_uapsd.hpp`). The Wi-Fi rebuilds its
+   beacon for that only when no device is on it, once each time it starts, so nothing already on it is disconnected.
 3. The phone joins that Wi-Fi and opens a TCP connection. Everything after that runs inside TLS.
 4. The service describes the car to the phone. The phone answers with an H.264 stream, and the service shows it on
    its own LayerManager layer. The stream's size follows the screen's (`core/canvas.hpp`). On the 1280x480 screen it

@@ -16,6 +16,11 @@ Each version links to the commit or tag its archive was built from.
 - **A phone on Wi-Fi gets a picture on a 1440x540 screen.** Since 0.1.9-test.1 such a screen asked a phone on Wi-Fi
   for 1920x1080, and phones hang up on that over the car's Wi-Fi. A phone on Wi-Fi now gets 1280x720 stretched to the
   screen. The cable keeps 1920x1080, and buttons come out the same size on both.
+- **The picture and sound over Wi-Fi no longer stutter because of the car's Wi-Fi power saving.** The car's Wi-Fi
+  offered phones U-APSD, a power saving mode in which its chip held the phone's data back for seconds. Before each
+  phone joins, Android Auto now has the car's Wi-Fi stop offering it. For that, the Wi-Fi rebuilds the beacon phones
+  find it by, once each time it starts and only while no phone or iPhone is on it, so nothing gets disconnected. A
+  phone already on the Wi-Fi keeps U-APSD until it next joins.
 
 ## [0.1.9-test.1] - 2026-11-23
 

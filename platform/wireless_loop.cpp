@@ -101,7 +101,11 @@ void runWirelessLoop(AlpsSppLink& bt, const aa::ApInfo& ap, uint16_t port, Wirel
         // Credentials are captured from the live AP at startup, never from the saved car report.
         const unsigned lost = host.lostSessions();
         aa::WirelessSetup setup(fd, ap, port, kPeekMs);
-        bool ok = !host.stopRequested() && setup.handshake(10000);
+        bool ok = false;
+        if (!host.stopRequested()) {
+            host.prepareAccessPoint();
+            ok = setup.handshake(10000);
+        }
         host.handshakeEnded(setup.spokeWireless(), ok);
         if (ok) {
             ELOG("WirelessLoop", "WPP accepted; waiting for TCP on port %u", port);

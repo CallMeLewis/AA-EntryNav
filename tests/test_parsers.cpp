@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// Alps SPP UUID and payload encoding, and the hostapd configuration parser, on made-up values.
+// Alps SPP UUID and payload encoding, the hostapd configuration parser and the access point's U-APSD steps, on made-up
+// values.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include <string>
+#include <vector>
+
 #include "alps_spp.hpp"
+#include "ap_uapsd.hpp"
 #include "evo_ap.hpp"
 #define CHECK(x)                                                 \
     do {                                                         \
@@ -13,6 +18,76 @@
             exit(1);                                             \
         }                                                        \
     } while (0)
+
+namespace {
+
+// hostapd as hostapd_cli shows it: one reply per command, in order, "!" for a command that could not run. The commands
+// sent are kept.
+std::vector<std::string> g_replies, g_sent;
+
+bool fakeHostapd(const std::vector<std::string>& command, std::string& reply) {
+    std::string line;
+    for (size_t i = 0; i < command.size(); ++i) {
+        line += (i ? " " : "") + command[i];
+    }
+    g_sent.push_back(line);
+    const std::string next = g_sent.size() <= g_replies.size() ? g_replies[g_sent.size() - 1] : "!";
+    reply = next == "!" ? "" : next;
+    return next != "!";
+}
+
+evo::UapsdOffer withdraw(const std::vector<std::string>& answers, bool beaconDone = false) {
+    g_replies = answers;
+    g_sent.clear();
+    return evo::withdrawUapsd(fakeHostapd, beaconDone);
+}
+
+std::vector<std::string> replies(const char* a, const char* b = 0, const char* c = 0) {
+    std::vector<std::string> out(1, a);
+    if (b) {
+        out.push_back(b);
+    }
+    if (c) {
+        out.push_back(c);
+    }
+    return out;
+}
+
+void uapsdCases() {
+    // No station: the setting, then RELOAD to rebuild the beacon and the chip's probe response.
+    CHECK(withdraw(replies("OK\n", "", "OK\n")) == evo::UapsdOffer::kWithdrawn);
+    CHECK(g_sent.size() == 3 && g_sent[0] == "set uapsd_advertisement_enabled 0" && g_sent[1] == "all_sta" &&
+          g_sent[2] == "raw RELOAD");
+    CHECK(withdraw(replies("OK", " \n", "OK\r\n")) == evo::UapsdOffer::kWithdrawn);
+    // A station on the access point (its MIB lines): RELOAD would disconnect it, so it is not sent.
+    CHECK(withdraw(replies("OK\n", "02:00:00:00:00:01\nflags=[AUTH][ASSOC]\n")) == evo::UapsdOffer::kBeaconLeft);
+    CHECK(g_sent.size() == 2);
+    // A station list that cannot be read is no proof of an empty one.
+    CHECK(withdraw(replies("OK\n", "!")) == evo::UapsdOffer::kBeaconLeft && g_sent.size() == 2);
+    CHECK(withdraw(replies("OK\n", "'STA-FIRST' command failed.\n")) == evo::UapsdOffer::kBeaconLeft);
+    // The setting refused or not answered: nothing else is sent.
+    CHECK(withdraw(replies("FAIL\n")) == evo::UapsdOffer::kSetRefused && g_sent.size() == 1);
+    CHECK(withdraw(replies("!")) == evo::UapsdOffer::kSetRefused && g_sent.size() == 1);
+    CHECK(withdraw(replies("OKAY\n")) == evo::UapsdOffer::kSetRefused);
+    CHECK(withdraw(replies("OK\n", "", "FAIL\n")) == evo::UapsdOffer::kReloadRefused);
+    CHECK(withdraw(replies("OK\n", "", "!")) == evo::UapsdOffer::kReloadRefused);
+    // The beacon already rebuilt for this hostapd start: the setting again, never a second RELOAD.
+    CHECK(withdraw(replies("OK\n", "", "OK\n"), true) == evo::UapsdOffer::kAlreadyDone);
+    CHECK(g_sent.size() == 1 && g_sent[0] == "set uapsd_advertisement_enabled 0");
+    CHECK(withdraw(replies("FAIL\n"), true) == evo::UapsdOffer::kSetRefused);
+    // Which hostapd start: its control socket's identity. An unknown start is never the same one.
+    evo::HostapdStart a, b, unknown;
+    a.device = b.device = 1;
+    a.inode = b.inode = 42;
+    a.known = b.known = true;
+    CHECK(a.same(b) && !a.same(unknown) && !unknown.same(unknown));
+    b.inode = 43;  // hostapd started again: a new socket
+    CHECK(!a.same(b));
+    CHECK(strstr(evo::describeUapsdOffer(evo::UapsdOffer::kSetRefused), "left on"));
+}
+
+}  // namespace
+
 int main() {
     uint8_t uuid[16];
     const uint8_t expected[] = {0x4d, 0xe1, 0x7a, 0x00, 0x52, 0xcb, 0x11, 0xe6,
@@ -54,6 +129,9 @@ int main() {
     CHECK(!evo::parseHostapdConfig("ssid=ok\npassphrase=" + std::string(64, 'k') + "\n", ap));
     CHECK(!evo::parseHostapdConfig("ssid=ok\npassphrase=demo1234" + std::string(1, '\0'), ap));
     CHECK(!evo::parseHostapdConfig(std::string(65537, 'x'), ap));
-    puts("PASS Alps UUID/payload and hostapd configuration (no real secret)");
+    uapsdCases();
+    puts(
+        "PASS Alps UUID/payload and hostapd configuration (no real secret); access point U-APSD: RELOAD only with no "
+        "station and once per hostapd start");
     return 0;
 }

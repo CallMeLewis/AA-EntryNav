@@ -9,6 +9,7 @@
 #include <string>
 
 #include "aa_input.hpp"
+#include "evo_ap.hpp"
 #include "evo_log.hpp"
 #include "evo_spp_snapshot.hpp"
 #include "evo_touch.hpp"
@@ -122,6 +123,10 @@ void ServiceApp::sppLinkOpened() {
     pthread_mutex_lock(&mu);
     ++sppLinks;
     pthread_mutex_unlock(&mu);
+}
+
+void ServiceApp::prepareAccessPoint() {
+    ELOG("ServiceApp", "car access point: %s", describeUapsdOffer(withdrawAccessPointUapsd()));
 }
 
 void ServiceApp::handshakeEnded(bool spoke, bool accepted) {

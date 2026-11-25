@@ -25,6 +25,10 @@ public:
     // An Android Auto session runs over the Wi-Fi: not being prepared, and not on the cable.
     virtual bool wifiSessionRunning() = 0;
     virtual void sppLinkOpened() = 0;
+    // Just before a phone is told the access point: the next phone that joins it is offered no U-APSD
+    // (platform/ap_uapsd.hpp). Not called for a phone already on the Wi-Fi (answerDuringSession), which would gain
+    // nothing until it joins again.
+    virtual void prepareAccessPoint() = 0;
     // A handshake ended: the phone spoke the wireless protocol, it accepted the Wi-Fi.
     virtual void handshakeEnded(bool spoke, bool accepted) = 0;
     // Sessions over the Wi-Fi lost so far: ended without the phone's ByeByeRequest (silent phone, broken connection,
