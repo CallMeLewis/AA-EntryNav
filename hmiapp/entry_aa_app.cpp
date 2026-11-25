@@ -45,6 +45,7 @@
 #include "cluster_title.hpp"
 #include "cover_art.hpp"
 #include "flare_page.hpp"
+#include "hmi_affinity.hpp"
 #include "hmi_thread.hpp"
 #include "hold_machine.hpp"
 #include "log_profile.hpp"
@@ -455,6 +456,7 @@ bmw::PluginApp* createApp(bmw::IDispatcher& dispatcher, const char* name, const 
         return nullptr;
     }
     // HmiMain3D's own thread: the only one where its event queue can be looked up (bt_audio.hpp).
+    rememberHmiMainThread();  // hmi_affinity.hpp
     captureHmiQueue();
     captureVariantServer();  // the same: the plugin cache it comes from is per thread (car_coding.hpp)
     captureClusterPlayer();  // the same, and active with audio-wifi (cluster_player.hpp)

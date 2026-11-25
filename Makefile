@@ -69,7 +69,7 @@ LIFECYCLE_OBJ = $(PLATFORM_OBJ) platform/evo_touch.o platform/evo_knob.o platfor
 VIDEO_LIBS = -l:libxsvideo.so.4 -l:libdrm_omap.so.1 -l:libdrm.so.2 -lpthread -lrt
 
 .PHONY: all daemon hmiapp dev-tools check style clean verify_core verify_binary verify_wireless verify_repo verify_tests \
-        test-host test-touch-live \
+        verify_hmi_affinity test-host test-touch-live \
         tests/evo-check-host test-arm-all test-pb-arm-build test-sdr-arm-build test-kombi-arm-build \
         test-session-silence-arm-build test-presentation-arm-build test-wireless-lifecycle-arm-build \
         test-gps-arm-build test-trial-arm-build test-hmiapp-arm-build test-spawn-arm-build test-lm-cli-arm-build \
@@ -92,7 +92,8 @@ evo-trial: $(TRIAL_OBJ)
 HMI_SRC = hmiapp/entry_aa_app.cpp hmiapp/bmw_framework.cpp hmiapp/app_log.cpp hmiapp/app_guards.cpp \
           hmiapp/service_link.cpp hmiapp/car_signals.cpp hmiapp/hold_machine.cpp hmiapp/bt_audio.cpp \
           hmiapp/car_coding.cpp hmiapp/flare_page.cpp hmiapp/qr_code.cpp hmiapp/qr_png.cpp hmiapp/cluster_player.cpp \
-          hmiapp/hmi_thread.cpp hmiapp/cluster_title.cpp hmiapp/cover_art.cpp hmiapp/app_step.cpp
+          hmiapp/hmi_thread.cpp hmiapp/cluster_title.cpp hmiapp/cover_art.cpp hmiapp/app_step.cpp \
+          hmiapp/hmi_affinity.cpp
 HMI_OBJ = $(HMI_SRC:.cpp=.o)
 HMI_LIBDIRS = -L$(SYSROOT)/opt/hmi/lib -Wl,-rpath-link,$(SYSROOT)/opt/hmi/lib
 hmiapp: hmiapp/libAAEntryNav.so
@@ -132,6 +133,8 @@ verify_core:
 	python3 tools/verify_core.py
 verify_tests:
 	python3 tools/verify_tests.py
+verify_hmi_affinity:
+	python3 tools/verify_hmi_affinity.py
 verify_binary:
 	python3 tools/verify_binary.py
 verify_wireless:
@@ -149,7 +152,7 @@ style:
 	$(SHELLCHECK) -s sh -S style tools/setup.sh tools/backup_headunit.sh tools/ric_capture.sh
 # JOBS: how many PC tests build and run at once. Three per processor: most of a test's time is spent waiting.
 JOBS ?= $(shell expr $$(nproc) '*' 3)
-check: style verify_core verify_repo verify_tests
+check: style verify_core verify_repo verify_tests verify_hmi_affinity
 	$(MAKE) -j$(JOBS) --output-sync=target test-host
 
 # ---- tests on the PC ------------------------------------------------------------------------------------------------
@@ -175,7 +178,7 @@ HOST_TESTS = \
     host-usb host-usb-link host-spawn-attr host-popup-peek host-hold-machine host-bt-audio-plan \
     host-car-identity host-pin-lock host-qr-code host-flare-link host-qr-png host-crash-guard host-setup \
     host-release-version host-log-profile host-pb host-volume-pill host-volume-filter host-audio-mixer host-prompt-path \
-    host-media-metadata host-utf16 \
+    host-media-metadata host-utf16 host-hmi-affinity \
     host-media-key-jump host-wheel-roller host-evo-audio host-aa-frame host-played-acks host-aa-messages host-tcp-server \
     host-session-phone host-wireless-phone host-parsers host-alps-spp host-bluez-adapter host-kombi-phone host-kombi-display \
     host-kombi-graph host-kombi-guide host-kombi-client host-kombi-nav host-bmw-guidance host-kombi-golden \
@@ -238,6 +241,9 @@ host-spawn-attr:
 host-popup-peek:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_popup_peek.cpp -o tests/test-popup-peek
 	./tests/test-popup-peek
+host-hmi-affinity:
+	$(HOST_CXX) $(HOST_FLAGS) tests/test_hmi_affinity.cpp hmiapp/hmi_affinity.cpp -o tests/test-hmi-affinity
+	./tests/test-hmi-affinity
 host-hold-machine:
 	$(HOST_CXX) $(HOST_FLAGS) tests/test_hold_machine.cpp hmiapp/hold_machine.cpp -o tests/test-hold-machine
 	./tests/test-hold-machine

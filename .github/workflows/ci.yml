@@ -51,7 +51,7 @@ jobs:
       - name: Content
         run: |
           git config --global --add safe.directory "$PWD"
-          make verify_core verify_repo verify_tests
+          make verify_core verify_repo verify_tests verify_hmi_affinity
       - name: PC tests
         # One make target per test, so they build and run side by side: three per processor, since most of a test's
         # time is spent waiting.

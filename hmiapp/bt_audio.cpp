@@ -5,6 +5,7 @@
 #include <dlfcn.h>
 
 #include "app_log.hpp"
+#include "hmi_affinity.hpp"
 
 namespace evo {
 namespace app {
@@ -29,7 +30,7 @@ void* symbol(const char* name) {
 
 void captureHmiQueue() {
     GetHmiProcUnit get = reinterpret_cast<GetHmiProcUnit>(symbol("_Z14getHmiProcUnitv"));
-    g_queue = get ? get() : nullptr;
+    g_queue = get && hmiThreadAllowed("getHmiProcUnit (Bluetooth audio)", kHmiMainThread) ? get() : nullptr;
     alog("bluetooth audio: HMI event queue %p%s", g_queue, get ? "" : " (getHmiProcUnit not found)");
 }
 

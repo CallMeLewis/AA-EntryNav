@@ -135,6 +135,7 @@ namespace app {
 struct AppRunnable {
     void** vptr;  // where a bmw::Runnable keeps its vtable pointer, and all it holds
     void* vtbl[5];
+    void (*run)(void*);  // the task: run() marks its thread as a posted task's around it (hmi_affinity.hpp)
 };
 void makeRunnable(AppRunnable& r, void (*run)(void*));
 void postRunnable(bmw::PluginApp* app, AppRunnable& r, unsigned delayMs);

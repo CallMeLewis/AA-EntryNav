@@ -7,6 +7,8 @@
 
 #include <new>
 
+#include "hmi_affinity.hpp"
+
 namespace evo {
 namespace app {
 
@@ -17,6 +19,14 @@ enum { kSlotOnError = 21, kSlotOnInit = 22, kSlotOnFinalize = 23, kVtblSlots = 3
 void* g_vtbl[2 + kVtblSlots];  // the app's copy of bmw::PluginApp's primary vtable, with its offset and typeinfo
 
 void runnableNoop(void*) {}
+
+// run(): iDrive calls it with the runnable, which is the AppRunnable (its vptr comes first).
+void runnableRun(void* self) {
+    AppRunnable* r = static_cast<AppRunnable*>(self);
+    enterAppTask(true);
+    r->run(self);
+    enterAppTask(false);
+}
 
 }  // namespace
 
@@ -31,7 +41,8 @@ void makeRunnable(AppRunnable& r, void (*run)(void*)) {
     }
     vtbl[2] = reinterpret_cast<void*>(&runnableNoop);
     vtbl[3] = reinterpret_cast<void*>(&runnableNoop);
-    vtbl[4] = reinterpret_cast<void*>(run);
+    vtbl[4] = reinterpret_cast<void*>(&runnableRun);
+    r.run = run;
     r.vptr = vtbl + 2;
 }
 

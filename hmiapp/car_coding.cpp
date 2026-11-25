@@ -8,6 +8,7 @@
 #include <string>
 
 #include "app_log.hpp"
+#include "hmi_affinity.hpp"
 
 namespace evo {
 namespace app {
@@ -55,7 +56,7 @@ bool named(unsigned id, const char* feature) {
 void captureVariantServer() {
     GetCache get = reinterpret_cast<GetCache>(
         symbol("_ZN9hmiplugin3getI17IHmiVariantServerEENS_25CPluginInstanceCacheUsageIT_EEv"));
-    void* cache = get ? get() : nullptr;
+    void* cache = get && hmiThreadAllowed("hmiplugin::get<IHmiVariantServer>", kHmiMainThread) ? get() : nullptr;
     void* server = cache ? *reinterpret_cast<void**>(static_cast<char*>(cache) + 8) : nullptr;
     void** vtable = static_cast<void**>(symbol("_ZTV17CHmiVariantServer"));
     const bool known = server && vtable && *static_cast<void***>(server) == vtable + 2;

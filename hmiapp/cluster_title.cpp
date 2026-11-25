@@ -15,6 +15,7 @@
 #include "app_log.hpp"
 #include "cluster_player.hpp"
 #include "cover_art.hpp"
+#include "hmi_affinity.hpp"
 #include "hmi_thread.hpp"
 #include "utf16.hpp"
 
@@ -146,7 +147,9 @@ void clusterTitleApply() {
     static Invoke invoke = reinterpret_cast<Invoke>(symbol("_ZN9TDelegateIFvP17CSvcFunctionProxyEE6invokeES1_"));
     static __thread bool reported = false;
     // This thread's proxy: getServiceProxy answers from the calling thread's service node.
-    char* proxy = getProxy ? static_cast<char*>(getProxy(kCarPlayInstance)) : nullptr;
+    char* proxy = getProxy && hmiThreadAllowed("CPxyAuxiliaryInput::getServiceProxy", kHmiUnitThread)
+                      ? static_cast<char*>(getProxy(kCarPlayInstance))
+                      : nullptr;
     char* info = proxy ? proxy + kFileInfo : nullptr;
     const bool known = info && vtable && *reinterpret_cast<void**>(info) == static_cast<void*>(vtable + 2) &&
                        fromUnits && assign && destroy && setValid && invoke;

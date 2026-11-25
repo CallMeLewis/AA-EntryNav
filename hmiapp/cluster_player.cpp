@@ -13,6 +13,7 @@
 
 #include "../platform/service_contract.hpp"
 #include "app_log.hpp"
+#include "hmi_affinity.hpp"
 #include "hmi_thread.hpp"
 #include "service_link.hpp"
 
@@ -81,8 +82,6 @@ const unsigned kStaleSourceS = 3;  // a reading older than this many polls is no
 // may ask for it. On the app's status poll, a bmw::Dispatcher thread, the ask stopped that thread in 0.1.9-test.1 and
 // test.2 (the app went silent as Android Auto connected, then iDrive died and the unit restarted). The check runs on
 // HmiMain3D's thread (hmi_thread) and leaves its answer here: current source << 2 | state, or -1 for none yet.
-pthread_t g_createThread;
-bool g_createThreadKnown = false;
 std::atomic<int> g_sourceSeen(-1);
 std::atomic<unsigned> g_sourceReads(0);  // readings made, counted after g_sourceSeen is set
 std::atomic<bool> g_sourceReadLogged(false), g_sourceFailLogged(false);
@@ -137,7 +136,7 @@ void* symbolOf(const char* name) {
 // the typeinfo (offset to top) leads back to the whole object, whose offsets cluster_player.hpp gives.
 void* serviceFrom(const char* getter, const char* vtableName) {
     GetCache get = reinterpret_cast<GetCache>(symbolOf(getter));
-    void* cache = get ? get() : nullptr;
+    void* cache = get && hmiThreadAllowed(getter, kHmiMainThread) ? get() : nullptr;
     bool ok = true;
     void* service = cache ? ptr(cache, 8, &ok) : nullptr;
     void* vptr = service ? ptr(service, 0, &ok) : nullptr;
@@ -156,7 +155,11 @@ void* serviceFrom(const char* getter, const char* vtableName) {
 
 // CarPlay's audio source is iDrive's current entertainment source and built up (CHmiCarPlayService's own test).
 bool carPlaySourcePlaying() {
-    void* cache = g_audioGet ? g_audioGet() : nullptr;  // iDrive's thread: its plugin cache answers
+    // iDrive's hooks call this on its own threads (which ones, the observe build's log says)
+    void* cache =
+        g_audioGet && hmiThreadAllowed("hmiplugin::get<IHmiAudioService> (cluster player hooks)", kHmiUnitThread)
+            ? g_audioGet()
+            : nullptr;
     void* audio = cache ? *reinterpret_cast<void**>(static_cast<char*>(cache) + 8) : nullptr;
     if (!audio || *static_cast<void**>(audio) != g_audioVptr) {
         return false;
@@ -167,7 +170,9 @@ bool carPlaySourcePlaying() {
 // For the service's "carsource": 1 CarPlay's source is current and built up, 0 it is current but not built up, 2
 // another source is current, -1 the audio service is not as expected. `current` gets iDrive's current source.
 int carPlaySourceState(int* current) {
-    void* cache = g_audioGet ? g_audioGet() : nullptr;
+    void* cache = g_audioGet && hmiThreadAllowed("hmiplugin::get<IHmiAudioService> (source)", kHmiMainThread)
+                      ? g_audioGet()
+                      : nullptr;
     void* audio = cache ? *reinterpret_cast<void**>(static_cast<char*>(cache) + 8) : nullptr;
     if (!audio || *static_cast<void**>(audio) != g_audioVptr) {
         return -1;
@@ -279,7 +284,9 @@ void installClusterPlayer() {
     g_currentSource = reinterpret_cast<CurrentSourceFn>(
         symbolOf("_ZNK16CHmiAudioService21getCurrentAudioSourceEN8HmiAudio11EAudioClassENS0_10EAudioSinkE"));
     g_builtUp = reinterpret_cast<BuiltUpFn>(symbolOf("_ZNK16CHmiAudioService20isAudioSourceBuiltUpE12EAudioSource"));
-    void* cache = g_audioGet ? g_audioGet() : nullptr;
+    void* cache = g_audioGet && hmiThreadAllowed("hmiplugin::get<IHmiAudioService> (install)", kHmiMainThread)
+                      ? g_audioGet()
+                      : nullptr;
     void* audio = cache ? *reinterpret_cast<void**>(static_cast<char*>(cache) + 8) : nullptr;
     g_audioVptr = audioVtable ? static_cast<void*>(audioVtable + kVtableHeader) : nullptr;
     const bool audioKnown =
@@ -357,8 +364,6 @@ void captureClusterPlayer() {
         alog("cluster player: no pipe: not installed");
         return;
     }
-    g_createThread = pthread_self();  // createApp: HmiMain3D's own thread
-    g_createThreadKnown = true;
     g_modes = serviceFrom("_ZN9hmiplugin3getI21IEntModeButtonServiceEENS_25CPluginInstanceCacheUsageIT_EEv",
                           "_ZTV21CEntModeButtonService");
     g_skips = serviceFrom("_ZN9hmiplugin3getI15IEntSkipServiceEENS_25CPluginInstanceCacheUsageIT_EEv",
@@ -432,7 +437,7 @@ void clusterPlayerPoll(int servicePid, bool connected) {
 }
 
 void clusterPlayerSourceCheck() {
-    if (!g_carPlay || !g_createThreadKnown || !pthread_equal(pthread_self(), g_createThread)) {
+    if (!g_carPlay || !onHmiMainThread()) {
         return;  // the cluster's thread runs the same job: only HmiMain3D's own thread may ask
     }
     int current = -1;

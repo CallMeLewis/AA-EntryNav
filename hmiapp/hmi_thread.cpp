@@ -11,6 +11,7 @@
 
 #include "app_log.hpp"
 #include "cluster_player.hpp"
+#include "hmi_affinity.hpp"
 
 namespace evo {
 namespace app {
@@ -60,7 +61,8 @@ std::atomic<unsigned> g_clusterRuns(0);
 // and the cluster's.
 void onEventEntry(void* /*target*/, const void* /*event*/) {
     g_pending = false;
-    const bool cluster = g_getUnit && g_cluster && g_getUnit() == g_cluster;
+    const bool cluster = g_getUnit && g_cluster && hmiThreadAllowed("getHmiProcUnit (hmi job)", kHmiUnitThread) &&
+                         g_getUnit() == g_cluster;
     if (cluster && g_clusterRuns++ == 0) {
         g_thread = pthread_self();
         g_threadKnown = true;
@@ -179,7 +181,7 @@ bool captureHmiThread(HmiThreadJob job) {
     g_registerFn = symbol("_ZN12CHmiProcUnit15doRegisterEventEPvM15CDelegateTargetFvPK9CHmiEventEtt");
     g_sendFn = symbol("_ZN12CHmiProcUnit9sendEventEP9CHmiEvent");
     g_create = reinterpret_cast<CreateEvent>(symbol("_ZN25CHmiModePlayerSelectEvent11createEventEj"));
-    void* queue = get ? get() : nullptr;
+    void* queue = get && hmiThreadAllowed("getHmiProcUnit (hmi thread)", kHmiMainThread) ? get() : nullptr;
     // The slots must be the functions read: another iDrive build may lay the vtable out differently.
     const bool known = queue && g_registerFn && g_sendFn && slotsKnown(queue) && group && g_create;
     if (!known) {
