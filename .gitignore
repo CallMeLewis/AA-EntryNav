@@ -69,6 +69,7 @@ __pycache__/
 !/tools/verify_arm.py
 !/tools/verify_binary.py
 !/tools/verify_hmi_affinity.py
+!/tools/smoke_check.py
 !/tools/verify_core.py
 !/tools/verify_repo.py
 !/tools/verify_tests.py
