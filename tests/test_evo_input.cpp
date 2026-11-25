@@ -774,6 +774,16 @@ int main() {
         panel.p[1].y = 270;
         const aa::TouchEventOut wifi = evo::toCanvas(panel, 1440, 540, 1280, 480);
         CHECK(wifi.p[0].x == 1279 && wifi.p[0].y == 479 && wifi.p[1].x == 640 && wifi.p[1].y == 240);
+        // The tracker keeps the panel's whole width once told its size (EvoTouch::setPanel); its 1280x720 default
+        // would clamp the last 160 columns to x 1279.
+        evo::TouchTracker wide;
+        aa::TouchEventOut ev[16];
+        CHECK(frame(wide, 1439, 539, 1, 0, ev) == 1 && ev[0].p[0].x == 1279);
+        CHECK(wide.releaseAll(ev, 16) == 1);
+        wide.setBounds(1439, 539);
+        CHECK(frame(wide, 1439, 539, 1, 12, ev) == 1 && ev[0].p[0].x == 1439 && ev[0].p[0].y == 539);
+        const aa::TouchEventOut edge = evo::toCanvas(ev[0], 1440, 540, 1920, 720);
+        CHECK(edge.p[0].x == 1918 && edge.p[0].y == 718);
     }
     puts(
         "PASS older BMW controller (C10/C20), one controller protocol per car; input: IPv4/UDP of the copy, touch "
@@ -781,6 +791,7 @@ int main() {
         "vMOST message -> controller decoder; keys as CarPlay has them (tap ignored, NAV/MEDIA/COM and steering wheel "
         "phone button -> AA apps, COM to iDrive during a call, BACK and a left tilt keep Android Auto up); console and "
         "steering wheel volume buttons decoded; steering wheel roller: roll then push -> one track skip; volume level "
-        "(20.00.C08); touches on the 720p and 1080p canvases, and from an 800x400 panel");
+        "(20.00.C08); touches on the 720p and 1080p canvases, from an 800x400 panel, and a 1440x540 panel's right "
+        "edge");
     return 0;
 }

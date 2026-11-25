@@ -54,6 +54,11 @@ public:
     void reset();
     // False until the Android Auto picture has started (true by default).
     void setPictureStarted(bool started) { pictureStarted_ = started; }
+    // The largest coordinates kept; larger ones are clamped to them.
+    void setBounds(int maxX, int maxY) {
+        maxX_ = maxX;
+        maxY_ = maxY;
+    }
 
 private:
     void fillActive(aa::TouchEventOut& e, int which) const;
@@ -78,6 +83,13 @@ public:
     EvoTouch();
     ~EvoTouch();
     bool start(InputMode mode, Callback cb, void* user);
+    // Before start(): the panel's size in pixels. Touches arrive in panel pixels and are clamped to it, so the whole
+    // width of a panel wider than 1280 (1440x540) stays reachable. 1280x720 until then.
+    void setPanel(uint32_t width, uint32_t height) {
+        if (width && height) {
+            tracker_.setBounds(static_cast<int>(width) - 1, static_cast<int>(height) - 1);
+        }
+    }
     // Forward mode only: true while the Android Auto picture is on screen and the session is up.
     void setOwned(bool owned);
     // Main loop: whether the Android Auto picture has started. A gesture begun before stays ignored until it lifts.

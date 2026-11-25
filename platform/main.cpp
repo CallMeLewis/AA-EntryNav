@@ -239,6 +239,7 @@ int main(int argc, char** argv) {
     }
     // Declared after app: destroyed (and joined) before the session their callbacks post to.
     evo::EvoTouch touch;
+    touch.setPanel(app.panelWidth, app.panelHeight);
     evo::EvoKnob knob;
     evo::EvoControl control;
     std::string source;
