@@ -7,6 +7,17 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+## [0.1.9-test.2] - 2026-11-25
+
+<!-- Flare Drive:
+Picture and sound over Wi-Fi no longer stutter because of the car's Wi-Fi power saving, and phones on Wi-Fi now get a
+picture on 1440x540 screens. Android Auto also reconnects at once instead of holding a frozen picture when the stream
+breaks, and leaves iDrive on screen when it starts behind it.
+-->
+
+Picture and sound over Wi-Fi no longer stutter, 1440x540 screens get a picture over Wi-Fi, a broken stream reconnects at
+once, and iDrive keeps the screen when Android Auto starts behind it. Only the service changes.
+
 ### Fixed
 
 - **Android Auto reconnects at once when the phone's encrypted stream breaks.** One damaged piece of it is enough to
@@ -377,7 +388,8 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 - **Changing the car's clock no longer upsets Android Auto's timing.** When GPS corrected the clock while driving, a
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
-[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.9-test.1...HEAD
+[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.9-test.2...HEAD
+[0.1.9-test.2]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.9-test.2
 [0.1.9-test.1]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.9-test.1
 [0.1.8]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.8
 [0.1.7]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.7
