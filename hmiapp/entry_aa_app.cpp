@@ -60,7 +60,7 @@ namespace app {
 namespace {
 
 const unsigned kStatusPollMs = 1000;
-const off_t kServiceLogLimit = 1024 * 1024;  // RAM: /tmp is tmpfs on the head unit
+const off_t kServiceLogLimit = 1024 * 1024;  // data partition: bounded to ~2 MiB across service.log and service.old.log
 const unsigned kSpinMs = 200;
 
 bmw::PluginApp* g_app = nullptr;     // created by HmiMain3D, until destroyed

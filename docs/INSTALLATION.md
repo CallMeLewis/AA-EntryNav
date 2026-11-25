@@ -222,7 +222,7 @@ iDrive carries on without it ([crash guard](MAINTENANCE.md#crash-guard)). Once t
 `rm -f /var/local/data/AA/app.disable /var/local/data/AA/app-guard` and restart to switch it back on.
 
 **Android Auto doesn't start.** Turn on the logs ([MAINTENANCE.md](MAINTENANCE.md)), try again, then read
-`/tmp/aa-entrynav-service.log` and `/var/local/data/AA/app.log`.
+`/var/local/data/AA/service.log` and `/var/local/data/AA/app.log`.
 
 ## Steering-wheel media warning
 

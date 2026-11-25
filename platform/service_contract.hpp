@@ -44,6 +44,8 @@ constexpr char kSelectBtAudio[] = "/var/local/data/AA/select-bt-audio";
 constexpr char kFlarePin[] = "/var/local/data/AA/flare-pin";
 constexpr char kAppLog[] = "/var/local/data/AA/app.log";
 constexpr char kAppLogOld[] = "/var/local/data/AA/app.old.log";
+constexpr char kServiceLog[] = "/var/local/data/AA/service.log";
+constexpr char kServiceLogOld[] = "/var/local/data/AA/service.old.log";  // the log's previous megabyte (log_profile.hpp)
 constexpr char kAppDisable[] = "/var/local/data/AA/app.disable";  // present: the app stays off (set by hand)
 constexpr char kAppGuard[] = "/var/local/data/AA/app-guard";   // crash guard: 3 short iDrive runs and the app stays off
 constexpr char kBootGuard[] = "/var/local/data/AA/bootguard";  // automatic starts within 15 minutes
@@ -51,8 +53,6 @@ constexpr char kBootGuard[] = "/var/local/data/AA/bootguard";  // automatic star
 // ---- run time, in /tmp (memory, gone at the next start) -----------------------------------------------------------
 constexpr char kServiceDir[] = "/tmp/aa-entrynav-service";
 constexpr char kServiceStop[] = "/tmp/aa-entrynav-service/STOP";  // created by the app: the supervisor stops
-constexpr char kServiceLog[] = "/tmp/aa-entrynav-service.log";
-constexpr char kServiceLogOld[] = "/tmp/aa-entrynav-service.old.log";  // the log's previous megabyte (log_profile.hpp)
 constexpr char kStateFile[] = "/tmp/aa-entrynav-state";                // "state pid overlay", written by the service
 constexpr char kAppKeyFile[] = "/tmp/aa-entrynav-appkey";              // a key that also moved iDrive went to AA
 constexpr char kMediaJumpFile[] = "/tmp/aa-entrynav-media";            // MEDIA over iDrive: the app shows AA

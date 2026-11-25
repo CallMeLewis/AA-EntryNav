@@ -42,23 +42,35 @@ GOOD_SERVICE = [
 ]
 
 
-def report(app=GOOD_APP, service=GOOD_SERVICE, ids="HmiMain3D: 265\nevo-trial: 3322\naa-entrynav: 3568"):
-    return "\n".join(
-        [
-            "Diagnostic report",
-            "===== CONTROLLER DIAGNOSTICS =====",
-            "===== RUNNING PROCESS IDS =====",
-            ids,
-            "===== /var/local/data/AA/app.old.log (last 128 KiB) =====",
-            *app[:1],
-            "===== /var/local/data/AA/app.log (last 128 KiB) =====",
-            *app[1:],
-            "===== /tmp/aa-entrynav-service.log (last 128 KiB) =====",
-            *service,
-            "===== LOAD =====",
-            "===== END CONTROLLER DIAGNOSTICS =====",
+def report(
+    app=GOOD_APP,
+    service=GOOD_SERVICE,
+    service_old=(),
+    service_section="/var/local/data/AA/service.log",
+    ids="HmiMain3D: 265\nevo-trial: 3322\naa-entrynav: 3568",
+):
+    lines = [
+        "Diagnostic report",
+        "===== CONTROLLER DIAGNOSTICS =====",
+        "===== RUNNING PROCESS IDS =====",
+        ids,
+        "===== /var/local/data/AA/app.old.log (last 128 KiB) =====",
+        *app[:1],
+        "===== /var/local/data/AA/app.log (last 128 KiB) =====",
+        *app[1:],
+    ]
+    if service_old:
+        lines += [
+            "===== /var/local/data/AA/service.old.log (last 128 KiB) =====",
+            *service_old,
         ]
-    )
+    lines += [
+        f"===== {service_section} (last 128 KiB) =====",
+        *service,
+        "===== LOAD =====",
+        "===== END CONTROLLER DIAGNOSTICS =====",
+    ]
+    return "\n".join(lines)
 
 
 def failed(text):
@@ -99,6 +111,19 @@ def main():
     # Without the cluster player (no audio-wifi), its checks are not asked for.
     plain = [line for line in GOOD_APP if "cluster player" not in line]
     check(failed(report(app=plain)) == [], f"no cluster player: {failed(report(app=plain))}")
+    # A persistent service log may carry an earlier boot's stall or session before a monotonic clock reset.
+    prior_stall = ["[  900.000] [ServiceApp] iDrive app silent 5 s (clock at 900 s): HmiMain3D is not running"]
+    check(failed(report(service_old=prior_stall)) == [], "a stall from a prior boot is ignored")
+    prior_long = [
+        "[   10.000] [Control] state -> connected 3568 2",
+        "[  900.000] [Control] state -> connected 3568 1",
+    ]
+    fails(report(service_old=prior_long, service=short), "longest connected session 1.0 min", "prior boot session ignored")
+    # Older reports with /tmp/aa-entrynav-service.log still pass.
+    check(
+        failed(report(service_section="/tmp/aa-entrynav-service.log")) == [],
+        "legacy /tmp/aa-entrynav-service.log report passes",
+    )
 
     if failures:
         sys.exit(1)

@@ -509,6 +509,8 @@ void ServiceApp::watchApp() {
         snprintf(what, sizeof(what), "HmiMain3D %d thread", pid);
         logLines(what, describeThreads("/proc", pid));
     }
+    // Commit the stall evidence to flash before a watchdog reboot can drop the page cache.
+    fsync(STDOUT_FILENO);
 }
 
 void ServiceApp::logLines(const char* prefix, const std::string& lines) {

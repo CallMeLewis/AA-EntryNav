@@ -18,10 +18,10 @@ inline const char* serviceLogPath(const char* marker, const char* log) {
     return maintenanceProfile(marker) ? log : "/dev/null";
 }
 
-// The service's log is in /tmp, which is RAM on the head unit, and the service keeps appending to it (O_APPEND) for as
-// long as it runs. Past limit bytes it is copied to oldPath and emptied in place: the service's next writes start it
-// again, so the two files never hold more than about twice the limit. Lines written between the copy and the emptying
-// are lost. True when it was emptied.
+// The service's log is on the data partition (kept across head-unit restarts), and the service keeps appending to it
+// (O_APPEND) for as long as it runs. Past limit bytes it is copied to oldPath and emptied in place: the service's next
+// writes start it again, so the two files never hold more than about twice the limit. Lines written between the copy
+// and the emptying are lost. True when it was emptied.
 inline bool boundServiceLog(const char* path, const char* oldPath, off_t limit) {
     struct stat st;
     if (stat(path, &st) != 0 || st.st_size <= limit) {
@@ -42,7 +42,7 @@ inline bool boundServiceLog(const char* path, const char* oldPath, off_t limit) 
         }
         close(in);
     }
-    // Emptied even when the copy failed: memory comes before an old copy of the log.
+    // Emptied even when the copy failed: bounding disk space comes before an old copy of the log.
     return evo::emptyTmpFile(path);
 }
 

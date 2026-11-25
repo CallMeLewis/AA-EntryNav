@@ -44,6 +44,19 @@ def mono(line):
     return float(match.group(1)) if match else None
 
 
+def last_boot_index(lines):
+    """Index of the first line after the monotonic clock last went back (a head-unit restart), or 0."""
+    boot = 0
+    previous = None
+    for i, line in enumerate(lines):
+        t = mono(line)
+        if t is not None:
+            if previous is not None and t < previous:
+                boot = i
+            previous = t
+    return boot
+
+
 def longest_session(service):
     """The longest stretch in seconds the service said "connected", up to its last timestamped line."""
     longest, since, last = 0.0, None, None
@@ -94,16 +107,9 @@ def check(text):
             else f"the app's last start was in another HmiMain3D: {start.strip()}",
         )
 
-    # The app log outlives a restart of the head unit; its monotonic clock does not. Each start of the app since the
+    # Both logs outlive a restart of the head unit; their monotonic clocks do not. Each start of the app since the
     # clock last went back is one HmiMain3D: more than one is iDrive restarting by itself.
-    boot = 0
-    previous = None
-    for i, line in enumerate(app):
-        t = mono(line)
-        if t is not None:
-            if previous is not None and t < previous:
-                boot = i
-            previous = t
+    boot = last_boot_index(app)
     starts = sum(1 for i in creates if i >= boot)
     if creates:
         result(
@@ -113,14 +119,17 @@ def check(text):
             else f"the iDrive app started {starts} times since the head unit started: iDrive restarted",
         )
 
-    service = report.get("/tmp/aa-entrynav-service.log", [])
+    service = report.get("/var/local/data/AA/service.old.log", []) + report.get("/var/local/data/AA/service.log", [])
+    if not service:
+        service = report.get("/tmp/aa-entrynav-service.old.log", []) + report.get("/tmp/aa-entrynav-service.log", [])
+    service_now = service[last_boot_index(service) :]
 
-    longest = longest_session(service)
+    longest = longest_session(service_now)
     result(
         longest >= MIN_SESSION_S, f"longest connected session {longest / 60:.1f} min (at least {MIN_SESSION_S // 60})"
     )
 
-    silent = [line.strip() for line in service if "iDrive app silent" in line]
+    silent = [line.strip() for line in service_now if "iDrive app silent" in line]
     result(not silent, "the iDrive app's heartbeat never stopped" if not silent else f"heartbeat stopped: {silent[0]}")
 
     guard = [line.strip() for line in app_now if "thread guard:" in line]

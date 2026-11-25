@@ -249,20 +249,20 @@ touch /var/local/data/AA/maintenance
 
 | Log | Where | Size |
 |---|---|---|
-| iDrive app | `/var/local/data/AA/app.log`, moved to `app.old.log` when it passes 512 KB | 512 KB per file |
-| Android Auto service | `/tmp/aa-entrynav-service.log`, moved to `aa-entrynav-service.old.log` when it passes 1 MB | About 2 MB in all, in memory, gone after a restart |
+| iDrive app | `/var/local/data/AA/app.log`, moved to `app.old.log` when it passes 512 KB | 512 KB per file, kept across restarts |
+| Android Auto service | `/var/local/data/AA/service.log`, copied to `service.old.log` and emptied when it passes 1 MB | About 2 MB in all, kept across restarts |
 
 To copy them to the PC:
 
 ```sh
-scp root@169.254.1.0:/var/local/data/AA/app.log root@169.254.1.0:/tmp/aa-entrynav-service.log .
+scp root@169.254.1.0:/var/local/data/AA/app.log root@169.254.1.0:/var/local/data/AA/service.log .
 ```
 
 To turn logs off and delete them:
 
 ```sh
-rm -f /var/local/data/AA/maintenance /var/local/data/AA/app.log /var/local/data/AA/app.old.log /tmp/aa-entrynav-service.log \
-    /tmp/aa-entrynav-service.old.log
+rm -f /var/local/data/AA/maintenance /var/local/data/AA/app.log /var/local/data/AA/app.old.log \
+    /var/local/data/AA/service.log /var/local/data/AA/service.old.log
 ```
 
 ## Crash guard
