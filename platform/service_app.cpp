@@ -656,8 +656,9 @@ bool ServiceApp::startSession(int fd, void* user, bool cable) {
     a->session.stop();  // join callbacks before destroying/reinitializing video buffers
     bool videoOk = true;
     // 1080p over the cable only. Over the car's Wi-Fi a phone that is asked for 1080p alone sets the session up, never
-    // starts the picture and hangs up within seconds, so a phone on Wi-Fi always gets the standard canvas.
-    EvoVideoConfig config(false, a->panelWidth, a->panelHeight);
+    // starts the picture and hangs up within seconds, so a phone on Wi-Fi gets the standard canvas, never wider than
+    // 1280x720: a wider screen gets that stretched to it.
+    EvoVideoConfig config(false, a->panelWidth, a->panelHeight, aa::kWifiCanvasWidth);
     if (a->videoEnabled) {
         pthread_mutex_lock(&a->videoMu);
         if (cable) {

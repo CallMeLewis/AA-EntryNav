@@ -42,10 +42,11 @@ struct EvoVideoConfig {
     unsigned bufCount;                     // 8 dma-bufs
     uint32_t bufSize;                      // 1 MiB each, 2 MiB with hd (an IDR frame is larger)
     uint32_t paceMs;                       // FramePacer spacing: 0 on the cable, kWifiFrameSpacingMs on Wi-Fi
-    // A panelWidth x panelHeight screen's values, for its standard or its hd canvas (core/canvas.hpp). A screen no
-    // canvas fits gets a 0x0 stream, which init() refuses.
+    // A panelWidth x panelHeight screen's values, for its standard or its hd canvas (core/canvas.hpp), none wider than
+    // widest (aa::kWifiCanvasWidth for a phone on Wi-Fi). A screen no canvas fits gets a 0x0 stream, which init()
+    // refuses.
     explicit EvoVideoConfig(bool hd = false, uint32_t panelWidth = aa::kPanelWidth,
-                            uint32_t panelHeight = aa::kPanelHeight);
+                            uint32_t panelHeight = aa::kPanelHeight, uint32_t widest = aa::kWidestCanvas);
     bool hd() const { return width > displayWidth; }
 };
 

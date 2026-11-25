@@ -763,6 +763,18 @@ int main() {
         const aa::TouchEventOut hd = evo::toCanvas(panel, 800, 400, 1280, 640);
         CHECK(hd.p[0].x == 1278 && hd.p[0].y == 638);
     }
+    {  // A 1440x540 panel on Wi-Fi, the top 1280x480 of 1280x720 stretched to it: divided by 1.125, the panel's last
+       // pixel on the picture's last one.
+        aa::TouchEventOut panel;
+        memset(&panel, 0, sizeof(panel));
+        panel.n = 2;
+        panel.p[0].x = 1439;
+        panel.p[0].y = 539;
+        panel.p[1].x = 720;
+        panel.p[1].y = 270;
+        const aa::TouchEventOut wifi = evo::toCanvas(panel, 1440, 540, 1280, 480);
+        CHECK(wifi.p[0].x == 1279 && wifi.p[0].y == 479 && wifi.p[1].x == 640 && wifi.p[1].y == 240);
+    }
     puts(
         "PASS older BMW controller (C10/C20), one controller protocol per car; input: IPv4/UDP of the copy, touch "
         "machine (press, drag, release, duplicate, fragmented frame, forced release, nothing before the picture), "

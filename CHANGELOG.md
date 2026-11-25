@@ -13,6 +13,9 @@ Each version links to the commit or tag its archive was built from.
   make everything after it unreadable, yet Android Auto held a frozen picture through 15 more frames before giving up,
   and its last reply to the phone could go out garbled. It now ends the connection at the damaged piece and starts
   again as after any lost connection.
+- **A phone on Wi-Fi gets a picture on a 1440x540 screen.** Since 0.1.9-test.1 such a screen asked a phone on Wi-Fi
+  for 1920x1080, and phones hang up on that over the car's Wi-Fi. A phone on Wi-Fi now gets 1280x720 stretched to the
+  screen. The cable keeps 1920x1080, and buttons come out the same size on both.
 
 ## [0.1.9-test.1] - 2026-11-23
 

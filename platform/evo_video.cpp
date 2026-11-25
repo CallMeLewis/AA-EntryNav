@@ -17,7 +17,7 @@ static bool xsvCommand(const char* name, int result) {
     return result >= 0;
 }
 
-EvoVideoConfig::EvoVideoConfig(bool hd, uint32_t panelWidth, uint32_t panelHeight)
+EvoVideoConfig::EvoVideoConfig(bool hd, uint32_t panelWidth, uint32_t panelHeight, uint32_t widest)
     : canvas(),
       width(0),
       height(0),
@@ -31,7 +31,7 @@ EvoVideoConfig::EvoVideoConfig(bool hd, uint32_t panelWidth, uint32_t panelHeigh
       bufCount(8),
       bufSize(1u << 20),
       paceMs(0) {
-    if (aa::canvasFor(panelWidth, panelHeight, hd, canvas)) {
+    if (aa::canvasFor(panelWidth, panelHeight, hd, canvas, widest)) {
         width = shownWidth = canvas.width;
         height = canvas.height;
         shownHeight = canvas.shownHeight;
@@ -77,10 +77,14 @@ bool EvoVideo::init(const EvoVideoConfig& cfg) {
     if (started_) {
         return false;
     }
+    // The shown part keeps the panel's shape whichever way it is scaled: shrunk onto the panel, or stretched to a panel
+    // wider than the canvas a phone on Wi-Fi is asked for (aa::kWifiCanvasWidth).
     if (!cfg.width || !cfg.height || cfg.width > 1920 || cfg.height > 1080 || !cfg.bufCount || cfg.bufCount > 16 ||
         cfg.bufSize < 65536 || cfg.bufSize > (4u << 20) || !cfg.shownWidth || !cfg.shownHeight ||
-        cfg.shownWidth > cfg.width || cfg.shownHeight > cfg.height || cfg.displayWidth > cfg.shownWidth ||
-        cfg.displayHeight > cfg.shownHeight ||
+        cfg.shownWidth > cfg.width || cfg.shownHeight > cfg.height || !cfg.displayWidth || !cfg.displayHeight ||
+        cfg.displayWidth > 1920 || cfg.displayHeight > 1080 ||
+        static_cast<uint64_t>(cfg.shownWidth) * cfg.displayHeight !=
+            static_cast<uint64_t>(cfg.shownHeight) * cfg.displayWidth ||
         !ilm_.validateTarget(cfg.surfaceId, cfg.layerId, cfg.displayWidth, cfg.displayHeight)) {
         ELOG("Video", "REFUSED: target not checked (inventory, free id, visible full-screen layer)");
         return false;

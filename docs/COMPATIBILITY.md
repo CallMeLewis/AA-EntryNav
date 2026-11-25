@@ -15,11 +15,13 @@ The service reads the screen's size when it starts and asks the phone for a pict
 | 1280x480 | 1280x720, top 480 rows shown as they are | 1920x1080, top 720 rows scaled down |
 | 800x480 | 800x480, shown as it is | 800x480, shown as it is |
 | 800x400 | 800x480, top 400 rows shown as they are | 1280x720, top 640 rows scaled down |
+| 1440x540 | 1280x720, top 480 rows stretched to the screen | 1920x1080, top 720 rows scaled down |
 
 The phone draws nothing in the rows the screen doesn't show. Only the 1280x480 screen has been tried in a car. Other
 sizes work if one of Android Auto's three pictures (800x480, 1280x720, 1920x1080) is at least as wide as the screen and
-fills its height at the same scale. On any other screen the compatibility check stops with `video (screen WxH not
-supported)`.
+fills its height at the same scale. A phone on Wi-Fi is never asked for more than 1280x720, because phones asked for
+1920x1080 on the car's Wi-Fi hung up, so a screen wider than 1280 gets 1280x720 stretched to it. On any other screen
+the compatibility check stops with `video (screen WxH not supported)`.
 
 ## Cars tried so far
 

@@ -178,12 +178,25 @@ int main() {
     assert(streamWidth == 1920 && streamHeight == 1080 && outWidth == 1920 && outHeight == 1080);
     assert(height == 480 && srcWidth == 1920 && srcHeight == 720);
     video.stop();
-    // A part larger than the stream, or smaller than the panel, is refused before anything starts.
+    // A part larger than the stream, or not of the panel's shape, is refused before anything starts.
     evo::EvoVideoConfig bad(true);
     bad.shownHeight = 1081;
     assert(!video.init(bad));
     bad.shownHeight = 400;
     assert(!video.init(bad));
+
+    // A 1440x540 panel: on the cable 1920x1080 with its top 720 rows shrunk; on Wi-Fi never wider than 1280x720, its
+    // top 480 rows stretched to the panel.
+    const evo::EvoVideoConfig wide(true, 1440, 540);
+    assert(wide.hd() && wide.canvas.resolution == 3 && wide.bufSize == 2u << 20);
+    assert(video.init(wide) && video.start());
+    assert(streamWidth == 1920 && streamHeight == 1080 && height == 540 && srcWidth == 1920 && srcHeight == 720);
+    video.stop();
+    const evo::EvoVideoConfig wideWifi(false, 1440, 540, aa::kWifiCanvasWidth);
+    assert(!wideWifi.hd() && wideWifi.canvas.resolution == 2 && wideWifi.bufSize == 1u << 20);
+    assert(video.init(wideWifi) && video.start());
+    assert(streamWidth == 1280 && streamHeight == 720 && height == 540 && srcWidth == 1280 && srcHeight == 480);
+    video.stop();
 
     // An 800x400 panel: 800x480 decoded with its top 400 rows shown 1:1, or 1280x720 with its top 640 rows shrunk.
     const evo::EvoVideoConfig small(false, 800, 400);
@@ -221,5 +234,5 @@ int main() {
     puts(
         "PASS video presentation: visibility, opacity cache, camera hide, SPS/PPS after a refused IDR, a new IDR asked "
         "for after a lost frame, a stuck decoder reported once, reconnect, 720p shown 1:1 and 1080p shrunk onto the "
-        "panel, frame pacing on the Wi-Fi");
+        "panel, 720p stretched to a wider panel, frame pacing on the Wi-Fi");
 }

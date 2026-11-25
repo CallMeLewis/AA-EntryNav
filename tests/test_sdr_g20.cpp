@@ -126,22 +126,28 @@ bool hdMatches() {
     return true;
 }
 
-// Smaller screens: the canvas each gets, and the description the phone is told for it.
+// Other screens: the canvas each gets, and the description the phone is told for it. A phone on Wi-Fi gets no canvas
+// wider than 1280: the 1440x540 screen gets 1280x720 stretched to it, at the density that keeps the cable's layout.
 bool smallScreens() {
     struct Case {
         uint32_t panelW, panelH;
         bool hd;
-        uint32_t resolution, width, height, shownHeight, density;
+        uint32_t widest, resolution, width, height, shownHeight, density;
     };
+    const uint32_t any = aa::kWidestCanvas, wifi = aa::kWifiCanvasWidth;
     const Case cases[] = {
-        {1280, 480, false, 2, 1280, 720, 480, 140}, {1280, 480, true, 3, 1920, 1080, 720, 210},
-        {800, 480, false, 1, 800, 480, 480, 140},   {800, 480, true, 1, 800, 480, 480, 140},
-        {800, 400, false, 1, 800, 480, 400, 140},   {800, 400, true, 2, 1280, 720, 640, 224},
+        {1280, 480, false, any, 2, 1280, 720, 480, 140},  {1280, 480, true, any, 3, 1920, 1080, 720, 210},
+        {800, 480, false, any, 1, 800, 480, 480, 140},    {800, 480, true, any, 1, 800, 480, 480, 140},
+        {800, 400, false, any, 1, 800, 480, 400, 140},    {800, 400, true, any, 2, 1280, 720, 640, 224},
+        {1440, 540, false, any, 3, 1920, 1080, 720, 186}, {1440, 540, true, any, 3, 1920, 1080, 720, 186},
+        {1280, 480, false, wifi, 2, 1280, 720, 480, 140}, {1280, 480, true, wifi, 2, 1280, 720, 480, 140},
+        {800, 400, false, wifi, 1, 800, 480, 400, 140},   {800, 400, true, wifi, 2, 1280, 720, 640, 224},
+        {1440, 540, false, wifi, 2, 1280, 720, 480, 124}, {1440, 540, true, wifi, 2, 1280, 720, 480, 124},
     };
     for (unsigned i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
         const Case& c = cases[i];
         aa::Canvas canvas;
-        if (!aa::canvasFor(c.panelW, c.panelH, c.hd, canvas) || canvas.resolution != c.resolution ||
+        if (!aa::canvasFor(c.panelW, c.panelH, c.hd, canvas, c.widest) || canvas.resolution != c.resolution ||
             canvas.width != c.width || canvas.height != c.height || canvas.shownHeight != c.shownHeight ||
             canvas.density != c.density) {
             printf("FAIL %ux%u%s: canvas %u %ux%u, %u rows, density %u\n", c.panelW, c.panelH, c.hd ? " hd" : "",
@@ -156,12 +162,13 @@ bool smallScreens() {
             return false;
         }
     }
-    // Screens no canvas fits: too wide, or rows that don't come out whole.
+    // Screens no canvas fits: too wide, or rows that don't come out whole. Wi-Fi stretches none of them.
     const uint32_t refused[][2] = {{2560, 480}, {1024, 600}, {1000, 480}, {0, 480}, {1280, 0}};
     for (unsigned i = 0; i < sizeof(refused) / sizeof(refused[0]); ++i) {
         aa::Canvas canvas;
         if (aa::canvasFor(refused[i][0], refused[i][1], false, canvas) ||
-            aa::canvasFor(refused[i][0], refused[i][1], true, canvas)) {
+            aa::canvasFor(refused[i][0], refused[i][1], true, canvas) ||
+            aa::canvasFor(refused[i][0], refused[i][1], false, canvas, aa::kWifiCanvasWidth)) {
             printf("FAIL %ux%u: a canvas was given\n", refused[i][0], refused[i][1]);
             return false;
         }
@@ -180,7 +187,7 @@ int main() {
     printf(
         "PASS car description identical to the golden record (%u bytes with car GPS, %u without); only the head "
         "unit name and build change; 1080p changes only the resolution, densities, inset and touchscreen; 800x480 "
-        "and 800x400 screens get their canvas, screens none fits get none\n",
+        "and 800x400 screens get their canvas, 1440x540 gets 1280x720 stretched on Wi-Fi, screens none fits get none\n",
         static_cast<unsigned>(sizeof(kSdrG20WithCarGps)), static_cast<unsigned>(sizeof(kSdrG20WithoutCarGps)));
     return 0;
 }

@@ -230,12 +230,12 @@ int main(int argc, char** argv) {
     // service falls back to the standard one by itself (ServiceApp::startSession).
     app.videoConfig = evo::EvoVideoConfig(access(evo::contract::kVideo720, F_OK) != 0, app.panelWidth, app.panelHeight);
     if (video) {
-        const evo::EvoVideoConfig wifi(false, app.panelWidth, app.panelHeight);
-        ELOG("Main", "%ux%u screen; picture: %ux%u from a phone on the cable%s; %ux%u on Wi-Fi", app.panelWidth,
+        const evo::EvoVideoConfig wifi(false, app.panelWidth, app.panelHeight, aa::kWifiCanvasWidth);
+        ELOG("Main", "%ux%u screen; picture: %ux%u from a phone on the cable%s; %ux%u on Wi-Fi%s", app.panelWidth,
              app.panelHeight, app.videoConfig.width, app.videoConfig.height,
              app.videoConfig.hd() ? ", shrunk onto the panel (video-720 for the standard canvas)"
                                   : ", the standard canvas",
-             wifi.width, wifi.height);
+             wifi.width, wifi.height, wifi.width < app.panelWidth ? ", stretched to the panel" : "");
     }
     // Declared after app: destroyed (and joined) before the session their callbacks post to.
     evo::EvoTouch touch;
