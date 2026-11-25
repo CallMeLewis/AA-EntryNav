@@ -185,10 +185,10 @@ int main() {
     bad.shownHeight = 400;
     assert(!video.init(bad));
 
-    // A 1440x540 panel: on the cable 1920x1080 with its top 720 rows shrunk; on Wi-Fi never wider than 1280x720, its
-    // top 480 rows stretched to the panel.
+    // A 1440x540 panel: on the cable 1920x1080 with its top 720 rows shrunk, its standard canvas (no hd one, so no
+    // fallback to try); on Wi-Fi never wider than 1280x720, its top 480 rows stretched to the panel.
     const evo::EvoVideoConfig wide(true, 1440, 540);
-    assert(wide.hd() && wide.canvas.resolution == 3 && wide.bufSize == 2u << 20);
+    assert(!wide.hd() && wide.canvas.resolution == 3 && wide.bufSize == 2u << 20);
     assert(video.init(wide) && video.start());
     assert(streamWidth == 1920 && streamHeight == 1080 && height == 540 && srcWidth == 1920 && srcHeight == 720);
     video.stop();
@@ -211,6 +211,11 @@ int main() {
     video.stop();
     // An 800x480 panel has no hd canvas; a screen no canvas fits gets a stream init() refuses.
     assert(!evo::EvoVideoConfig(true, 800, 480).hd() && evo::EvoVideoConfig(true, 800, 480).width == 800);
+    // A 1920x720 panel: 1920x1080 is its standard canvas, with buffers big enough for a 1080p IDR frame.
+    const evo::EvoVideoConfig full(true, 1920, 720);
+    assert(!full.hd() && full.canvas.resolution == 3 && full.bufSize == 2u << 20);
+    // The reference panel's hd canvas is still hd.
+    assert(evo::EvoVideoConfig(true, 1280, 480).hd() && !evo::EvoVideoConfig(false, 1280, 480).hd());
     assert(!video.init(evo::EvoVideoConfig(false, 1024, 600)));
 
     // The Wi-Fi's frame pacing: off on the cable; on the Wi-Fi, a frame right behind the previous one waits for the

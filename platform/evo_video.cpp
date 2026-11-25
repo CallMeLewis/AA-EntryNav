@@ -30,12 +30,16 @@ EvoVideoConfig::EvoVideoConfig(bool hd, uint32_t panelWidth, uint32_t panelHeigh
       layerId(kAaLayerId),
       bufCount(8),
       bufSize(1u << 20),
-      paceMs(0) {
+      paceMs(0),
+      hdCanvas(false) {
     if (aa::canvasFor(panelWidth, panelHeight, hd, canvas, widest)) {
         width = shownWidth = canvas.width;
         height = canvas.height;
         shownHeight = canvas.shownHeight;
-        bufSize = this->hd() ? 2u << 20 : 1u << 20;
+        aa::Canvas standard;
+        hdCanvas =
+            hd && aa::canvasFor(panelWidth, panelHeight, false, standard, widest) && standard.width != canvas.width;
+        bufSize = hdCanvas || canvas.width >= 1920 ? 2u << 20 : 1u << 20;
     }
 }
 
