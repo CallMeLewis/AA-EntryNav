@@ -25,8 +25,14 @@ namespace app {
 void captureClusterPlayer();
 
 // From the status poll: tells the service whether the cluster shows its skip menu ("clusterskip") and what iDrive's
-// entertainment source is ("carsource"), each only when it or the service's PID changes.
+// entertainment source is ("carsource"). The skip state goes when it or the service's PID changes; the source when it
+// changes and every 10 s, and only from a reading made for this service in the last few seconds.
 void clusterPlayerPoll(int servicePid, bool connected);
+
+// From the hmi_thread job: reads iDrive's entertainment source for the next poll. Does nothing on any thread but
+// HmiMain3D's own, the only one where iDrive's per-thread plugin cache gives the audio service. The job also runs for
+// the track title while no phone is connected, so readings are made then too; the poll ignores those.
+void clusterPlayerSourceCheck();
 
 // Whether the cluster player hooks are installed on iDrive's CarPlay player (set in createApp).
 bool clusterPlayerInstalled();

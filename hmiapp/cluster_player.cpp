@@ -9,8 +9,11 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <atomic>
+
 #include "../platform/service_contract.hpp"
 #include "app_log.hpp"
+#include "hmi_thread.hpp"
 #include "service_link.hpp"
 
 namespace evo {
@@ -63,7 +66,26 @@ bool g_notifying = false;
 int g_toldPid = 0;
 int g_toldSkip = -1;
 int g_toldSource = -1;
-int g_loggedSource = -1;  // iDrive's current source and its state, as last logged
+int g_loggedSource = -1;     // iDrive's current source and its state, as last logged
+unsigned g_sinceToldS = 0;   // polls since "carsource" was last sent
+unsigned g_unreadPolls = 0;  // connected polls with no fresh reading from HmiMain3D's thread
+bool g_unreadLogged = false;
+unsigned g_readsAtPid = 0;           // g_sourceReads when the service's PID last changed: older readings are not sent
+unsigned g_readsUsed = 0;            // g_sourceReads at the last poll that saw a new reading
+unsigned g_staleS = 0;               // polls since a new reading
+const unsigned kResendSourceS = 10;  // "carsource" again this often: a lost datagram or a quick reconnect heals
+const unsigned kUnreadWarnPolls = 10;
+const unsigned kStaleSourceS = 3;  // a reading older than this many polls is not sent: the job stopped answering
+
+// iDrive's audio service comes from a per-thread plugin cache (CPluginInstanceCacheTLS): only HmiMain3D's own thread
+// may ask for it. On the app's status poll, a bmw::Dispatcher thread, the ask stopped that thread in 0.1.9-test.1 and
+// test.2 (the app went silent as Android Auto connected, then iDrive died and the unit restarted). The check runs on
+// HmiMain3D's thread (hmi_thread) and leaves its answer here: current source << 2 | state, or -1 for none yet.
+pthread_t g_createThread;
+bool g_createThreadKnown = false;
+std::atomic<int> g_sourceSeen(-1);
+std::atomic<unsigned> g_sourceReads(0);  // readings made, counted after g_sourceSeen is set
+std::atomic<bool> g_sourceReadLogged(false), g_sourceFailLogged(false);
 
 // Copies n bytes from addr in this process, or fails if any of them can't be read: write() checks the source and
 // answers EFAULT instead of faulting.
@@ -335,6 +357,8 @@ void captureClusterPlayer() {
         alog("cluster player: no pipe: not installed");
         return;
     }
+    g_createThread = pthread_self();  // createApp: HmiMain3D's own thread
+    g_createThreadKnown = true;
     g_modes = serviceFrom("_ZN9hmiplugin3getI21IEntModeButtonServiceEENS_25CPluginInstanceCacheUsageIT_EEv",
                           "_ZTV21CEntModeButtonService");
     g_skips = serviceFrom("_ZN9hmiplugin3getI15IEntSkipServiceEENS_25CPluginInstanceCacheUsageIT_EEv",
@@ -350,33 +374,76 @@ void clusterPlayerPoll(int servicePid, bool connected) {
         g_toldPid = 0;
         g_toldSkip = -1;
         g_toldSource = -1;
+        g_unreadPolls = 0;
         return;
     }
     if (servicePid != g_toldPid) {
         g_toldPid = servicePid;
         g_toldSkip = -1;
         g_toldSource = -1;
+        g_readsAtPid = g_sourceReads;  // a new service gets only readings made from now on
     }
     const int skip = g_lastAnswer == 1 ? 1 : 0;
     if (g_carPlaySkip && skip != g_toldSkip) {
         sendToService(skip ? "clusterskip 1" : "clusterskip 0");
         g_toldSkip = skip;
     }
-    // iDrive's entertainment source, so the service can ask for its route again when the car takes it back.
-    int current = -1;
-    const int source = carPlaySourceState(&current);
-    if (source >= 0 && (current << 2 | source) != g_loggedSource) {
+    // iDrive's entertainment source, so the service can ask for its route again when the car takes it back. Read on
+    // HmiMain3D's thread (clusterPlayerSourceCheck): this asks for the next reading and uses the last one, as long as
+    // it was made for this service and the job still answers.
+    requestHmiThread();
+    const unsigned reads = g_sourceReads;
+    if (reads != g_readsUsed) {
+        g_readsUsed = reads;
+        g_staleS = 0;
+    } else {
+        ++g_staleS;
+    }
+    const bool fresh = reads != g_readsAtPid && g_staleS < kStaleSourceS;
+    const int seen = fresh ? static_cast<int>(g_sourceSeen) : -1;
+    const int source = seen >= 0 ? (seen & 3) : -1;
+    const int current = seen >= 0 ? (seen >> 2) : -1;
+    if (source >= 0) {
+        g_unreadPolls = 0;
+    } else if (++g_unreadPolls == kUnreadWarnPolls && !g_unreadLogged) {
+        alog(
+            "cluster player: no fresh reading of iDrive's entertainment source for %u s: the service is not told "
+            "when the car takes the route back",
+            kUnreadWarnPolls);
+        g_unreadLogged = true;
+    }
+    if (source >= 0 && seen != g_loggedSource) {
         alog("cluster player: iDrive's entertainment source is 0x%x%s", current,
              source == 1   ? " (CarPlay's, built up: Android Auto's sound)"
              : source == 0 ? " (CarPlay's, not built up)"
                            : "");
-        g_loggedSource = current << 2 | source;
+        g_loggedSource = seen;
     }
-    if (source >= 0 && source != g_toldSource) {
+    // Sent on a change, and again every kResendSourceS: the datagram may be lost, and a session that ends and starts
+    // again between two polls clears the service's copy without a change here.
+    ++g_sinceToldS;
+    if (source >= 0 && (source != g_toldSource || g_sinceToldS >= kResendSourceS)) {
         char line[24];
         snprintf(line, sizeof(line), "carsource %d", source);
         sendToService(line);
         g_toldSource = source;
+        g_sinceToldS = 0;
+    }
+}
+
+void clusterPlayerSourceCheck() {
+    if (!g_carPlay || !g_createThreadKnown || !pthread_equal(pthread_self(), g_createThread)) {
+        return;  // the cluster's thread runs the same job: only HmiMain3D's own thread may ask
+    }
+    int current = -1;
+    const int source = carPlaySourceState(&current);
+    const bool ok = source >= 0 && current >= 0;
+    g_sourceSeen = ok ? (current << 2 | source) : -1;
+    ++g_sourceReads;
+    if (ok && !g_sourceReadLogged.exchange(true)) {
+        alog("cluster player: iDrive's entertainment source read on HmiMain3D's thread");
+    } else if (!ok && !g_sourceFailLogged.exchange(true)) {
+        alog("cluster player: iDrive's audio service not as expected on HmiMain3D's thread: no source reading");
     }
 }
 

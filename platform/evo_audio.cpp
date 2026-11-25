@@ -296,7 +296,7 @@ void EvoAudio::askMediaRoute(uint32_t now) {
         routeAsked_ = true;
         routeTried_ = true;
         routeGranted_ = false;
-        routeSeen_ = carSource_ == kSourcePlays;  // already playing: the app reports changes only
+        routeSeen_ = carSource_ == kSourcePlays;  // already playing: the app may not report it again for 10 s
         routeHeldMs_ = now;
         routeRetryMs_ = 0;
         id = ++routeAsk_;

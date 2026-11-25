@@ -415,9 +415,11 @@ void appOnFinalize(bmw::PluginApp* self) {
     self->onFinalize();
 }
 
-// What the app has the cluster's HMI thread do (hmi_thread.hpp): the track title on the cluster.
+// What the app has iDrive's HMI threads do (hmi_thread.hpp): the track title on the cluster and main menu, and on
+// HmiMain3D's own thread the read of iDrive's entertainment source.
 void hmiThreadJob() {
     clusterTitleApply();
+    clusterPlayerSourceCheck();
 }
 
 bmw::PluginApp* createApp(bmw::IDispatcher& dispatcher, const char* name, const bmw::Bundle& params,
