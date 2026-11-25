@@ -41,8 +41,10 @@ const unsigned kOwnPingsLogEvery = 300;
 const uint64_t kSetupMs = 10000;
 // Once one TLS record is lost or damaged, none of the records after it decrypt, and the phone keeps sending them, so
 // neither the silence limit nor the setup limit fires: the picture stays frozen until the cable is pulled or the Wi-Fi
-// drops. This many encrypted frames in a row that do not decrypt end the session. One that decrypts starts the count
-// again. Upstream (Sq00ky, 5ec2bad) ends its sessions at the same count.
+// drops. A record that fails its check breaks TLS at once (TlsClient::broken) and ends the session at that frame. What
+// is left are frames that bring bytes of a record that never completes, because part of it was lost: this many
+// encrypted frames in a row that give nothing end the session. One that decrypts starts the count again. Upstream
+// (Sq00ky, 5ec2bad) ends its sessions at the same count.
 const unsigned kMaxUndecrypted = 16;
 // A media message whose sound nobody played within its limit is acked anyway (core/played_acks.hpp). While any waits
 // for its sound to be played, the thread wakes this often to see to it.
@@ -487,7 +489,17 @@ bool AASession::sendPlain(uint8_t channel, const Message& message) {
 
 bool AASession::sendSealed(uint8_t channel, const Message& message, uint8_t flags) {
     std::vector<uint8_t> records;
-    return tls_.seal(&message[0], message.size(), records) && sendFrame(channel, flags, &records[0], records.size());
+    if (!tls_.seal(&message[0], message.size(), records)) {
+        const int fd = socket_;
+        if (tls_.broken() && fd >= 0) {
+            // Nothing can be sealed any more. No send failed, so nothing else shuts the socket: the session ends here,
+            // as after a failed send (its receive fails), instead of carrying on unheard.
+            printf("[AASession] cannot seal a message for channel %u: ending the session.\n", channel);
+            shutdown(fd, SHUT_RDWR);
+        }
+        return false;
+    }
+    return sendFrame(channel, flags, &records[0], records.size());
 }
 
 void AASession::sendPlayedAcks() {
@@ -577,7 +589,14 @@ AASession::Received AASession::receive(uint8_t& channel, Message& message) {
     std::vector<uint8_t> plain;
     if (!header.encrypted()) {
         plain.swap(payload);
-    } else if (!tls_.open(&payload[0], payload.size(), plain)) {
+    } else if (!tls_.open(&payload[0], payload.size(), plain) || tls_.broken()) {
+        if (tls_.broken()) {
+            // No later frame can decrypt and nothing more can be sealed, so no ack: the session ends at this frame,
+            // even when records before the bad one gave a message.
+            printf("[AASession] Encrypted frame on channel %u (%u bytes) broke TLS: ending the session\n", channel,
+                   header.length);
+            return kLost;
+        }
         printf("[AASession] Failed to decrypt encrypted frame (%u bytes).\n", header.length);
         if (++undecrypted_ >= kMaxUndecrypted) {
             printf(

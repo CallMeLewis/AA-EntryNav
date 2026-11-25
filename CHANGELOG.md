@@ -7,6 +7,13 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Android Auto reconnects at once when the phone's encrypted stream breaks.** One damaged piece of it is enough to
+  make everything after it unreadable, yet Android Auto held a frozen picture through 15 more frames before giving up,
+  and its last reply to the phone could go out garbled. It now ends the connection at the damaged piece and starts
+  again as after any lost connection.
+
 ## [0.1.9-test.1] - 2026-11-23
 
 <!-- Flare Drive:

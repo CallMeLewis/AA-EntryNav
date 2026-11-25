@@ -389,6 +389,21 @@ public:
         log_.push_back(std::string("ph raw ") + what + " " + hex(data));
         writeAll(data);
     }
+    // One encrypted frame whose last record fails its check: one bit of its MAC flipped. The records of `good`, when
+    // given, come first in the same frame, intact.
+    void corrupted(uint8_t channel, const Bytes& good, const Bytes& bad) {
+        Bytes records;
+        if (!good.empty()) {
+            log_.push_back(format("ph ch=%u fl=%02x ", channel, kSealed) + describe(channel, good, false) +
+                           ", then in the same frame:");
+            records = tls_.seal(good);
+        }
+        log_.push_back(format("ph ch=%u fl=%02x ", channel, kSealed) + describe(channel, bad, false) +
+                       ", its record corrupted");
+        Bytes broken = tls_.seal(bad);
+        broken[broken.size() - 1] ^= 0x01;
+        frame(channel, kSealed, records + broken, nullptr);
+    }
     // A ping, then every head unit frame up to its answer: whatever was sent or posted before has been handled.
     void settle() {
         if (lost_) {
@@ -903,8 +918,9 @@ void fragmentEdges(std::vector<std::string>& log) {
     }
 }
 
-// Frames that do not decrypt. Fifteen in a row are dropped and the session goes on; a frame that decrypts starts the
-// count again. Once a record is damaged none after it decrypts, and the sixteenth in a row ends the session.
+// Frames that give no whole record, while TLS waits for the rest of it. Fifteen in a row are dropped and the session
+// goes on; a frame that decrypts starts the count again. A record whose rest never comes (part of it lost on the way)
+// ends the session at the sixteenth frame in a row.
 void brokenStream(std::vector<std::string>& log) {
     Link link;
     Phone phone(link.phoneFd, log);
@@ -916,12 +932,84 @@ void brokenStream(std::vector<std::string>& log) {
     log.push_back("-- the same again: the count started again, so 15 more do not end the session");
     phone.sealedInFrames(0, bytes({0x00, 0x0b, 0x08, 0x06}), 16);
     phone.settle();
-    log.push_back("-- a damaged record, then 15 more frames: the session ends");
-    for (int i = 0; i < 16; ++i) {
-        phone.raw("sealed garbage", bytes({0x00, 0x0b, 0x00, 0x08, 1, 2, 3, 4, 5, 6, 7, 8}));
+    log.push_back("-- a record of 16 KB that never completes: 15 frames of it do not end the session");
+    phone.raw("record header", bytes({0x00, 0x0b, 0x00, 0x05, 0x17, 0x03, 0x03, 0x40, 0x00}));
+    for (int i = 0; i < 14; ++i) {
+        phone.raw("record bytes", bytes({0x00, 0x0b, 0x00, 0x04, 1, 2, 3, 4}));
     }
+    phone.settle();
+    log.push_back("-- the 16th does");
+    phone.raw("record bytes", bytes({0x00, 0x0b, 0x00, 0x04, 1, 2, 3, 4}));
     phone.untilClosed();
     ended(link, log);
+}
+
+// A record that fails its check is fatal in TLS: no record after it decrypts, the good ones neither. The session ends
+// at that frame and sends nothing more, not even the ack of the video it lost, which used to go out as OpenSSL's
+// alert. The same when the frame's earlier records gave a message: nothing can answer it.
+void corruptedRecord(std::vector<std::string>& log) {
+    {
+        Link link;
+        Phone phone(link.phoneFd, log);
+        phone.handshake();
+        phone.discover();
+        log.push_back("-- video whose record fails its check");
+        phone.corrupted(6, Bytes(), bytes({0x00, 0x00, 0, 0, 0, 0, 0, 0, 0, 0x2a, 0x60, 0x61}));
+        phone.untilClosed();
+        ended(link, log);
+    }
+    Link link;
+    Phone phone(link.phoneFd, log);
+    phone.handshake();
+    phone.discover();
+    log.push_back("-- a ping, then a record that fails its check, in one frame");
+    phone.corrupted(0, bytes({0x00, 0x0b, 0x08, 0x07}), bytes({0x00, 0x0b, 0x08, 0x08}));
+    phone.untilClosed();
+    ended(link, log);
+}
+
+// TlsClient on its own. A record cut in two waits for its rest; one that fails its check breaks TLS for good. Then
+// open and seal give nothing: seal used to hand out what OpenSSL left for the phone (its alert) as the message.
+std::string tlsAfterBadRecord() {
+    aa::TlsClient client;
+    PhoneTls phone;
+    Bytes records, answer;
+    if (!client.start() || !client.hello(records)) {
+        return "no ClientHello";
+    }
+    for (int flight = 0; flight < 2 && !client.established(); ++flight) {
+        records = phone.step(records);
+        if (records.empty() || !client.handshake(&records[0], records.size(), answer)) {
+            return "the handshake stopped";
+        }
+        records = answer;
+    }
+    if (!client.established()) {
+        return "the handshake did not end";
+    }
+    const Bytes ping = bytes({0x00, 0x0b, 0x08, 0x01});
+    Bytes plain;
+    const Bytes record = phone.seal(ping);
+    const size_t half = record.size() / 2;
+    if (client.open(&record[0], half, plain) || client.broken()) {
+        return "half a record did not wait for its rest";
+    }
+    if (!client.open(&record[half], record.size() - half, plain) || plain != ping || client.broken()) {
+        return "the rest of a record did not complete it";
+    }
+    Bytes bad = phone.seal(ping);
+    bad[bad.size() - 1] ^= 0x01;
+    if (client.open(&bad[0], bad.size(), plain) || !client.broken()) {
+        return "a record that fails its check did not break TLS";
+    }
+    const Bytes good = phone.seal(ping);
+    if (client.open(&good[0], good.size(), plain)) {
+        return "a record decrypted after TLS broke";
+    }
+    if (client.seal(&ping[0], ping.size(), records) || !records.empty()) {
+        return "seal gave records after TLS broke";
+    }
+    return std::string();
 }
 
 // The car leaves (sayGoodbye): the phone is asked to quit, and its ByeByeResponse ends the session.
@@ -1255,10 +1343,15 @@ struct Scenario {
 };
 
 const Scenario kScenarios[] = {
-    {"full session", fullSession},   {"fragment edges", fragmentEdges},
-    {"plain edges", plainEdges},     {"cut headers", cutHeaders},
-    {"lifecycle", lifecycle},        {"sound over Wi-Fi", wifiAudio},
-    {"broken stream", brokenStream}, {"goodbye", goodbye},
+    {"full session", fullSession},
+    {"fragment edges", fragmentEdges},
+    {"plain edges", plainEdges},
+    {"cut headers", cutHeaders},
+    {"lifecycle", lifecycle},
+    {"sound over Wi-Fi", wifiAudio},
+    {"broken stream", brokenStream},
+    {"corrupted record", corruptedRecord},
+    {"goodbye", goodbye},
     {"music played", musicPlayed},
 };
 
@@ -1332,6 +1425,7 @@ int main(int argc, char** argv) {
     const std::string bye = writing ? std::string() : unansweredGoodbye();
     const std::string unplayed = writing ? std::string() : unplayedMusic();
     const std::string keyframe = writing ? std::string() : keyframeAfterLoss();
+    const std::string badRecord = writing ? std::string() : tlsAfterBadRecord();
     takeEvents();
     fflush(stdout);
     dup2(console, 1);
@@ -1383,6 +1477,11 @@ int main(int argc, char** argv) {
         printf("FAIL session, IDR after a lost frame: %s\n", keyframe.c_str());
         return 1;
     }
+    if (!badRecord.empty()) {
+        printf("FAIL TLS, a record that fails its check: %s\n", badRecord.c_str());
+        return 1;
+    }
+    puts("PASS TLS, a record that fails its check: TLS breaks for good, seal hands out nothing; a cut record waits");
     puts("PASS session, IDR after a lost frame: focus off and on, not in the video's first 5 s, once in 10 s");
     puts("PASS session, music nobody plays: its messages are acked at the limit, not before, and the session goes on");
     puts(
