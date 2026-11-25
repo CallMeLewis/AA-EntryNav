@@ -7,6 +7,26 @@ Each version links to the commit or tag its archive was built from.
 
 ## [Unreleased]
 
+## [0.1.9-test.3] - 2026-11-25
+
+<!-- Flare Drive:
+With Sound through Android Auto on, connecting your phone no longer freezes iDrive or restarts the head unit. Touch
+reaches the right edge of 1440x540 screens, and 1920x720 screens get a steady picture over the cable.
+-->
+
+Sound through Android Auto no longer freezes iDrive or restarts the head unit, touch reaches the right edge of 1440x540
+screens, and 1920x720 screens get a steady picture over the cable. The service and the iDrive app change.
+
+### Fixed
+
+- **Sound through Android Auto no longer freezes iDrive or restarts the head unit.** In 0.1.9-test.1 and 0.1.9-test.2,
+  iDrive froze and the head unit restarted a few seconds after Android Auto connected with Sound through Android Auto
+  on. When iDrive takes the sound back and Android Auto misses it, Android Auto now hears about it within 10 seconds.
+- **Touch reaches the right edge of a 1440x540 screen.** The rightmost 160 pixels of Android Auto's picture did not
+  respond to touch. You can now tap across the full width of the screen.
+- **A 1920x720 screen gets a steady picture over the cable.** The picture over the cable could break up or fail to
+  appear, because the largest frames did not fit in the memory set aside for them.
+
 ## [0.1.9-test.2] - 2026-11-25
 
 <!-- Flare Drive:
@@ -388,7 +408,8 @@ The first release of AA-EntryNav: Android Auto starts every time and keeps clear
 - **Changing the car's clock no longer upsets Android Auto's timing.** When GPS corrected the clock while driving, a
   wait could end early or drag on. Android Auto now times things from when the head unit started.
 
-[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.9-test.2...HEAD
+[Unreleased]: https://github.com/CallMeLewis/AA-EntryNav/compare/v0.1.9-test.3...HEAD
+[0.1.9-test.3]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.9-test.3
 [0.1.9-test.2]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.9-test.2
 [0.1.9-test.1]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.9-test.1
 [0.1.8]: https://github.com/CallMeLewis/AA-EntryNav/tree/v0.1.8
