@@ -644,7 +644,8 @@ void fullSession(std::vector<std::string>& log) {
     }
     phone.settle();
 
-    log.push_back("-- audio and video setup, start indications");
+    log.push_back(
+        "-- audio and video setup, start indications; the focus kept from before the setup follows its FOCUSED");
     phone.send(6, kSealed, bytes({0x80, 0x00, 0x08, 0x03}));
     phone.send(8, kSealed, bytes({0x80, 0x00, 0x08, 0x01}));
     phone.send(2, kSealed, bytes({0x80, 0x00, 0x08, 0x03}));
@@ -685,7 +686,7 @@ void fullSession(std::vector<std::string>& log) {
     phone.send(2, kSealed, bytes({0x80, 0x07, 0x10, 0x02}));
     phone.settle();
 
-    log.push_back("-- input bindings; the next drain also sends the focus kept from before the video setup");
+    log.push_back("-- input bindings");
     phone.send(3, kSealed, bytes({0x80, 0x02, 0x0a, 0x01, 0x03}));
     phone.send(5, kSealed, bytes({0x80, 0x02}));
     phone.send(7, kSealed, bytes({0x80, 0x02, 0x0a, 0x03, 0x03, 0x04, 0x13}));
@@ -1337,6 +1338,54 @@ std::string keyframeAfterLoss() {
     return std::string();
 }
 
+// A video focus the car posts before the phone sets its video up is kept until the setup, then sent right after the
+// setup's FOCUSED when it differs. Left to the next car input, it went out seconds later and could undo a newer focus.
+// An empty verdict means it passed.
+std::string keptFocus() {
+    {
+        std::vector<std::string> log;
+        Link link;
+        Phone phone(link.phoneFd, log);
+        phone.handshake();
+        phone.discover();
+        link.session.postVideoFocus(false);  // iDrive has the screen as the session starts: the reverse camera
+        phone.settle();
+        const size_t from = log.size();
+        phone.send(6, kSealedCtl, bytes({0x00, 0x07, 0x08, 0x00, 0x10, 0x06}));
+        phone.send(6, kSealed, bytes({0x80, 0x00, 0x08, 0x03}));
+        phone.settle();
+        if (focusTrail(log, from) != "fn") {
+            return "UNFOCUSED kept from before the setup: focus trail '" + focusTrail(log, from) +
+                   "' instead of the setup's FOCUSED, then UNFOCUSED";
+        }
+    }
+    std::vector<std::string> log;
+    Link link;
+    Phone phone(link.phoneFd, log);
+    phone.handshake();
+    phone.discover();
+    link.session.postVideoFocus(false);
+    link.session.postVideoFocus(true);  // Android Auto back before the setup: the newer focus wins
+    phone.settle();
+    size_t from = log.size();
+    phone.send(6, kSealedCtl, bytes({0x00, 0x07, 0x08, 0x00, 0x10, 0x06}));
+    phone.send(6, kSealed, bytes({0x80, 0x00, 0x08, 0x03}));
+    phone.settle();
+    if (focusTrail(log, from) != "f") {
+        return "FOCUSED kept from before the setup: focus trail '" + focusTrail(log, from) +
+               "' instead of the setup's FOCUSED alone";
+    }
+    from = log.size();
+    phone.send(7, kSealed, bytes({0x80, 0x02, 0x0a, 0x01, 0x03}));
+    phone.settle();
+    link.session.postKeyEvent(kKeyHome, true);
+    phone.settle();
+    if (!focusTrail(log, from).empty()) {
+        return "a focus kept from before the setup still came out at the next car input: " + focusTrail(log, from);
+    }
+    return std::string();
+}
+
 struct Scenario {
     const char* name;
     void (*run)(std::vector<std::string>&);
@@ -1426,6 +1475,7 @@ int main(int argc, char** argv) {
     const std::string unplayed = writing ? std::string() : unplayedMusic();
     const std::string keyframe = writing ? std::string() : keyframeAfterLoss();
     const std::string badRecord = writing ? std::string() : tlsAfterBadRecord();
+    const std::string kept = writing ? std::string() : keptFocus();
     takeEvents();
     fflush(stdout);
     dup2(console, 1);
@@ -1482,6 +1532,11 @@ int main(int argc, char** argv) {
         return 1;
     }
     puts("PASS TLS, a record that fails its check: TLS breaks for good, seal hands out nothing; a cut record waits");
+    if (!kept.empty()) {
+        printf("FAIL session, focus kept from before the video setup: %s\n", kept.c_str());
+        return 1;
+    }
+    puts("PASS session, focus kept from before the video setup: sent right after it when it differs, never later");
     puts("PASS session, IDR after a lost frame: focus off and on, not in the video's first 5 s, once in 10 s");
     puts("PASS session, music nobody plays: its messages are acked at the limit, not before, and the session goes on");
     puts(

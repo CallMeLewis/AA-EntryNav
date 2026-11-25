@@ -21,6 +21,9 @@ Each version links to the commit or tag its archive was built from.
   phone joins, Android Auto now has the car's Wi-Fi stop offering it. For that, the Wi-Fi rebuilds the beacon phones
   find it by, once each time it starts and only while no phone or iPhone is on it, so nothing gets disconnected. A
   phone already on the Wi-Fi keeps U-APSD until it next joins.
+- **iDrive keeps the screen when Android Auto starts behind it.** When iDrive had the screen as a phone connected, for
+  example with the reverse camera up, Android Auto only heard about it at the next button press or touch, seconds
+  later, and could take the screen in between. The phone now hears about it as soon as its picture is set up.
 
 ## [0.1.9-test.1] - 2026-11-23
 

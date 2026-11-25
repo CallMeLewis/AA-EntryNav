@@ -261,6 +261,13 @@ void AASession::onSetup(uint8_t channel) {
         sendVideoFocus(true, false);
         videoReady_ = true;
         keyframe_.videoStarted(locationClockMs());
+        // A focus the car posted before the setup was kept for now (sendCarInput). Left to the next car input, it went
+        // out seconds later, and could undo a newer focus: iDrive's reverse camera up as the session starts wants the
+        // picture aside at once.
+        const FocusRequest kept = inbox_.takeFocus();
+        if (kept != kFocusNone && (kept == kFocusProjected) != projected_) {
+            sendCarFocus(kept);
+        }
     }
 }
 

@@ -680,13 +680,11 @@ void AASession::sendCarInput() {
         printf("[AASession] NIGHT_MODE event: SEND FAILED\n");
     }
     if (batch.focus != kFocusNone && !videoReady_) {
-        // Before the phone set the video up, a focus would mean nothing to it; the setup itself answers FOCUSED.
+        // Before the phone set the video up, a focus would mean nothing to it. The setup answers FOCUSED, then sends
+        // this one if it differs (onSetup).
         inbox_.deferFocus(batch.focus);
     } else if (batch.focus != kFocusNone) {
-        const bool projected = batch.focus == kFocusProjected;
-        const bool sent = sendVideoFocus(projected, true);
-        printf("[AASession] video focus -> phone: %s (unrequested) %s\n",
-               projected ? "FOCUSED/projected" : "UNFOCUSED/native", sent ? "sent" : "SEND FAILED");
+        sendCarFocus(batch.focus);
     }
     if (batch.keyframe) {
         askKeyframe();  // after the focus above: a step aside just posted leaves the phone without the screen
@@ -755,6 +753,13 @@ bool AASession::sendSensorEvent(uint32_t type) {
         return sendSealed(channel::kSensors, message::drivingStatusEvent(sensor::kDrivingUnrestricted));
     }
     return true;  // no source: the start response alone
+}
+
+void AASession::sendCarFocus(FocusRequest focus) {
+    const bool projected = focus == kFocusProjected;
+    const bool sent = sendVideoFocus(projected, true);
+    printf("[AASession] video focus -> phone: %s (unrequested) %s\n",
+           projected ? "FOCUSED/projected" : "UNFOCUSED/native", sent ? "sent" : "SEND FAILED");
 }
 
 bool AASession::sendVideoFocus(bool projected, bool unrequested) {

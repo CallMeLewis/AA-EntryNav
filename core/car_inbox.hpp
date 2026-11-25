@@ -64,8 +64,10 @@ public:
     void emptyWake();
     void take(CarBatch& batch);
     std::vector<std::vector<uint8_t>> takeLocation(uint64_t nowMs);
-    // The video is not set up yet: the focus waits for the next turn, unless a newer one came meanwhile.
+    // The video is not set up yet: the focus waits until it is (takeFocus), unless a newer one came meanwhile.
     void deferFocus(FocusRequest focus);
+    // The focus waiting since before the video setup, or a newer one, and kFocusNone from then on.
+    FocusRequest takeFocus();
     int nightState();  // -1 not known yet, 0 day, 1 night
     void bindInput();  // the phone bound the input channel: car input is accepted from now on
     void startNightMode();

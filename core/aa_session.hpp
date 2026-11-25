@@ -155,6 +155,7 @@ private:
     bool sendLocation();
     bool sendSensorEvent(uint32_t type);
     bool sendVideoFocus(bool projected, bool unrequested);
+    void sendCarFocus(FocusRequest focus);  // a focus the car posted, logged
     void askKeyframe();
 
     // One handler per route (aa_channels.cpp); dispatch() is false when the session must end.
