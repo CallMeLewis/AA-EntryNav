@@ -8,6 +8,9 @@ New components are written in Rust; C and C++ get fixes only. Port existing code
 the Rust version has matched it in the car. The iDrive plugin glue in `hmiapp/` that has to match BMW's C++ interface
 (GCC 4.7, the plugin vtables) stays C++. Rust for the head unit is static (`armv7-unknown-linux-musleabihf`) or, for
 code loaded into HmiMain3D, a staticlib linked by the car's GCC 4.7 toolchain; never change the car's own libraries.
+Once a Rust piece ships in place of its C++, remove what it replaced in the same change: the old source, its build
+rules, and the tests and dependencies nothing else needs, after recording the old outputs as fixtures if the Rust is
+checked against them. Delete files nothing references whenever you find them, after checking the other repos don't.
 
 ## Settings
 
