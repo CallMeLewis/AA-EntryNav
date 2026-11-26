@@ -2,6 +2,13 @@
 
 Write commit messages following [docs/commit-messages.md](docs/commit-messages.md). Write the CHANGELOG and each release's Flare Drive note following [docs/release-notes.md](docs/release-notes.md). Run all generated prose through the `unslop` skill before finalizing.
 
+## Rust
+
+New components are written in Rust; C and C++ get fixes only. Port existing code piece by piece and keep the C++ until
+the Rust version has matched it in the car. The iDrive plugin glue in `hmiapp/` that has to match BMW's C++ interface
+(GCC 4.7, the plugin vtables) stays C++. Rust for the head unit is static (`armv7-unknown-linux-musleabihf`) or, for
+code loaded into HmiMain3D, a staticlib linked by the car's GCC 4.7 toolchain; never change the car's own libraries.
+
 ## Settings
 
 Keep settings easy for drivers to use without SSH. Prefer automatic behaviour with safe defaults over adding a new file in `/var/local/data/AA`. Never gate a user-facing feature behind a diagnostic flag or require multiple files to turn one feature on. Whenever a user-facing setting file is added or changed in `platform/service_contract.hpp`, wire it into Flare Drive (`../flare-drive`) so drivers can change it from the app.
