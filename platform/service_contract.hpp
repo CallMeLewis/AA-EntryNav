@@ -45,7 +45,8 @@ constexpr char kFlarePin[] = "/var/local/data/AA/flare-pin";
 constexpr char kAppLog[] = "/var/local/data/AA/app.log";
 constexpr char kAppLogOld[] = "/var/local/data/AA/app.old.log";
 constexpr char kServiceLog[] = "/var/local/data/AA/service.log";
-constexpr char kServiceLogOld[] = "/var/local/data/AA/service.old.log";  // the log's previous megabyte (log_profile.hpp)
+constexpr char kServiceLogOld[] =
+    "/var/local/data/AA/service.old.log";                         // the log's previous megabyte (log_profile.hpp)
 constexpr char kAppDisable[] = "/var/local/data/AA/app.disable";  // present: the app stays off (set by hand)
 constexpr char kAppGuard[] = "/var/local/data/AA/app-guard";   // crash guard: 3 short iDrive runs and the app stays off
 constexpr char kBootGuard[] = "/var/local/data/AA/bootguard";  // automatic starts within 15 minutes
@@ -53,11 +54,11 @@ constexpr char kBootGuard[] = "/var/local/data/AA/bootguard";  // automatic star
 // ---- run time, in /tmp (memory, gone at the next start) -----------------------------------------------------------
 constexpr char kServiceDir[] = "/tmp/aa-entrynav-service";
 constexpr char kServiceStop[] = "/tmp/aa-entrynav-service/STOP";  // created by the app: the supervisor stops
-constexpr char kStateFile[] = "/tmp/aa-entrynav-state";                // "state pid overlay", written by the service
-constexpr char kAppKeyFile[] = "/tmp/aa-entrynav-appkey";              // a key that also moved iDrive went to AA
-constexpr char kMediaJumpFile[] = "/tmp/aa-entrynav-media";            // MEDIA over iDrive: the app shows AA
-constexpr char kDayNightFile[] = "/tmp/aa-entrynav-daynight";          // day or night, written by the app
-constexpr char kCarFile[] = "/tmp/aa-entrynav-car";                    // the car's own details, by the app
+constexpr char kStateFile[] = "/tmp/aa-entrynav-state";           // "state pid overlay", written by the service
+constexpr char kAppKeyFile[] = "/tmp/aa-entrynav-appkey";         // a key that also moved iDrive went to AA
+constexpr char kMediaJumpFile[] = "/tmp/aa-entrynav-media";       // MEDIA over iDrive: the app shows AA
+constexpr char kDayNightFile[] = "/tmp/aa-entrynav-daynight";     // day or night, written by the app
+constexpr char kCarFile[] = "/tmp/aa-entrynav-car";               // the car's own details, by the app
 // The step the iDrive app is at in its status poll and its HMI thread job, one fixed-size line each
 // (hmiapp/app_step.hpp), logged by the service when the app's heartbeat stops (platform/app_heartbeat.hpp).
 constexpr char kAppStepFile[] = "/tmp/aa-entrynav-app-step";

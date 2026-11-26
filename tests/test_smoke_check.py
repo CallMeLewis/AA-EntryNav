@@ -118,7 +118,9 @@ def main():
         "[   10.000] [Control] state -> connected 3568 2",
         "[  900.000] [Control] state -> connected 3568 1",
     ]
-    fails(report(service_old=prior_long, service=short), "longest connected session 1.0 min", "prior boot session ignored")
+    fails(
+        report(service_old=prior_long, service=short), "longest connected session 1.0 min", "prior boot session ignored"
+    )
     # Older reports with /tmp/aa-entrynav-service.log still pass.
     check(
         failed(report(service_section="/tmp/aa-entrynav-service.log")) == [],
