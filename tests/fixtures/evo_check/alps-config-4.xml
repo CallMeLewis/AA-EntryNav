@@ -1,0 +1,1 @@
+<configuration><name>"supported_services"</name><id>0x1</id><instance>0x2</instance><value>0x3</value></configuration><configuration></configuration><configuration><name>"spp_data_interface"</name><value>0x1</value><id>0x2</id><instance>0x3</instance></configuration>

@@ -1,0 +1,2 @@
+# The repository's line width: 120, as in core/, platform/ and tools/.
+max_width = 120

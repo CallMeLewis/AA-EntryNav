@@ -2,10 +2,13 @@
 """Check that every test runs somewhere: none forgotten in the Makefile, none built and never run.
 
 A test is run by the PC suite (make test-host, which CI runs) or by tests/run_qemu.py (the ARM tests under QEMU, which
-the pre-push hook and publish_release.py run through tools/verify_arm.py). Three things are checked:
+the pre-push hook and publish_release.py run through tools/verify_arm.py). Four things are checked:
   - every tests/test_* source is run by one of them, or listed in MANUAL with the reason it can't be;
   - every program the PC suite builds is also run by it;
-  - every ARM program test-arm-all builds is run by tests/run_qemu.py, and everything run_qemu.py runs is built.
+  - every ARM program test-arm-all builds is run by tests/run_qemu.py, and everything run_qemu.py runs is built;
+  - every Rust program in rust/ is compared with its C++ original by run_qemu.py's RUST_CASES, every case names a
+    Rust program, and every crate has tests of its own in its tests/ folder. tools/build_rust.py builds them all, and
+    run_qemu.py runs each test program it builds.
 """
 
 import re
@@ -101,13 +104,40 @@ def main():
         if not (ROOT / name).is_file():
             problems.append(f"MANUAL lists {name}, which no longer exists")
 
+    # The Rust ports: each program compared with its C++ by run_qemu.py, each crate with tests of its own.
+    rust_programs, crates = rust_workspace()
+    block = re.search(r"^RUST_CASES = \{(.*?)^\}", qemu, re.MULTILINE | re.DOTALL)
+    cases = set(re.findall(r'^\s*"([a-z0-9-]+)":', block.group(1), re.MULTILINE)) if block else set()
+    for program in sorted(rust_programs - cases):
+        problems.append(f"rust/ builds {program}, which tests/run_qemu.py's RUST_CASES never compares with its C++")
+    for program in sorted(cases - rust_programs):
+        problems.append(f"tests/run_qemu.py's RUST_CASES names {program}, which no crate in rust/ builds")
+    for crate in crates:
+        if not any((ROOT / "rust" / crate / "tests").glob("*.rs")):
+            problems.append(f"rust/{crate} has no tests in rust/{crate}/tests")
+
     if problems:
         raise SystemExit("FAIL:\n  " + "\n  ".join(problems))
     sources = len([s for s in (ROOT / "tests").glob("test_*") if s.suffix in (".c", ".cpp", ".py")])
     print(
         f"PASS: {sources} test sources, each run by the PC suite or under QEMU ({len(MANUAL)} by hand); "
-        f"{len(arm_programs)} ARM test programs, all run by tests/run_qemu.py"
+        f"{len(arm_programs)} ARM test programs, all run by tests/run_qemu.py; "
+        f"Rust programs compared with their C++: {len(rust_programs)}"
     )
+
+
+def rust_workspace():
+    """The programs the crates of rust/Cargo.toml build ([[bin]] names), and the crates."""
+    workspace = ROOT / "rust/Cargo.toml"
+    if not workspace.is_file():
+        return set(), []
+    members = re.search(r"^members = \[(.*?)\]", workspace.read_text(encoding="utf-8"), re.MULTILINE | re.DOTALL)
+    crates = re.findall(r'"([^"]+)"', members.group(1)) if members else []
+    programs = set()
+    for crate in crates:
+        manifest = (ROOT / "rust" / crate / "Cargo.toml").read_text(encoding="utf-8")
+        programs.update(re.findall(r'^\[\[bin\]\]\s*\nname = "([^"]+)"', manifest, re.MULTILINE))
+    return programs, crates
 
 
 if __name__ == "__main__":

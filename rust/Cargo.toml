@@ -1,0 +1,26 @@
+# Copyright (c) 2026 CallMeLewis
+# The Rust ports of AA-EntryNav's programs, in the order docs/rust-port.md gives. Each one sits beside its C++ original
+# until it has matched it in the car. A program that loads no car library is static armv7-unknown-linux-musleabihf;
+# one that must load a car library is a staticlib for armv7-unknown-linux-gnueabihf, linked by the build image's GCC 4.7:
+#   evo-capture   the passive SOME/IP recorder (tools/evo_capture.cpp), musl
+#   evo-rsprobe   what std and the car's libraries do in a glibc Rust program, glibc; it replaces nothing
+#   glibc-compat  what std calls that the car's glibc 2.15 lacks (getauxval), linked into every glibc program
+# make rust builds them into build/rust, tests/run_qemu.py checks them against the C++ under QEMU, and their tests
+# compare them with what tests/fixtures recorded of the C++.
+[workspace]
+resolver = "2"
+members = ["aa-dbus", "evo-capture", "evo-check", "evo-ric", "evo-rsprobe", "evo-text", "glibc-compat"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "PolyForm-Noncommercial-1.0.0"
+publish = false
+
+# Small static programs: no unwinding (a panic ends the run, as a crash of the C++ would), one codegen unit and LTO.
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

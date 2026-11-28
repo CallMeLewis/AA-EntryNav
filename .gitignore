@@ -27,6 +27,7 @@
 !/plugins/
 !/pyproject.toml
 !/requirements-dev.txt
+!/rust/
 !/tests/
 !/toolchain/
 !/tools/
@@ -37,6 +38,8 @@
 *.so
 __pycache__/
 /hmiapp/AAEntryNav_ALL_*.zip
+# cargo's builds; tools/build_rust.py copies what ships to build/, which stays local like every other build
+/rust/target/
 
 # tests/: sources and fixtures only, without the tests of the older kits
 /tests/*
@@ -50,6 +53,7 @@ __pycache__/
 # tools/: what the build, the release and the checks use
 /tools/*
 !/tools/backup_headunit.sh
+!/tools/build_rust.py
 !/tools/evo_capture.cpp
 !/tools/evo_ric.cpp
 !/tools/ric_capture.sh

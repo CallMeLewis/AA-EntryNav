@@ -1,0 +1,23 @@
+[SPP] observed org.alps.evo.DM.BtApplReadConfigurationCfm (yyqqay)
+[SPP] observed org.alps.evo.DM.BtApplReadConfigurationCfm (yyqqay)
+[SPP] observed org.alps.evo.SPP.BtApplSppSetUuidCfm (yy) instance=0
+[SPP] observed org.alps.evo.SPP.BtApplSppDataInd (yqay) instance=1
+[SPP] observed org.alps.evo.SPP.BtApplSppDataInd (yqay) instance=0
+[SPP] observed org.alps.evo.SPP.BtApplSppDataCfm (yy) instance=0
+[SPP] observed org.alps.evo.SPP.BtApplSppSendInd (y) instance=5
+[SPP] observed org.alps.evo.SPP.BtApplSppDataSendFcInd (yy) instance=0
+[SPP] observed org.alps.evo.SPP.BtApplOddInd (s)
+[SPP] observed org.alps.evo.SPP.BtApplEmptyInd ()
+[SPP] observed org.alps.evo.DM.BtApplDeviceConnectInd (yayty)
+[SPP] BtApplDeviceConnectInd instance=0 function=1 status=0
+[SPP] observed org.alps.evo.DM.BtApplDeviceConnectInd (yayty)
+[SPP] BtApplDeviceConnectInd instance=3 function=2 status=128
+[SPP] observed org.alps.evo.DM.BtApplDeviceDisconnectInd (yayyty)
+[SPP] BtApplDeviceDisconnectInd instance=0 function=1 status=0 reason=2
+[SPP] observed org.alps.evo.DM.BtApplDeviceConnectInd (yayty)
+[SPP] observed org.alps.evo.DM.BtApplDeviceConnectInd (yay)
+[SPP] observed org.alps.evo.DM.BtApplSetConfigurationCfm (yyq)
+[SPP] observed org.alps.evo.DM.BtApplReadConfigurationCfm (yyqqay)
+[SPP] observed org.alps.evo.DM.BtApplReadConfigurationCfm (yy)
+[SPP] observed org.alps.evo.DM.BtApplSomethingInd (t)
+[SPP] Alps service replaced or lost: the link must restart

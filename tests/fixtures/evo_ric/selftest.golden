@@ -1,0 +1,2 @@
+evo-ric: 1 calls, 1 answers, 0 signals recorded in FILE
+PASS evo-ric: the RIC call and its answer recorded with every argument, other traffic left out, the caller answered only by the service

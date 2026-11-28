@@ -1,0 +1,3 @@
+usage: evo-ric --names [--address A]
+       evo-ric --watch [minutes] [--out DIR] [--max-mb N] [--address A]
+       evo-ric --selftest

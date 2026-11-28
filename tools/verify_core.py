@@ -13,8 +13,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 UPSTREAM = "SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0"
 OWN = re.compile(r"Copyright \(c\) 20\d\d CallMeLewis")
-SOURCE_DIRS = ("core", "platform", "hmiapp", "tools", "tests", "toolchain")
-SUFFIXES = {".c", ".cpp", ".h", ".hpp", ".py", ".sh"}
+SOURCE_DIRS = ("core", "platform", "hmiapp", "tools", "tests", "toolchain", "rust")
+SUFFIXES = {".c", ".cpp", ".h", ".hpp", ".py", ".sh", ".rs"}
 # Data neither project wrote: these files say where they come from instead of carrying a copyright.
 THIRD_PARTY = {"core/include/dhu_sdp.h", "core/include/hu_certificate.h"}
 ORIGIN = "Not written by this project"

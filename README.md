@@ -74,19 +74,49 @@ Each one is a switch in Flare Drive, or a file in `/var/local/data/AA` on the he
 
 ## Building it yourself
 
-You need Docker. The build links the ARM programs against a copy of the car's system, which
-`tools/backup_headunit.sh` makes. That copy holds BMW files and never goes into git.
+You need Docker and [rustup](https://rustup.rs). The build links the ARM programs against a copy of the car's system,
+which `tools/backup_headunit.sh` makes. That copy holds BMW files and never goes into git.
 
 | Command | What it does |
 |---|---|
 | `git config core.hooksPath .githooks` | Once. Before each push to `main`, checks for secrets and runs `verify_arm.py` |
 | `docker build -t entrynav2-tc:4.7 toolchain` | Once. Builds the cross compiler |
 | `make check` | Style, content checks and the PC tests, as CI runs them |
-| `python3 tools/verify_arm.py` | The ARM programs against the car's libraries, their tests under QEMU, and the release checks |
+| `python3 tools/build_rust.py` (or `make rust`) | The Rust ports' tests on the PC, then the programs for the head unit in `build/rust` and their tests built for ARM |
+| `python3 tools/verify_arm.py` | The Rust ports, the ARM programs against the car's libraries, their tests under QEMU, and the release checks |
 | `python3 tools/package_release.py` | The release archive, after `verify_arm.py` |
 
-CI can't hold the copy of the car's system, so it runs only `make check`. The pre-push hook runs `verify_arm.py` on
-the commit pushed to `main`, and `tools/verify_tests.py` makes sure every test runs in one or the other.
+CI can't hold the copy of the car's system, so it runs `make check`, and the Rust tests and Clippy in a job of their
+own. The pre-push hook runs `verify_arm.py` on the commit pushed to `main`, and `tools/verify_tests.py` makes sure
+every test runs in one or the other.
+
+### The Rust ports
+
+The C++ is moving to Rust a piece at a time, in the order [docs/rust-port.md](docs/rust-port.md) gives. `rust/` holds
+the ports, each beside its C++ original until it has matched it in the car, built with the toolchain
+`rust/rust-toolchain.toml` pins.
+
+Any program that loads none of the car's libraries builds as a static ARMv7 musl program. It needs nothing from the
+car's glibc and no cross compiler. Programs that must load a car library use glibc Rust instead. They compile to a
+staticlib that the build image's GCC 4.7 links against the copy of the car's system, just as it links the C++, and
+they need nothing newer than glibc 2.15.
+
+| Port | Replaces | State |
+|---|---|---|
+| `rust/evo-capture` | `tools/evo_capture.cpp`, the passive SOME/IP recorder | Same output as the C++ on the PC and under QEMU; not yet run in a car |
+| `rust/evo-ric` | `tools/evo_ric.cpp`, the passive recorder of the cluster guidance calls | Same output as the C++ on the PC, and under QEMU on the car's own `dbus-daemon`; not yet run in a car |
+| `rust/evo-check` | `tools/evo_check.cpp` and the read-only part of `platform/alps_spp.cpp` | Same output as the C++ on the PC, and under QEMU against a fake Alps service; not yet run in a car |
+
+Four crates support the ports and replace nothing. `rust/aa-dbus` is a small D-Bus client that speaks the bus protocol
+directly, so static programs can use D-Bus without libdbus. `rust/evo-text` prints numbers and error messages, and reads
+numbers, as glibc does. `rust/evo-rsprobe` is the first glibc Rust program, and `make evo-rsprobe` links it. Running it
+checks that std and every car library the service uses work from Rust, and `glibc-compat` provides the one function std
+needs that glibc 2.15 lacks. As a developer tool, it ships in no release.
+
+The C++ stays the default. For car runs, `make dev-tools RUST_TOOLS="evo-capture evo-ric evo-check"` takes the named
+tools from `build/rust` instead. Tests compare each port with fixtures recorded from the C++ in `tests/fixtures`, while
+`make check` tests the C++ against them. On ARM, `tests/run_qemu.py` runs both programs side by side. Inside `rust/`,
+`cargo test` and `cargo clippy --all-targets -- -D warnings` run on Windows or Linux.
 
 [ARCHITECTURE.md](docs/ARCHITECTURE.md) shows how the programs fit together, and [CONTRIBUTING.md](CONTRIBUTING.md)
 says what a change needs.

@@ -1,0 +1,41 @@
+# alps-config-1.xml
+
+--- Static Alps configuration: supported services and SPP interface only ---
+"supported_services" id=0x6000 instance=0x00 value=0x0000FFFF
+"spp_data_interface" id=0x6203 instance=0x00 value=0x01
+"spp_data_interface" id=0x6253 instance=0x01 value=0x00
+3 static entries kept. This does not prove that an instance is free at run time.
+# alps-config-2.xml
+
+--- Static Alps configuration: supported services and SPP interface only ---
+[UNEXPECTED FORMAT]
+[UNEXPECTED FORMAT]
+[UNEXPECTED FORMAT]
+[UNEXPECTED FORMAT]
+[UNEXPECTED FORMAT]
+"spp_data_interface" id=0xABCdef instance=0x05 value=0x123456789012345F
+"spp_data_interface" id=0x6203 instance=0x00 value=0x01
+"supported_services" id=0x1 instance=0x3 value=0x2
+3 static entries kept. This does not prove that an instance is free at run time.
+# alps-config-3.xml
+
+--- Static Alps configuration: supported services and SPP interface only ---
+0 static entries kept. This does not prove that an instance is free at run time.
+# alps-config-4.xml
+
+--- Static Alps configuration: supported services and SPP interface only ---
+"supported_services" id=0x1 instance=0x2 value=0x3
+"spp_data_interface" id=0x2 instance=0x3 value=0x1
+2 static entries kept. This does not prove that an instance is free at run time.
+# 262145 bytes
+
+--- Static Alps configuration: supported services and SPP interface only ---
+[MISSING/UNREADABLE]
+# a folder
+
+--- Static Alps configuration: supported services and SPP interface only ---
+[MISSING/UNREADABLE]
+# missing
+
+--- Static Alps configuration: supported services and SPP interface only ---
+[MISSING/UNREADABLE]

@@ -8,8 +8,10 @@
 #   all            what the car runs: aa-entrynav, evo-trial and hmiapp/libAAEntryNav.so (ARM)
 #   dev-tools      evo-check, evo-capture and evo-ric, read-only diagnostics run by hand on the car, evo-sound, which plays a
 #                  test tone on one of the car's sound outputs, and evo-usb, Android Auto's cable link by hand (ARM,
-#                  not installed)
-#   test-arm-all   every ARM program tests/run_qemu.py runs (ARM)
+#                  not installed). RUST_TOOLS="evo-capture evo-ric evo-check" takes those from the Rust build (below)
+#   rust           the Rust ports (rust/, docs/rust-port.md) for the head unit, static, in build/rust, after their tests
+#                  on the PC: tools/build_rust.py, run on the PC itself and not in the build image (ARM)
+#   test-arm-all   every ARM program tests/run_qemu.py runs, evo-rsprobe among them, which needs make rust first (ARM)
 #   test-host      the tests that run on the PC itself (host compiler, libdbus-1-dev, dbus, protoc, python3-protobuf),
 #                  one target each, so give it -j (make check does); as root, also tools/setup.sh in a chroot, with BUSYBOX=$(sh tests/build_busybox.sh)
 #   check          what CI runs without a copy of the car's system: style, verify_core, verify_repo, verify_tests,
@@ -73,7 +75,7 @@ VIDEO_LIBS = -l:libxsvideo.so.4 -l:libdrm_omap.so.1 -l:libdrm.so.2 -lpthread -lr
         tests/evo-check-host test-arm-all test-pb-arm-build test-sdr-arm-build test-kombi-arm-build \
         test-session-silence-arm-build test-presentation-arm-build test-wireless-lifecycle-arm-build \
         test-gps-arm-build test-trial-arm-build test-hmiapp-arm-build test-spawn-arm-build test-lm-cli-arm-build \
-        test-phone-arm-build
+        test-phone-arm-build rust record-capture-golden record-ric-golden record-check-golden
 all: daemon evo-trial hmiapp
 
 %.o: %.cpp
@@ -105,15 +107,37 @@ hmiapp/libAAEntryNav.so: $(HMI_OBJ)
 
 # Read-only diagnostics, run by hand on the car; neither is part of a release.
 dev-tools: evo-check evo-capture evo-ric evo-sound evo-usb evo-mfl
+# RUST_TOOLS takes the named tools from their Rust ports instead (rust/, docs/rust-port.md), copied from build/rust
+# (make rust first): evo-capture, evo-ric and evo-check, each a static musl program. Without it the C++ is built, as
+# before. The three are phony, so that a switch either way always replaces the program that is there.
+RUST_TOOLS ?=
+.PHONY: evo-capture evo-ric evo-check
+rust-tool = $(filter $(1),$(RUST_TOOLS))
+# Read-only Bluetooth, D-Bus, IVI scene and system checks (tools/evo_check.cpp).
+ifneq ($(call rust-tool,evo-check),)
+evo-check: build/rust/evo-check
+	cp $< $@
+else
 evo-check: $(CHECK_OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDSHLIB) -l:libdbus-1.so.3 -lpthread -lrt
+endif
 # Passive SOME/IP recorder (tools/evo_capture.cpp: receive only, nothing sent).
+ifneq ($(call rust-tool,evo-capture),)
+evo-capture: build/rust/evo-capture
+	cp $< $@
+else
 evo-capture: $(CAPTURE_OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDSHLIB) -lrt
+endif
 # Passive recorder of the cluster guidance calls on the session bus (tools/evo_ric.cpp: it listens, and sends
 # nothing to BMW's programs), with tools/ric_capture.sh to run it from a laptop on the ENET cable.
+ifneq ($(call rust-tool,evo-ric),)
+evo-ric: build/rust/evo-ric
+	cp $< $@
+else
 evo-ric: $(RIC_OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDSHLIB) -l:libdbus-1.so.3 -lpthread -lrt
+endif
 # Steering wheel buttons, by hand (tools/evo_mfl.cpp): a copy of 0x15.02 and read-only Gets, printed.
 evo-mfl: $(MFL_OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDSHLIB) -ldl -lrt
@@ -125,6 +149,26 @@ evo-sound: $(SOUND_OBJ)
 # Android Auto's cable link by hand (tools/evo_usb.cpp): the kernel's usbfs, and D-Bus to read the car's Bluetooth.
 evo-usb: $(USB_TOOL_OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDSHLIB) -l:libdbus-1.so.3 -lpthread -lrt
+
+# ---- Rust (rust/, docs/rust-port.md) --------------------------------------------------------------------------------
+# Static ARMv7 hard-float programs, linked by Rust's own rust-lld against the target's musl: no cross compiler, nothing
+# from the car's glibc, so this runs on the PC itself, not in the build image. tools/build_rust.py runs the tests on the
+# PC, then puts the programs in build/rust and their tests built for ARM in build/rust/tests, for tests/run_qemu.py.
+# From WSL on Windows: make rust CARGO=cargo.exe.
+rust:
+	python3 tools/build_rust.py
+# glibc Rust, for a program that must load a car library: build_rust.py builds the staticlib for
+# armv7-unknown-linux-gnueabihf into build/rust, and this links it in the build image with GCC 4.7 and a C main against
+# the copy of the car's system, like every C++ program (ARM). evo-rsprobe checks std and the car's libraries from such
+# a program; it replaces nothing and ships in no release. std needs libdl, libpthread, librt, libm and libgcc_s.
+CC = arm-linux-gnueabihf-gcc
+RUST_GLIBC_LIBS = -ldl -lpthread -lrt -lm -lgcc_s -lc
+evo-rsprobe: rust/evo-rsprobe/main.c build/rust/libevo_rsprobe.a
+	$(CC) $(ARCH) -O2 -Wall -Wextra -o $@ $^ -s -Wl,--gc-sections $(LDSHLIB) -l:libssl.so.1.0.0 -l:libcrypto.so.1.0.0 \
+	    $(RUST_GLIBC_LIBS)
+build/rust/%:
+	@echo "build/rust/$* is missing: build the Rust ports with make rust (or python3 tools/build_rust.py) first" >&2
+	@exit 1
 
 # Checks run on the PC. verify_binary and verify_wireless need the ARM programs and the copy of the car's system.
 verify_repo:
@@ -182,7 +226,7 @@ HOST_TESTS = \
     host-media-key-jump host-wheel-roller host-evo-audio host-aa-frame host-played-acks host-aa-messages host-tcp-server \
     host-session-phone host-wireless-phone host-parsers host-alps-spp host-bluez-adapter host-kombi-phone host-kombi-display \
     host-kombi-graph host-kombi-guide host-kombi-client host-kombi-nav host-bmw-guidance host-kombi-golden \
-    host-evo-gps host-gps-wire-oracle host-evo-capture host-evo-ric
+    host-evo-gps host-gps-wire-oracle host-evo-capture host-capture-golden host-evo-ric host-ric-golden host-check-golden
 .PHONY: $(HOST_TESTS) tests/fake-vmostclient.so tests/fake-asound.so
 test-host: $(HOST_TESTS)
 
@@ -372,9 +416,39 @@ host-gps-wire-oracle: host-evo-gps
 host-evo-capture:
 	$(HOST_CXX) $(HOST_FLAGS) tools/evo_capture.cpp -o tests/test-evo-capture
 	./tests/test-evo-capture --selftest
+# The C++ recorder still gives what tests/fixtures/evo_capture holds, which its Rust port is checked against
+# (rust/evo-capture/tests/golden.rs). make record-capture-golden writes them again, only for a change meant to be made.
+host-capture-golden:
+	$(HOST_CXX) $(HOST_FLAGS) tests/test_capture_golden.cpp -o tests/test-capture-golden
+	./tests/test-capture-golden tests/fixtures/evo_capture
+record-capture-golden:
+	$(HOST_CXX) $(HOST_FLAGS) tests/test_capture_golden.cpp -o tests/test-capture-golden-record
+	./tests/test-capture-golden-record tests/fixtures/evo_capture --record
 host-evo-ric:
 	$(HOST_CXX) $(HOST_FLAGS) tools/evo_ric.cpp $(HOST_DBUS) -o tests/test-evo-ric
 	env -u XDG_RUNTIME_DIR dbus-run-session -- ./tests/test-evo-ric --selftest
+# The C++ evo-ric still gives what tests/fixtures/evo_ric and the D-Bus messages of tests/fixtures/dbus hold, which its
+# Rust port is checked against (rust/evo-ric/tests/golden.rs). make record-ric-golden writes them again, only for a
+# change meant to be made.
+host-ric-golden:
+	$(HOST_CXX) $(HOST_FLAGS) tests/test_ric_golden.cpp $(HOST_DBUS) -o tests/test-ric-golden
+	env -u XDG_RUNTIME_DIR dbus-run-session -- ./tests/test-ric-golden tests/fixtures
+# The C++ evo-check still gives what tests/fixtures/evo_check holds (rust/evo-check/tests/golden.rs): its dump of the
+# D-Bus corpus, its Alps configuration summary, and what its Alps link sends and logs against a fake Alps service.
+CHECK_GOLDEN_SRC = tests/test_check_golden.cpp platform/alps_spp.cpp platform/alps_spp_codec.cpp platform/evo_process.cpp
+host-check-golden:
+	$(HOST_CXX) $(HOST_FLAGS) $(CHECK_GOLDEN_SRC) $(HOST_DBUS) -o tests/test-check-golden
+	env -u XDG_RUNTIME_DIR dbus-run-session -- sh -c \
+	    'DBUS_SYSTEM_BUS_ADDRESS="$$DBUS_SESSION_BUS_ADDRESS" ./tests/test-check-golden tests/fixtures'
+record-check-golden:
+	mkdir -p tests/fixtures/evo_check/alps
+	$(HOST_CXX) $(HOST_FLAGS) $(CHECK_GOLDEN_SRC) $(HOST_DBUS) -o tests/test-check-golden-record
+	env -u XDG_RUNTIME_DIR dbus-run-session -- sh -c \
+	    'DBUS_SYSTEM_BUS_ADDRESS="$$DBUS_SESSION_BUS_ADDRESS" ./tests/test-check-golden-record tests/fixtures --record'
+record-ric-golden:
+	mkdir -p tests/fixtures/dbus tests/fixtures/evo_ric
+	$(HOST_CXX) $(HOST_FLAGS) tests/test_ric_golden.cpp $(HOST_DBUS) -o tests/test-ric-golden-record
+	env -u XDG_RUNTIME_DIR dbus-run-session -- ./tests/test-ric-golden-record tests/fixtures --record
 
 # Root only (AF_PACKET): sudo make test-touch-live. Loopback traffic, no other interface touched.
 test-touch-live:
@@ -386,7 +460,7 @@ test-touch-live:
 test-arm-all: dev-tools test-pb-arm-build test-sdr-arm-build test-kombi-arm-build test-session-silence-arm-build \
               test-presentation-arm-build test-wireless-lifecycle-arm-build test-gps-arm-build test-trial-arm-build \
               test-hmiapp-arm-build test-spawn-arm-build test-lm-cli-arm-build test-phone-arm-build \
-              test-control-arm-build
+              test-control-arm-build evo-rsprobe
 
 test-pb-arm-build:
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) tests/test_pb.cpp -o tests/test-pb-arm $(LDSHLIB) -lrt
@@ -453,7 +527,7 @@ test-wireless-lifecycle-arm-build: $(CORE_OBJ) $(LIFECYCLE_OBJ)
 	    -Wl,--gc-sections -o tests/test-wireless-lifecycle-arm $(LDSHLIB) $(VIDEO_LIBS) -l:libssl.so.1.0.0 -l:libcrypto.so.1.0.0 -l:libdbus-1.so.3 -ldl
 
 clean:
-	rm -f $(ARM_OBJ) $(ARM_OBJ:.o=.d) $(HMI_OBJ) $(HMI_OBJ:.o=.d) aa-entrynav evo-trial evo-check evo-capture evo-ric evo-sound evo-usb \
+	rm -f $(ARM_OBJ) $(ARM_OBJ:.o=.d) $(HMI_OBJ) $(HMI_OBJ:.o=.d) aa-entrynav evo-trial evo-check evo-capture evo-ric evo-sound evo-usb evo-rsprobe \
 	    hmiapp/libAAEntryNav.so hmiapp/AAEntryNav_ALL_Texts.zip hmiapp/AAEntryNav_ALL_Images.zip \
 	    tests/test-* tests/evo-check-host tests/*.so
 

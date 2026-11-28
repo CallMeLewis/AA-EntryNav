@@ -1,0 +1,17 @@
+
+=== Interfaces (IPv4 packets seen)
+  vbr0.73      3
+IPv4 3, SOME/IP messages 3, SSH ignored 0
+
+=== SOME/IP-SD (distinct offers and subscriptions)
+  x1     OFFER          svc 0x1234 inst 0x0001 major 1 minor 0  [udp 160.48.199.119:30490 > 224.244.224.245:30490 vbr0.73] -> udp 160.48.199.119:30558
+
+=== SOME/IP (service, method or event)
+svc 0x1234 method 0x8001 NOTIFICATION (iface v1): 2 messages, 40 bytes
+    flow udp 160.48.199.119:30558 > 160.48.199.20:30501 vbr0.73
+    sample ababababab
+    sample cdcdcd
+svc 0xffff method 0x8100 NOTIFICATION (iface v1): 1 messages, 56 bytes
+    flow udp 160.48.199.119:30490 > 224.244.224.245:30490 vbr0.73
+    sample c000000000000010010000101234000101000003000000000000000c00090400a030c7770011775e
+PASS evo-capture selftest (SD offer + endpoint, 2 SOME/IP in one datagram, non-SOME/IP ignored, wrapping SD lengths refused)

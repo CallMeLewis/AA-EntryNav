@@ -1,0 +1,24 @@
+0 call s=101 rs=0 :1.20 -> BMW.RueKoIC /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_setResource sig=uui(yv) args=u:7 u:50331648 i:3 (y:9,v<s>s:"Main St")
+37 return s=102 rs=101 :1.5 -> :1.20 - -.- sig=i args=i:0
+74 error s=103 rs=41 :1.6 -> :1.21 - -.org.freedesktop.DBus.Error.UnknownMethod sig=s args=s:"No \"such\" method"
+111 signal s=104 rs=0 :1.5 -> - /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_statusChanged sig=u args=u:4294967295
+259 call s=108 rs=0 :1.20 -> - /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_broadcast sig= args=
+296 call s=109 rs=0 :1.20 -> :1.50 /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_setNavigationData sig= args=
+333 call s=110 rs=0 :1.20 -> :1.51 /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_setNavigationData sig= args=
+370 call s=111 rs=0 :1.20 -> :1.52 /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_setNavigationData sig= args=
+407 call s=112 rs=0 :1.20 -> :1.53 /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_setNavigationData sig= args=
+444 call s=113 rs=0 :1.20 -> :1.54 /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_setNavigationData sig= args=
+481 call s=114 rs=0 :1.20 -> :1.55 /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_setNavigationData sig= args=
+518 call s=115 rs=0 :1.20 -> :1.56 /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_setNavigationData sig= args=
+555 call s=116 rs=0 :1.20 -> :1.57 /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_setNavigationData sig= args=
+592 call s=117 rs=0 :1.20 -> :1.58 /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_setNavigationData sig= args=
+629 call s=118 rs=0 :1.20 -> :1.59 /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_setNavigationData sig= args=
+666 call s=119 rs=0 :1.20 -> :1.60 /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_setNavigationData sig= args=
+703 call s=120 rs=0 :1.20 -> :1.61 /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_setNavigationData sig= args=
+740 call s=121 rs=0 :1.20 -> :1.62 /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_setNavigationData sig= args=
+777 call s=122 rs=0 :1.20 -> :1.63 /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_setNavigationData sig= args=
+814 call s=123 rs=0 :1.20 -> :1.64 /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_setNavigationData sig= args=
+851 call s=124 rs=0 :1.20 -> :1.65 /BMW/RueKoIC BMW.INFOTAINMENT.REMOTEINSTRUMENTCLUSTER.RICServiceGuidance.ric_setNavigationData sig= args=
+# size limit of 3000 bytes reached: nothing more is recorded
+# counts: 132 calls, 43 answers, 35 signals, 2890 bytes, 189 dropped, full 1
+# answers matched from: :1.50 :1.51 :1.52 :1.53 :1.54 :1.55 :1.56 :1.57 :1.58 :1.59 :1.60 :1.61 :1.62 :1.63 :1.64 :1.65 BMW.Kombi BMW.NBTEvo BMW.RueKoIC

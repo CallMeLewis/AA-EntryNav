@@ -39,6 +39,7 @@ the same session over USB.
 | `platform/` | The service and everything specific to the EntryNav2: picture, inputs, Bluetooth, Wi-Fi, USB, sound, cluster |
 | `hmiapp/` | The iDrive app, `libAAEntryNav.so`, with its screens, texts and images |
 | `tools/` | The supervisor, `setup.sh`, developer tools for the car, and the build, release and check scripts |
+| `rust/` | The Rust ports, each beside its C++ original until it has matched it in the car ([rust-port.md](rust-port.md)) |
 | `tests/` | The PC tests, the ARM tests run under QEMU, and their fixtures |
 
 ### `core/`
@@ -146,13 +147,21 @@ the same session over USB.
 - **Developer tools for the car**, built by `make dev-tools` and run by hand from `/tmp`, never installed:
   `evo_check.cpp` (Bluetooth and network), `evo_capture.cpp` (records SOME/IP), `evo_sound.cpp` (sound outputs),
   `evo_usb.cpp` (the cable link one step at a time) and `evo_mfl.cpp` (what each steering wheel button sends).
-  `car_sound_probe.sh` records what each sound source opens.
+  `car_sound_probe.sh` records what each sound source opens. `rust/evo-capture` is the Rust port of `evo_capture.cpp`,
+  which `make dev-tools RUST_TOOLS=evo-capture` uses in its place.
+  `rust/evo-ric` and `rust/evo-check` port `evo_ric.cpp` and `evo_check.cpp`, and `RUST_TOOLS="evo-ric evo-check"`
+  selects them the same way. Both speak D-Bus through `rust/aa-dbus`, a client of our own, so they stay static
+  programs with no libdbus. The Bluetooth modes of `evo-check` carry the read-only monitor mode of
+  `platform/alps_spp.cpp`. `rust/evo-rsprobe` is the first glibc Rust program. `make evo-rsprobe` links its Rust
+  staticlib with GCC 4.7 against the car's libraries, and the program checks that std and each library the service
+  needs work from Rust.
 - **On the PC.** `backup_headunit.sh` copies the car's system and only reads on the car. `pc_headunit.cpp` runs the
   real session against a phone's head unit server over `adb`, with no car at all.
 - **Releases.** `package_release.py` builds the archive ([installation](INSTALLATION.md)). `publish_release.py`
   publishes it to Flare Drive's plugin catalog (through Flare Drive's `flare-publish`) and to GitHub, and `release_version.py` defines which version numbers it accepts and their
   order.
-- **Checks.** `verify_arm.py` builds the ARM programs and runs everything that needs the copy of the car's system.
+- **Checks.** `verify_arm.py` builds the Rust ports (`build_rust.py`) and the ARM programs and runs everything that
+  needs the copy of the car's system.
   `verify_binary.py` and `verify_wireless.py` check the ARM programs against the car's libraries and the approved
   fingerprints. `verify_repo.py` checks that nothing private or compiled reaches git, `verify_core.py` checks file
   headers and the licence notice, and `verify_tests.py` checks that every test runs somewhere. `format_sources.py`
@@ -161,7 +170,12 @@ the same session over USB.
 ## How it is tested
 
 `make test-host` runs the logic on the PC, and `tests/run_qemu.py` runs the ARM programs under QEMU with the car's own
-libraries. `make verify_binary verify_wireless` then checks the programs that ship.
+libraries. `make verify_binary verify_wireless` then checks the programs that ship. Each Rust port is checked against
+fixtures recorded from its C++ original (`tests/test_capture_golden.cpp` for `evo-capture`), on the PC by
+`cargo test` and on ARM by `run_qemu.py`, which also runs it beside the C++ and compares the two.
+For the D-Bus tools, `run_qemu.py` starts the car's own `dbus-daemon` under QEMU on a private socket. Both `evo-ric`
+and its C++ version record the same corpus on that bus. Each `evo-check` runs alone on its own bus against a fake
+Alps service (`rust/evo-check/examples/alps_fake.rs`), so both see the same unique names.
 
 Four tests compare against frozen records, byte for byte, and a change to those bytes has to be deliberate:
 

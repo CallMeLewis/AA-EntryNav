@@ -58,6 +58,11 @@ def main():
         if not any(v.startswith(prefix) for v in versions):
             raise SystemExit(f"FAIL: aa-entrynav lists no {prefix} version")
     check_help(binary, "--monitor")
+    # glibc Rust (docs/rust-port.md, step 2): the same limits for a Rust staticlib linked by GCC 4.7. tests/run_qemu.py
+    # runs it.
+    _, probe_versions, _ = check_arm_elf(ROOT / "evo-rsprobe")
+    if not any(v.startswith("GLIBC_") for v in probe_versions):
+        raise SystemExit("FAIL: evo-rsprobe lists no GLIBC_ version")
     report = {
         "checked_utc": datetime.now(timezone.utc).isoformat(),
         "binary": binary.name,
@@ -74,6 +79,7 @@ def main():
     output.parent.mkdir(exist_ok=True)
     output.write_text(json.dumps(report, indent=2) + "\n")
     print("PASS ARMv7/hard-float, GLIBC <= 2.15, GLIBCXX <= 3.4.17, loads under QEMU with the head unit's libraries")
+    print("PASS evo-rsprobe (glibc Rust): ARMv7/hard-float, GLIBC <= 2.15")
     print(f"SHA256 {report['sha256']} ({report['bytes']} octets)")
     print(output)
 

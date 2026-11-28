@@ -1,0 +1,12 @@
+<evolution>
+<configuration><name>"spp_data_interface"</name><id>6203</id><instance>0x00</instance><value>0x01</value></configuration>
+<configuration><name>"supported_services"</name><id>0x6000</id><instance>0x0</instance><value>0x12345678901234567</value></configuration>
+<configuration><name>"supported_services"</name><id>0x60g0</id><instance>0x00</instance><value>0x01</value></configuration>
+<configuration><name>"spp_data_interface"</name><id>0x</id><instance>0x00</instance><value>0x01</value></configuration>
+<configuration><name>"spp_data_interface"</name><instance>0x00</instance><value>0x01</value></configuration>
+<configuration><name>"spp_data_interface"</name><id>0xABCdef</id><instance>0x05</instance><value>0x123456789012345F</value></configuration>
+<configuration><name>spp_data_interface</name><id>0x6203</id><instance>0x00</instance><value>0x01</value></configuration>
+<configuration><name>"spp_data_interface"</name><id>0x6203</id></id><instance>0x00</instance><value>0x01</value></configuration>
+<configuration><id>0x1</id><name>"supported_services"</name><value>0x2</value><instance>0x3</instance></configuration>
+<configuration><name>"spp_data_interface"</name><id>0x6203</id><instance>0x00</instance><value>0x01</value>
+</evolution>

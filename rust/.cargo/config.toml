@@ -1,0 +1,12 @@
+# Copyright (c) 2026 CallMeLewis
+# The head unit: ARMv7 Cortex-A15, hard float, kernel 3.12. Linked fully static against the target's own musl with
+# rust-lld, so the programs need nothing from the car's glibc 2.15 and no cross compiler. The same setup as
+# EntryNav-Apps' rust/.cargo/config.toml.
+[target.armv7-unknown-linux-musleabihf]
+linker = "rust-lld"
+rustflags = ["-C", "linker-flavor=ld.lld", "-C", "link-self-contained=yes", "-C", "target-cpu=cortex-a15"]
+
+# glibc Rust: staticlibs only, which need no linker here. The build image's GCC 4.7 links them against the copy of the
+# car's system (the Makefile's evo-rsprobe rule), so they need nothing newer than the car's glibc 2.15.
+[target.armv7-unknown-linux-gnueabihf]
+rustflags = ["-C", "target-cpu=cortex-a15"]

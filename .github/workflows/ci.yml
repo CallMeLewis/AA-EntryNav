@@ -1,5 +1,6 @@
-# Checks that need no copy of the car's system: style, repository content, PC tests.
-# The ARM build links against the car's libraries (BMW files), so it runs on a developer's machine, not here.
+# Checks that need no copy of the car's system: style, repository content, PC tests, and the Rust ports' tests.
+# The ARM build links against the car's libraries (BMW files), so it runs on a developer's machine, not here, and so do
+# the Rust tests built for the head unit's ARM target (tools/verify_arm.py).
 name: CI
 
 # A push or pull request that changes documentation only (Markdown files and docs/) starts no run. NOTICE.md is not
@@ -58,4 +59,25 @@ jobs:
         # The installer test needs a BusyBox that behaves like the car's; Debian's packages do not. The image holds the
         # one tests/build_busybox.sh builds.
         run: make -j"$(($(nproc) * 3))" --output-sync=target test-host HOST_CXX=g++ BUSYBOX=/opt/busybox/busybox
+
+  rust:
+    name: Rust tests, Clippy and rustfmt
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The runner's own rustup installs the version rust/rust-toolchain.toml pins, so no toolchain action is needed.
+      - name: Install the pinned Rust, Clippy and rustfmt
+        run: |
+          rustup toolchain install --no-self-update
+          rustup component add clippy rustfmt
+      - name: Formatting
+        run: cargo fmt --check
+      - name: The tests of every crate, against the fixtures recorded from the C++
+        run: cargo test --locked
+      - name: Clippy on every crate and target, warnings as errors
+        run: cargo clippy --locked --all-targets -- -D warnings
 

@@ -1,0 +1,10 @@
+[package]
+name = "glibc-compat"
+description = "What Rust's std calls that the car's glibc 2.15 lacks, for every glibc Rust program"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "glibc_compat"

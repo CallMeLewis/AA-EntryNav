@@ -1,0 +1,20 @@
+[package]
+name = "evo-ric"
+description = "The passive recorder of the cluster guidance calls of tools/evo_ric.cpp, on aa-dbus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "evo-ric"
+path = "src/main.rs"
+
+[dependencies]
+aa-dbus = { path = "../aa-dbus" }
+evo-text = { path = "../evo-text" }
+
+# The C library's priority, signal, clock and mkdtemp calls, for the program on Linux; the recording's lines and
+# filter build anywhere.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

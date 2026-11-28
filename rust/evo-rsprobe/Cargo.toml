@@ -1,0 +1,16 @@
+[package]
+name = "evo-rsprobe"
+description = "What Rust's std and the car's libraries do in a glibc-linked Rust program on the head unit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# A staticlib for armv7-unknown-linux-gnueabihf, linked by the build image's GCC 4.7 with main.c (make evo-rsprobe).
+# The rlib lets its tests call the std checks on the PC.
+[lib]
+name = "evo_rsprobe"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+glibc-compat = { path = "../glibc-compat" }

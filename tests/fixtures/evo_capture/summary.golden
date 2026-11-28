@@ -1,0 +1,267 @@
+
+=== Interfaces (IPv4 packets seen)
+  eth0         114
+  vbr0.73      139
+  wlan0        124
+IPv4 300, SOME/IP messages 90, SSH ignored 2
+
+=== SOME/IP-SD (distinct offers and subscriptions)
+  x1     ?              svc 0x0102 inst 0x0304 major 5 minor 6  [udp 160.48.199.119:30490 > 224.244.224.245:30490 vbr0.73] -> tcp 160.48.199.119:30501
+  x1     ?              svc 0x0102 inst 0x0304 major 5 minor 6  [udp 160.48.199.20:30490 > 224.244.224.245:30490 wlan0] -> tcp 160.48.199.119:30501
+  x1     ?              svc 0x0102 inst 0x0304 major 5 minor 6  [udp 160.48.199.30:30490 > 224.244.224.245:30490 vbr0.73] -> udp 160.48.199.30:30600
+  x1     FIND           svc 0xb006 inst 0xffff major 255 minor 4294967295  [udp 160.48.199.119:30490 > 224.244.224.245:30490 vbr0.73]
+  x1     FIND           svc 0xb006 inst 0xffff major 255 minor 4294967295  [udp 160.48.199.20:30490 > 224.244.224.245:30490 wlan0]
+  x1     FIND           svc 0xb006 inst 0xffff major 255 minor 4294967295  [udp 160.48.199.30:30490 > 224.244.224.245:30490 vbr0.73]
+  x1     OFFER          svc 0x1234 inst 0x0001 major 1 minor 0  [udp 160.48.199.119:30490 > 224.244.224.245:30490 eth0]
+  x1     OFFER          svc 0x1234 inst 0x0001 major 1 minor 0  [udp 160.48.199.119:30490 > 224.244.224.245:30490 vbr0.73] -> udp 160.48.199.119:30558
+  x1     OFFER          svc 0xb006 inst 0x0001 major 1 minor 0  [udp 160.48.199.119:30490 > 224.244.224.245:30490 vbr0.73] -> tcp 160.48.199.119:30501 -> udp 224.244.224.245:30490
+  x1     OFFER          svc 0xb006 inst 0x0001 major 1 minor 0  [udp 160.48.199.20:30490 > 224.244.224.245:30490 wlan0] -> tcp 160.48.199.119:30501 -> udp 224.244.224.245:30490
+  x1     OFFER          svc 0xb006 inst 0x0001 major 1 minor 0  [udp 160.48.199.30:30490 > 224.244.224.245:30490 vbr0.73] -> udp 160.48.199.30:30600
+  x1     OFFER          svc 0xb006 inst 0x0002 major 1 minor 1  [udp 160.48.199.119:30490 > 224.244.224.245:30490 vbr0.73]
+  x1     OFFER          svc 0xb006 inst 0x0002 major 1 minor 1  [udp 160.48.199.20:30490 > 224.244.224.245:30490 wlan0]
+  x1     OFFER          svc 0xb006 inst 0x0002 major 1 minor 1  [udp 160.48.199.30:30490 > 224.244.224.245:30490 vbr0.73]
+  x1     OFFER          svc 0xb007 inst 0x0001 major 2 minor 9  [udp 160.48.199.119:30490 > 224.244.224.245:30490 vbr0.73] -> udp 160.48.199.119:1
+  x1     STOP_OFFER     svc 0xb006 inst 0x0001 major 1 minor 7  [udp 160.48.199.119:30490 > 224.244.224.245:30490 vbr0.73] -> udp 224.244.224.245:30490
+  x1     STOP_OFFER     svc 0xb006 inst 0x0001 major 1 minor 7  [udp 160.48.199.20:30490 > 224.244.224.245:30490 wlan0] -> udp 224.244.224.245:30490
+  x1     STOP_OFFER     svc 0xb006 inst 0x0001 major 1 minor 7  [udp 160.48.199.30:30490 > 224.244.224.245:30490 vbr0.73]
+  x1     STOP_SUBSCRIBE svc 0xb006 inst 0x0001 major 1 eventgroup 0x0001  [udp 160.48.199.119:30490 > 224.244.224.245:30490 vbr0.73]
+  x1     STOP_SUBSCRIBE svc 0xb006 inst 0x0001 major 1 eventgroup 0x0001  [udp 160.48.199.20:30490 > 224.244.224.245:30490 wlan0]
+  x1     STOP_SUBSCRIBE svc 0xb006 inst 0x0001 major 1 eventgroup 0x0001  [udp 160.48.199.30:30490 > 224.244.224.245:30490 vbr0.73]
+  x1     SUBSCRIBE      svc 0xb006 inst 0x0001 major 1 eventgroup 0x0001  [udp 160.48.199.119:30490 > 224.244.224.245:30490 vbr0.73] -> tcp 160.48.199.119:30501 -> ? 160.48.199.20:1
+  x1     SUBSCRIBE      svc 0xb006 inst 0x0001 major 1 eventgroup 0x0001  [udp 160.48.199.20:30490 > 224.244.224.245:30490 wlan0] -> tcp 160.48.199.119:30501 -> ? 160.48.199.20:1
+  x1     SUBSCRIBE      svc 0xb006 inst 0x0001 major 1 eventgroup 0x0001  [udp 160.48.199.30:30490 > 224.244.224.245:30490 vbr0.73] -> udp 160.48.199.30:30600
+  x1     SUBSCRIBE_ACK  svc 0xb006 inst 0x0001 major 1 eventgroup 0x0002  [udp 160.48.199.119:30490 > 224.244.224.245:30490 vbr0.73] -> opt-type-0x01 -> opt-type-0x04
+  x1     SUBSCRIBE_ACK  svc 0xb006 inst 0x0001 major 1 eventgroup 0x0002  [udp 160.48.199.20:30490 > 224.244.224.245:30490 wlan0] -> opt-type-0x01 -> opt-type-0x04
+  x1     SUBSCRIBE_ACK  svc 0xb006 inst 0x0001 major 1 eventgroup 0x0002  [udp 160.48.199.30:30490 > 224.244.224.245:30490 vbr0.73]
+  x1     SUBSCRIBE_NACK svc 0xb006 inst 0x0001 major 1 eventgroup 0x0002  [udp 160.48.199.119:30490 > 224.244.224.245:30490 vbr0.73]
+  x1     SUBSCRIBE_NACK svc 0xb006 inst 0x0001 major 1 eventgroup 0x0002  [udp 160.48.199.20:30490 > 224.244.224.245:30490 wlan0]
+  x1     SUBSCRIBE_NACK svc 0xb006 inst 0x0001 major 1 eventgroup 0x0002  [udp 160.48.199.30:30490 > 224.244.224.245:30490 vbr0.73]
+
+=== SOME/IP (service, method or event)
+svc 0x1234 method 0x8001 NOTIFICATION (iface v1): 2 messages, 40 bytes
+    flow udp 160.48.199.119:30558 > 160.48.199.20:30501 vbr0.73
+    sample ababababab
+    sample cdcdcd
+svc 0xb006 method 0x0002 NOTIFICATION (iface v1): 1 messages, 18 bytes
+    flow udp 160.48.199.119:1 > 160.48.199.20:2 vbr0.73
+    sample 0909
+svc 0xb006 method 0x0010 REQUEST (iface v1): 1 messages, 20 bytes
+    flow tcp 192.168.10.4:41000 > 160.48.199.119:30509 wlan0
+    sample 01010101
+svc 0xb006 method 0x0010 RESPONSE (iface v1): 1 messages, 22 bytes
+    flow tcp 192.168.10.4:41000 > 160.48.199.119:30509 wlan0
+    sample 020202020202
+svc 0xb006 method 0x0011 REQUEST (iface v1): 1 messages, 20 bytes
+    flow tcp 192.168.10.4:41000 > 160.48.199.119:30509 wlan0
+    sample 03030303
+svc 0xb006 method 0x0012 REQUEST (iface v1): 1 messages, 216 bytes
+    flow tcp 192.168.10.4:41000 > 160.48.199.119:30509 wlan0
+    sample 0404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404
+svc 0xb006 method 0x0013 REQUEST (iface v1): 1 messages, 18 bytes
+    flow tcp 192.168.10.4:41000 > 160.48.199.119:30509 wlan0
+    sample 0505
+svc 0xb006 method 0x0100 REQUEST (iface v0): 1 messages, 16 bytes
+    flow udp 160.48.199.119:40000 > 160.48.199.20:30501 vbr0.73
+    sample 
+svc 0xb006 method 0x0101 REQUEST_NO_RETURN (iface v1): 1 messages, 23 bytes
+    flow udp 160.48.199.119:40001 > 160.48.199.20:30501 eth0
+    sample 01010101010101
+svc 0xb006 method 0x0102 NOTIFICATION (iface v2): 1 messages, 30 bytes
+    flow udp 160.48.199.119:40002 > 160.48.199.20:30501 wlan0
+    sample 0202020202020202020202020202
+svc 0xb006 method 0x0103 RESPONSE (iface v3): 1 messages, 37 bytes
+    flow udp 160.48.199.119:40003 > 160.48.199.20:30501 vbr0.73
+    sample 030303030303030303030303030303030303030303
+svc 0xb006 method 0x0104 ERROR (iface v0): 1 messages, 44 bytes
+    flow udp 160.48.199.119:40004 > 160.48.199.20:30501 eth0
+    sample 04040404040404040404040404040404040404040404040404040404
+svc 0xb006 method 0x0105 NOTIFICATION (iface v1): 1 messages, 51 bytes
+    flow udp 160.48.199.119:40005 > 160.48.199.20:30501 wlan0
+    sample 0505050505050505050505050505050505050505050505050505050505050505050505
+svc 0xb006 method 0x0106 ? (iface v2): 1 messages, 58 bytes
+    flow udp 160.48.199.119:40006 > 160.48.199.20:30501 vbr0.73
+    sample 060606060606060606060606060606060606060606060606060606060606060606060606060606060606
+svc 0xb006 method 0x0107 ? (iface v3): 1 messages, 65 bytes
+    flow udp 160.48.199.119:40007 > 160.48.199.20:30501 eth0
+    sample 07070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707
+svc 0xb006 method 0x0108 RESPONSE (iface v0): 1 messages, 72 bytes
+    flow udp 160.48.199.119:40008 > 160.48.199.20:30501 wlan0
+    sample 0808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808
+svc 0xb006 method 0x0109 ERROR (iface v1): 1 messages, 79 bytes
+    flow udp 160.48.199.119:40009 > 160.48.199.20:30501 vbr0.73
+    sample 090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909
+svc 0xb006 method 0x0200 NOTIFICATION (iface v1): 1 messages, 16 bytes
+    flow udp 160.48.199.119:3 > 160.48.199.20:4 eth0
+    sample 
+svc 0xb006 method 0x0201 NOTIFICATION (iface v1): 1 messages, 112 bytes
+    flow udp 160.48.199.119:3 > 160.48.199.20:4 eth0
+    sample 5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a
+svc 0xb006 method 0x0202 NOTIFICATION (iface v1): 1 messages, 136 bytes
+    flow udp 160.48.199.119:3 > 160.48.199.20:4 eth0
+    sample a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5..
+svc 0xb006 method 0x0300 NOTIFICATION (iface v1): 3 messages, 60 bytes
+    flow udp 160.48.199.119:6 > 160.48.199.20:7 vbr0.73
+    sample 08080808
+    sample 08080808
+    sample 08080808
+svc 0xb006 method 0x8001 ? (iface v135): 1 messages, 49 bytes
+    flow tcp 28.183.44.33:13276 > 188.82.86.176:5397 eth0
+    sample 7d0bac3f0b970e4114e7490e8477297f07823a330905c784b5bbdd8ff82248307d
+svc 0xb006 method 0x8001 ? (iface v163): 1 messages, 234 bytes
+    flow tcp 200.120.135.212:52782 > 47.180.247.225:50265 wlan0
+    sample de5b03f3cf883e0a4bb64bf14f3085d29703099a9efbb3f5a1a31f4e9c48a8d24bf76b6d297944cb745dce5726ed673efb36296c7104f18dc2e35a0ceb1ec217a8c24397749bba3b8d34c26eeddbb95b509ab9ef343d9fd5d352067b2a234c0b..
+svc 0xb006 method 0x8001 ? (iface v175): 1 messages, 108 bytes
+    flow tcp 175.60.213.100:31074 > 78.5.48.108:62605 eth0
+    sample f4093e8afe8faeb0f63d8aa509cfdf8323c17927f04ee32cdb736bef11ec1b8d7e34bfdfce88e5846ce4d7d68504a2f3056412b4983fb3b8aa92d059661876b4b94f71a54e714cc8937b5578b22996d298f6dcb2f020b2b428a16533
+svc 0xb006 method 0x8001 ? (iface v191): 1 messages, 274 bytes
+    flow tcp 162.152.140.179:23375 > 41.239.89.118:65389 wlan0
+    sample 4e4034abaf0406be8c658204f28095fbad
+svc 0xb006 method 0x8001 ? (iface v20): 1 messages, 58 bytes
+    flow udp 155.24.222.168:11399 > 170.221.53.126:5623 eth0
+    sample 6954d2df8188743fa53e69edd1c00b16c11b78a6f11b89499c4cdd6bbff9ce37152f799a1cbaba3f0e25
+svc 0xb006 method 0x8001 ? (iface v40): 1 messages, 159 bytes
+    flow tcp 55.60.91.117:6398 > 43.104.71.255:47464 vbr0.73
+    sample 5ce42f6991bdc3e8d0d06e96e2f9dcb156d3783376bc6fd84fcead1eade6de3f1c9f6d38e75788c51b28186184efcc4aad470f7ae48e0cad33deb0616614a6d00bcb5cf76c61fc9296f0731c55556dd2352b55b081d05872465e629450b21f51..
+svc 0xb006 method 0x8001 ? (iface v47): 1 messages, 189 bytes
+    flow tcp 55.27.75.183:43729 > 62.195.103.130:22153 vbr0.73
+    sample e63de23715880078ed2dd5093a080c2588b5
+svc 0xb006 method 0x8001 ERROR (iface v133): 1 messages, 25 bytes
+    flow tcp 109.33.40.110:429 > 178.202.76.61:34619 eth0
+    sample 451cf5bf7e44c83fc5
+svc 0xb006 method 0x8001 ERROR (iface v177): 1 messages, 247 bytes
+    flow tcp 88.249.175.193:45693 > 163.124.86.108:19660 eth0
+    sample 43005c5f60528a566f12603acb6e9a179150b3b99d64e8ac8b18353bb69656733bcbc720f662c3ce83c947c83d2a0f1b417296936b4d19bb572694e0602ac30fa3452111fc23ec75062f1e851f96734e6144699ca9
+svc 0xb006 method 0x8001 ERROR (iface v191): 1 messages, 140 bytes
+    flow tcp 92.115.234.162:35897 > 235.79.218.52:37458 vbr0.73
+    sample 1cebd35cf29d7c4e0e8141910c
+svc 0xb006 method 0x8001 NOTIFICATION (iface v202): 2 messages, 306 bytes
+    flow tcp 55.177.201.167:2257 > 94.43.184.124:51394 eth0
+    flow udp 142.121.189.97:27528 > 16.27.230.81:30337 vbr0.73
+    sample 753d64780e3d93f6dfe78993b517f18d1b6939de5e388b428aa1d4376b80c0f78d71ba7f3bcfef8b82b74b962e057addca55e75ca402bfcfc629eeb2fda62040d415c07698d1fc1055f7be89d763b21eaab146cb193ca44c3121b91dbe3c3079..
+    sample 16469108cf86fc45ef060c2622014d4ad4740a0b30
+svc 0xb006 method 0x8001 NOTIFICATION (iface v244): 1 messages, 78 bytes
+    flow udp 139.65.151.207:112 > 188.228.70.129:36650 eth0
+    sample dbf0837d3a2a10b58dac1744504374d6be7ac3d6d49e5f724ebb6594a79db1e81cd0dfdca99f4a9a0a170f0fbb040ae6f7f2d78dbb2cd12ec3bf15b68a77
+svc 0xb006 method 0x8001 NOTIFICATION (iface v88): 1 messages, 89 bytes
+    flow udp 132.240.192.28:41748 > 198.154.52.121:2548 wlan0
+    sample 3933b07ee9b341a114641543b791868f8d47b17214527297863d656ce056e51bdea70f91fbfdbf7975e3914146a6e0132a52c9dc9fb32848df5599c2e7837777734adf53fe76ad02c5
+svc 0xb006 method 0x8001 NOTIFICATION (iface v95): 1 messages, 87 bytes
+    flow tcp 55.42.185.202:27405 > 251.20.37.220:60433 vbr0.73
+    sample f8bf7daa7b0543a970ccc9602172398b9b1180a5aa864aebda6c02597621d5ab8bbfaf5de5233caa0fe8e78f576bddc8c7c90ad02bdb1ae411407800c35251e04e2f91007eb0e4
+svc 0xb006 method 0x8001 REQUEST (iface v178): 1 messages, 81 bytes
+    flow tcp 244.139.127.130:45297 > 179.34.43.162:5407 wlan0
+    sample d12a9a54896102aed4941aca1dbf2f03919e4e761cac40ff6a279439e6099482bd0e4df4dbb48b6cec35da855b8e859d567b99cec677e2f55ac0ebad7d5002545a
+svc 0xb006 method 0x8001 REQUEST (iface v92): 1 messages, 182 bytes
+    flow udp 221.182.203.151:41927 > 251.171.151.158:25098 wlan0
+    sample 81bcc2f4fdb81c71e33a55b30feeaa461d4217756860584d0d35e99ae86c05e89573a9826f749175935c388dddd7db55e950761a12f4c5e975af438bee2d2e8f18d9803f51e0f5a8b32e0b961b6ffc95240ec5f02c3922b44dd98ead649d4766..
+svc 0xb006 method 0x8001 REQUEST_NO_RETURN (iface v120): 1 messages, 83 bytes
+    flow tcp 98.168.129.123:23929 > 162.120.34.110:1760 wlan0
+    sample 9f8b610013875a991838c9d5e82a4a1f80a838a49cbfb050b73b8ecf0ea76e8c
+svc 0xb006 method 0x8001 REQUEST_NO_RETURN (iface v37): 1 messages, 162 bytes
+    flow udp 64.225.232.135:56118 > 249.104.221.112:29662 wlan0
+    sample 34f8af754b8532d46bb93617713ff5ccf8856c3d5eb55777bdbc3146f246373698be65920d5177676bebe9818f38f66b14a39b73575994a375465cc74716306d6c340cdf3ecdac2adbcd8c1a1ce0e73ba072bad8c1aec0fe9c8177790d9619d4..
+svc 0xb006 method 0x8001 RESPONSE (iface v150): 1 messages, 119 bytes
+    flow tcp 83.50.28.233:51817 > 56.16.184.27:6182 eth0
+    sample 06bc4aa02654b4b668cc75a9274e498580c7ae164fe3dee8300dd6467e72523d56fecd99945d84e5d4fa736f710256418861a928f5c3a7af54934d2300ff579016f140c272154545b0d962642b67532c00ac94690b5360a7e8cab431f23b4c14..
+svc 0xb006 method 0x8001 RESPONSE (iface v250): 1 messages, 46 bytes
+    flow udp 68.37.238.14:21160 > 184.29.101.182:55310 eth0
+    sample a611d2c1586fb83f10c079ce696f12b9c1aa3f0d325a7b96992e04df9191
+svc 0xb006 method 0x8001 RESPONSE (iface v83): 1 messages, 171 bytes
+    flow tcp 182.12.183.119:42172 > 134.224.93.156:53102 wlan0
+    sample 6a810eead0ced44aa8782acc60795dcb228d7964db324a7337a25c94a1dafa224696313a1251cdb8b14859388e772315d69a356c752d5c19176b23b82751d7a4d39b84fa05c4f6966909b9146d6618cf3b9720e4c0189d2f
+svc 0xb006 method 0x8005 NOTIFICATION (iface v1): 8 messages, 152 bytes
+    flow udp 160.48.199.119:50000 > 160.48.199.20:30501 vbr0.73
+    flow udp 160.48.199.119:50001 > 160.48.199.20:30501 eth0
+    flow udp 160.48.199.119:50002 > 160.48.199.20:30501 wlan0
+    flow udp 160.48.199.119:50003 > 160.48.199.20:30501 vbr0.73
+    flow udp 160.48.199.119:50004 > 160.48.199.20:30501 eth0
+    flow udp 160.48.199.119:50005 > 160.48.199.20:30501 wlan0
+    sample 303030
+    sample 313131
+    sample 323232
+svc 0xb006 method 0x8100 ? (iface v119): 1 messages, 169 bytes
+    flow tcp 118.87.10.6:30121 > 19.221.172.223:32980 vbr0.73
+    sample 372302401cecc62f0befa14dcd083fd8f1d20bcac1ab32df4aada09558b50126775ec08ff2060b8cd6c7cb98ef7eaff1c8c62291affd4f34ae3d235891634937e60a2fcef790ffd9d10fa6d34064d0f9d02ae847ccbf1b79413d550bfb814238..
+svc 0xb006 method 0x8100 ? (iface v147): 1 messages, 259 bytes
+    flow tcp 51.247.98.28:57862 > 84.97.154.186:22257 wlan0
+    sample bac584b65629c979d42d26d88ffb57e0a480d85def67e4db0c1e78a556cf50c8ea67e710a4927a0820bb05fdb90f44fc8c7ab2ce75a88d020f04cfe2b8bb
+svc 0xb006 method 0x8100 ? (iface v19): 1 messages, 45 bytes
+    flow tcp 0.223.58.165:50031 > 65.158.134.69:57517 vbr0.73
+    sample 2eaf821e4bb5a4772d01f8ec602fec792f9aaadaa75f1f8b945af6c782
+svc 0xb006 method 0x8100 ? (iface v250): 1 messages, 42 bytes
+    flow tcp 189.155.122.14:62397 > 227.114.203.212:58771 vbr0.73
+    sample 6422157d14569b021292ed348b9218316bd2e8d25e8de9b6d0c0
+svc 0xb006 method 0x8100 ? (iface v33): 1 messages, 143 bytes
+    flow tcp 194.229.232.43:23971 > 61.242.152.251:23366 vbr0.73
+    sample 2d139b9890820d9cdc8b7631dd0a82911f9b9cb9ed99f16554216d10200fbcf7dcff4916d64c4129181390ac6f30e2da663fa2b04a9bfeea2761e003c96df438bc5ba8854b8626a6830b5b1730c6f213de535997d80dba5f2b1102e6a33bdd69..
+svc 0xb006 method 0x8100 ERROR (iface v175): 1 messages, 150 bytes
+    flow udp 58.182.61.208:22474 > 149.106.87.172:32995 wlan0
+    sample 055833c02ec1cb439e38528011c7e264053a589ab41f4f901bc02570f62af427c0299961b649af89d4d594ccd6da62163824f613353eeb2eca769e94b3d62c316b2a6eb12f00037ffba245c88b1d52785b3d033ba68ef77d695b88695fb1d3ec..
+svc 0xb006 method 0x8100 ERROR (iface v84): 1 messages, 24 bytes
+    flow tcp 251.109.4.64:35133 > 27.81.122.245:48215 eth0
+    sample 1f924be3d5efe1d3
+svc 0xb006 method 0x8100 NOTIFICATION (iface v100): 1 messages, 92 bytes
+    flow tcp 246.165.126.150:4319 > 151.148.183.165:61248 wlan0
+    sample ea0e08abf44ded252aad438d88796810cabe769a6c484ad7a9a27f327e1a72d8a7ba40b59f4ec275a3649783af46190c7f0166fc8f6157ff1af28b811dff5cad5395e7703a8008750c4b5b2a
+svc 0xb006 method 0x8100 NOTIFICATION (iface v116): 1 messages, 170 bytes
+    flow udp 31.76.91.131:15934 > 76.34.13.44:61937 vbr0.73
+    sample 2d3e9778d052af8f988c5aa2108803ad85a1d76c04f4c25a565d70b50a774c776aa0835c83f201e2214a7243d043417cdb3b9c494f4c6c25f853604e61ebe3bed872203167020425da783ad4bf6f303b60451016ca14c7e0c9b901d6e9cf29f4..
+svc 0xb006 method 0x8100 REQUEST_NO_RETURN (iface v78): 1 messages, 147 bytes
+    flow tcp 231.162.237.233:30536 > 38.110.13.235:62841 wlan0
+    sample 376ae673bd0cbfd589e0b4883754c1d72292a2cf6787d33ce2de8faa2f05d364a9265b776d2ea2af57c9e5970362207ccc260f6bcf012d2de89fb851b26baa218b92bfaa8d0075b8956106d73e206f52e66b6c36a72b784f5e0fd128a682710f..
+svc 0xb006 method 0x8100 RESPONSE (iface v113): 1 messages, 96 bytes
+    flow udp 103.253.52.64:56671 > 45.244.37.38:57093 vbr0.73
+    sample 60fed35c4b235b1f819c0bbdeee4af0f3e38d5b4dc94c706f5b49223751402e408efa3e81a42c089d6c866e429ff61d5be213cf8032b45a822d9860208a6cce260d0a2e498515563dae5f17c130a420b
+svc 0xb006 method 0x8100 RESPONSE (iface v22): 1 messages, 117 bytes
+    flow tcp 72.62.247.181:3608 > 56.2.75.8:23245 eth0
+    sample b9b94c3c0ddb6fe9fea7c51fa90accaaeaafbe155d0498ae5d33167f0729b3553791adbb89d9fefe582b622ac174570ba060172d915a9fdbef8fab22d7ebb6ce251afd6a75877c44225fef66498ed29dc6c0607435609638f19c30f5175ea977..
+svc 0xffff method 0x8001 ? (iface v236): 1 messages, 256 bytes
+    flow tcp 89.35.5.39:2414 > 193.29.107.121:44616 vbr0.73
+    sample 8f5f1639be424db6f0d024259006e8e1cca0a5078e19277382aefac1165b694c74dc813189ad0e4c00099c3947ed76538815a9b7b0fc01416bdf098d24ba0ef608491d990307ff52c13243bcadc43335f479dcd782cf0a7f030049c8e209e410..
+svc 0xffff method 0x8001 ? (iface v58): 1 messages, 124 bytes
+    flow udp 73.11.246.88:33874 > 215.172.48.158:61526 wlan0
+    sample d0b80834eccf80e0074b5e5f5eb73e1ced617b44705332c3635a3f4501013e3547958ac1f12240d37a743c171f171afbdc5635a96d3eaa0e4e9b55d5baf9d26caea37cfde6a67075ddce8a80d0a66689bb7b5fbd5a5a9208280cdb166320d552..
+svc 0xffff method 0x8001 ERROR (iface v102): 1 messages, 114 bytes
+    flow udp 61.153.185.150:47497 > 173.95.205.98:55960 wlan0
+    sample cd52b12ae4c6db54f57e5ec8edf5066278685ebe01d3b337b5f212ea804044b30efbd82dca1d18b6e16211683f488f2090091e793fa209d17acf5d422a0be6a9fe942fa1616486887e37f578428b484e589a0da52e618edbee9cd80a85c6b70f..
+svc 0xffff method 0x8001 ERROR (iface v163): 1 messages, 115 bytes
+    flow tcp 115.24.44.234:43636 > 224.126.172.98:20154 eth0
+    sample c90db7d00cbf2e0fbf86fb511dedba012341c64d8d8e3c1fd6a0f8233b0396c7b802713509aaa65aaac711e1d6e54e388a4fb88982126cc139fa468cec92e25597279b49f6c68e54843897227f0c511ee18c1a7566c50c138c8304a48d529d93..
+svc 0xffff method 0x8001 ERROR (iface v33): 1 messages, 185 bytes
+    flow udp 169.134.241.101:44533 > 251.155.143.63:62412 vbr0.73
+    sample 50d322e1305eff21508e8074ebef4446fecca5c24432c0d53bed712a1d88542fe751c40e5552deb4e2587eccccee40c40d617fc661bd58bf46cea75bf62008056efed6ea6a752ef66551ecd59c1dacf20b27c97a6e79605941e04d3bbfe72c8b..
+svc 0xffff method 0x8001 ERROR (iface v98): 1 messages, 291 bytes
+    flow tcp 199.251.22.192:63114 > 40.165.142.158:35349 wlan0
+    sample 6a5384ec3e2b5b7438962eacf4fff9e1cd937820e03e263209ac41a6e348c3c6cc3f689fde7daefdf6aecf6caf3dc8376758
+svc 0xffff method 0x8001 NOTIFICATION (iface v161): 1 messages, 105 bytes
+    flow udp 34.186.16.144:59645 > 84.131.158.75:23149 wlan0
+    sample 6d12ba5bf6798ee43f71f1b496580e870548d2db581ee8ea1d75beb19eab7eece8da1516c7df2f6cc75537ea339a5a4c18c8840e42bc616b3c115c605424a2a994121fc1c8b47fe57ea92d11004b56015bb8e6315bc989dc8c
+svc 0xffff method 0x8001 NOTIFICATION (iface v242): 1 messages, 42 bytes
+    flow tcp 145.195.134.159:33936 > 150.166.168.68:10798 wlan0
+    sample 4555b83859379ba50ac3b19b75e678e6764b2a11a960c46a694f
+svc 0xffff method 0x8001 NOTIFICATION (iface v65): 1 messages, 45 bytes
+    flow tcp 249.56.197.83:40243 > 247.191.36.35:53391 wlan0
+    sample 9c241623f32c900e46e4ccf79199250b9058b836beea612459debb405b
+svc 0xffff method 0x8001 REQUEST (iface v157): 1 messages, 212 bytes
+    flow tcp 128.7.219.192:2978 > 18.218.120.225:64099 wlan0
+    sample 47dbd3a857c18794030b34ea3534a686997969049dd6c8bf6b07d0d4f0884d1fd794cb3c8e2895863f00b81ad79700d4022af8502bb5ede97ff4ecbc
+svc 0xffff method 0x8001 REQUEST_NO_RETURN (iface v195): 1 messages, 262 bytes
+    flow tcp 222.165.117.69:32648 > 193.123.14.149:30425 wlan0
+    sample b7f8d306faddfdafca9ccb904422b876441a02ec66f2a33f05d4577b3ead9c6ced29ac9eaeb3845cdc78e0b394643b6fb223d21bd220a1054f8864374647977e93097565d239fb395e05e5065457ae9890db937b
+svc 0xffff method 0x8001 REQUEST_NO_RETURN (iface v6): 1 messages, 143 bytes
+    flow udp 112.12.79.144:33296 > 194.58.70.159:11003 eth0
+    sample 3b771026d273beb339f7b86d9abf0b71e246839bbdc9ab879644d0909a73ffd3b5d1012c939c65369fce754f06233e91b4198cd955eaebc25493a6aadfd0caabdf1c23a203b53c2ab69563a12378a22137dcc5879dfb5a6ec3d2ab34d31dc5f3..
+svc 0xffff method 0x8100 NOTIFICATION (iface v1): 10 messages, 961 bytes
+    flow udp 160.48.199.119:30490 > 224.244.224.245:30490 eth0
+    flow udp 160.48.199.119:30490 > 224.244.224.245:30490 vbr0.73
+    flow udp 160.48.199.20:30490 > 224.244.224.245:30490 wlan0
+    flow udp 160.48.199.30:30490 > 224.244.224.245:30490 vbr0.73
+    sample c000000000000010010000101234000101000003000000000000000c00090400a030c7770011775e
+    sample c0000000fffffff8010000101234000101000003000000000000000c00090400a030c7770011775e
+    sample c00000000000001001000010123400010100000300000000fffffffc00090400a030c7770011775e
+svc 0xffff method 0x8100 NOTIFICATION (iface v221): 1 messages, 176 bytes
+    flow tcp 188.35.217.223:64810 > 137.230.120.63:64389 wlan0
+    sample bc2a8f68670fd7eb5d4847498a50ab5b9a6491c0f88043d2d160ceaf1180fe30641b5ff4362e3c55b274a270c56b5d211a4df8041f17c174fe85c28ea412c82ebcfc5ef0b43dd12fb6912d08af763e574b2690b8f59e6e86da9ae5dee695c19c..
+svc 0xffff method 0x8100 REQUEST (iface v205): 1 messages, 28 bytes
+    flow udp 12.68.164.160:50007 > 232.27.220.12:31307 eth0
+    sample 8321262ded6e9cff36805803

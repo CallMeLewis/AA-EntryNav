@@ -1,0 +1,16 @@
+[package]
+name = "evo-capture"
+description = "The passive SOME/IP recorder of tools/evo_capture.cpp: receive only, a pcap and a text summary"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "evo-capture"
+path = "src/main.rs"
+
+# The C library's functions, structures and constants as the target defines them. Only the recording needs them, and
+# it runs on Linux only; the parser and its tests build anywhere.
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"

@@ -4,8 +4,10 @@
   python tools/verify_arm.py               the working tree as it is
   python tools/verify_arm.py --commit SHA  that commit alone, checked out in a temporary folder (the pre-push hook)
 
-The steps: the ARM build against the car's libraries (programs, iDrive app, ARM tests), the ARM tests under QEMU
-(tests/run_qemu.py), then the checks of the programs a release ships (tools/verify_binary.py, verify_wireless.py).
+The steps: the Rust ports and their tests (tools/build_rust.py, with this PC's cargo), the ARM build against the car's
+libraries (programs, iDrive app, ARM tests), the ARM tests under QEMU, the Rust ones and their comparison with the C++
+among them (tests/run_qemu.py), then the checks of the programs a release ships (tools/verify_binary.py,
+verify_wireless.py).
 publish_release.py runs the same, then packages. On Linux they run here, through toolchain/tc.sh; elsewhere in Docker:
 the build image, and an image with qemu-arm and the ARM binutils (QEMU_IMAGE). HU_ROOTFS gives the copy of the car's
 system: a folder or a Docker volume.
@@ -37,6 +39,8 @@ def run_all(root, checks=CHECKS, clean=False):
     clean: `make clean` first, so that nothing built earlier in root (other flags, an older Makefile) is reused. The
     objects are git-ignored, so a clean `git status` says nothing about them; publish_release.py ships this build.
     """
+    # Rust builds on this PC on every system: its ARM target links with rust-lld, with no cross compiler.
+    run(sys.executable, "-I", "tools/build_rust.py", cwd=root)
     if sys.platform.startswith("linux"):
         if clean:
             run("bash", "toolchain/tc.sh", "make", "clean", cwd=root)
@@ -77,7 +81,7 @@ def main():
             run_all(ROOT)
     except subprocess.CalledProcessError as error:
         raise SystemExit(f"FAIL: the ARM checks stopped at: {' '.join(str(a) for a in error.cmd)}") from None
-    print("PASS: ARM build, ARM tests under QEMU, release programs checked", flush=True)
+    print("PASS: Rust ports, ARM build, ARM tests under QEMU, release programs checked", flush=True)
 
 
 if __name__ == "__main__":

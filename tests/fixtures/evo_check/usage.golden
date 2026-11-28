@@ -1,0 +1,10 @@
+evo-check --scene | --context | --bluetooth | --monitor [seconds 1..60] | --help
+evo-check --dbus-names | --dbus-introspect <destination> <path> | --dbus-watch <path> [seconds 1..3600]
+Read and watch only: no UUID, configuration, surface or TCP port.
+--scene: IVI scene and candidate layers; each command is bounded to 2 seconds.
+--context: video, MOST, audio and inputs, network, ports and firewall, read only.
+--bluetooth: the Alps API, then spp_data_interface of instances 0 and 1.
+--monitor: bounded watch (30 seconds by default), Ctrl-C to end it.
+--dbus-names: system bus names, with the pid and command line of their process.
+--dbus-introspect: XML description of one bus object.
+--dbus-watch: messages on one bus path (60 seconds by default), arguments decoded.

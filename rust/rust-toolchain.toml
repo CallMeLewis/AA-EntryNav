@@ -1,0 +1,7 @@
+# The toolchain the head unit's Rust is built and tested with, the one EntryNav-Apps pins. Its armv7 musl target ships
+# musl's C library and rust-lld, so a fully static ARM program links on any host with no cross compiler. The armv7
+# glibc target builds the staticlibs that the build image's GCC 4.7 links against the copy of the car's system.
+[toolchain]
+channel = "1.94.1"
+targets = ["armv7-unknown-linux-musleabihf", "armv7-unknown-linux-gnueabihf"]
+profile = "minimal"
